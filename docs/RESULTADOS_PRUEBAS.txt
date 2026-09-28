@@ -1,0 +1,79 @@
+Resultados reales — 2026-09-28T02:59Z — Node v22.22.2
+
+$ npx tsc -b
+sin errores
+
+$ npx vitest run
+ ✓ tests/business.test.ts (27 tests) 5990ms
+   ✓ Empresas: contabilidad > Cafetería y cocina: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 1057ms
+   ✓ Empresas: contabilidad > Minimercado de barrio: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 584ms
+   ✓ Empresas: contabilidad > Fábrica de muebles: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 645ms
+   ✓ Empresas: contabilidad > Software por suscripción: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 463ms
+   ✓ Empresas: contabilidad > Consultora contable: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 612ms
+   ✓ Empresas: finanzas, impuestos y dividendos > empresa individual: su resultado tributa en la declaración personal 305ms
+   ✓ Empresas: compraventa, inversionistas y personal > el escenario "fundar empresa" no modifica la partida real 338ms
+ ✓ tests/world.test.ts (13 tests) 3252ms
+   ✓ Economía dinámica > en 20 años recorre fases, las variables quedan acotadas y ocurren eventos 371ms
+   ✓ Jurisdicciones fiscales > el cambio de residencia cuesta hoy, rige el 1 de enero y ajusta el costo de vida 497ms
+   ✓ Jurisdicciones fiscales > una empresa registrada en Meridia paga el 21 % de impuesto de sociedades 418ms
+   ✓ Asesor avanzado y escenarios > escenarios: recesión, suba de tasas, caída de mercados y compra de inmueble sobre una copia de la partida 856ms
+stdout | tests/phase5.test.ts > Fase 5 · rendimiento > 10 años de simulación completa en un tiempo razonable y con guardado acotado
+10 años: 2.9 s (1252 días/s) · estado 2152 KB · guardado 683 KB · asientos personales 1515 + 3541 resumidos
+ ✓ tests/phase5.test.ts (12 tests) 8232ms
+   ✓ Fase 5 · guardado comprimido y seguro > el guardado comprimido es mucho más chico y restaura exactamente el mismo estado 335ms
+   ✓ Fase 5 · guardado comprimido y seguro > una copia dañada no destruye las demás: se carga la mejor copia válida 847ms
+   ✓ Fase 5 · guardado comprimido y seguro > si la escritura se interrumpe, la ranura temporal más nueva se recupera 325ms
+   ✓ Fase 5 · guardado comprimido y seguro > con el almacenamiento lleno libera copias viejas, nunca la principal, y no rompe nada 2067ms
+   ✓ Fase 5 · rendimiento > 10 años de simulación completa en un tiempo razonable y con guardado acotado 3079ms
+   ✓ Fase 5 · instantánea liviana para deshacer acciones > restaurar devuelve exactamente el estado previo aunque la acción haya escrito asientos y operado 818ms
+   ✓ Fase 5 · insolvencia personal de punta a punta > sin ingresos y con deudas: el asesor la anticipa, aparecen atrasos, cae el puntaje y la contabilidad sigue cuadrando 363ms
+ ✓ tests/audit_world.test.ts (3 tests) 3814ms
+   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w1: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 1823ms
+   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w2: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 1148ms
+   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w3: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 842ms
+ ✓ tests/invest.test.ts (10 tests) 2256ms
+   ✓ Bolsa de valores > cobra dividendos con retención y los precios se mantienen positivos durante 3 años de mercado 1151ms
+ ✓ tests/audit.test.ts (10 tests) 7771ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla a: 4 años de acciones aleatorias sin estados imposibles 2016ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla b: 4 años de acciones aleatorias sin estados imposibles 1189ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla c: 4 años de acciones aleatorias sin estados imposibles 977ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla d: 4 años de acciones aleatorias sin estados imposibles 894ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla e: 4 años de acciones aleatorias sin estados imposibles 907ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla f: 4 años de acciones aleatorias sin estados imposibles 1025ms
+ ✓ tests/realestate.test.ts (6 tests) 1435ms
+   ✓ Bienes raíces > compra al contado: gastos de escritura, alquiler cobrado, gastos, impuesto trimestral y tasación a mercado 793ms
+ ✓ tests/simulation.test.ts (11 tests) 3720ms
+   ✓ Simulación integrada > 5 años con empleo, ahorro, depósitos y estudios: la contabilidad cuadra cada mes 1690ms
+   ✓ Simulación integrada > es determinista: misma semilla y mismas acciones → mismo estado 509ms
+   ✓ Simulación integrada > la inflación REALIZADA del año (acumulada mes a mes) indexa los gastos y se declara el impuesto 497ms
+ ✓ tests/audit_business.test.ts (4 tests) 4377ms
+   ✓ Auditoría de empresas (bots aleatorios) > semilla p: 3 años con decisiones empresariales aleatorias sin estados imposibles 1612ms
+   ✓ Auditoría de empresas (bots aleatorios) > semilla q: 3 años con decisiones empresariales aleatorias sin estados imposibles 940ms
+   ✓ Auditoría de empresas (bots aleatorios) > semilla r: 3 años con decisiones empresariales aleatorias sin estados imposibles 878ms
+   ✓ Auditoría de empresas (bots aleatorios) > semilla s: 3 años con decisiones empresariales aleatorias sin estados imposibles 945ms
+ ✓ tests/save_v2.test.ts (4 tests) 1180ms
+   ✓ Guardado v2 (empresas) y almacenamiento espejado > una partida con empresas se guarda y se recupera idéntica 681ms
+   ✓ Guardado v2 (empresas) y almacenamiento espejado > migra una partida v1 (Fase 1, sin empresas) a la versión actual y pasa todas las invariantes 315ms
+ ✓ tests/save.test.ts (6 tests) 712ms
+   ✓ Guardado y recuperación > guardar y cargar produce exactamente el mismo estado 440ms
+ ✓ tests/tax.test.ts (5 tests) 4ms
+ ✓ tests/card.test.ts (4 tests) 468ms
+ ✓ tests/loans.test.ts (5 tests) 472ms
+ ✓ tests/ledger.test.ts (5 tests) 100ms
+ ✓ tests/content.test.ts (3 tests) 27ms
+ ✓ tests/indicators.test.ts (2 tests) 5ms
+ Test Files  17 passed (17)
+      Tests  130 passed (130)
+   Duration  52.96s (transform 965ms, setup 0ms, collect 5.12s, tests 43.81s, environment 3ms, prepare 936ms)
+
+$ npm run build && npm run build:single && npx cap sync android
+correctos (bloques: index ≈ 493 kB, vendor ≈ 142 kB, glossary ≈ 124 kB, pantallas bajo demanda; single ≈ 1,1 MB)
+
+Recorrido de interfaz automatizado (Chromium headless, 390×844 táctil, compilación de un solo archivo):
+- partida nueva → Bolsa Lite (comprar, analizar) → Trading Pro → Bonos (comprar) → Fondos (invertir) → Mogul (comprar)
+  → Inmuebles (inspeccionar, comprar: rechazo correcto por fondos) → Negocios (crear holding) → Más: Economía,
+  Impuestos (informe), Profesionales (contratar contador), Legal → Informes → Asesor. Errores de consola: 0.
+- Auditoría de botones: todas las acciones tienen ⓘ; sin ⓘ solo "← Más" / "← Volver" (navegación).
+- Persistencia: 14 meses de juego, guardar, recargar → misma fecha; guardado comprimido ≈ 267 KB por copia.
+
+APK: NO compilada ni ejecutada en este entorno (sin SDK de Android ni acceso de red para descargarlo).

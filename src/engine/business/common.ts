@@ -1,0 +1,198 @@
+import { SECTOR_BY_ID, SectorDef, roleDef, EMPLOYER_PAYROLL_RATE, LEGAL_FORM_BY_ID } from '../../content/sectors';
+import type { GameState, LogKind } from '../state';
+import type { Company, Arrear } from './types';
+import { Cents, clamp, roundCents, usd, applyRate } from '../money';
+import { coPost, CoAccountId, CO_ACCOUNT_IDS, CO_CHART } from './companyLedger';
+import type { CashFlowClass } from '../ledger/core';
+import { addLog } from '../log';
+
+export const ARREARS_FEE = 0.03;
+
+export function sectorOf(co: Company): SectorDef {
+  return SECTOR_BY_ID[co.sector];
+}
+
+/** USD de precios base → centavos a precios actuales (índice de inflación). */
+export function px(state: GameState, dollars: number): Cents {
+  return usd(dollars * state.macro.priceIndex);
+}
+
+export function coLog(state: GameState, co: Company, kind: LogKind, icon: string, text: string, amount?: Cents): void {
+  if (state.meta.projection || co.status === 'sold') return;
+  if (state.listings.some((l) => l.company === co)) return;
+  addLog(state, kind, icon, `${co.name}: ${text}`, amount);
+  state.log[state.log.length - 1].company = co.id;
+}
+
+export function coCash(co: Company): Cents {
+  return co.ledger.balances.cash;
+}
+
+export function coEquity(co: Company): Cents {
+  let e = 0;
+  for (const id of CO_ACCOUNT_IDS) {
+    const t = CO_CHART[id].type;
+    const b = co.ledger.balances[id];
+    if (t === 'asset') e += b;
+    else if (t === 'liability') e -= b;
+  }
+  return e;
+}
+
+/** Beneficio distribuible: resultados acumulados menos lo ya repartido. */
+export function distributableProfit(co: Company): Cents {
+  let r = 0;
+  for (const id of CO_ACCOUNT_IDS) {
+    const t = CO_CHART[id].type;
+    if (t === 'income') r += co.ledger.balances[id];
+    else if (t === 'expense') r -= co.ledger.balances[id];
+  }
+  return r + co.ledger.balances.distributions;
+}
+
+export function isOpen(co: Company): boolean {
+  return co.status === 'active' || co.status === 'insolvent';
+}
+
+/**
+ * Pago de la empresa desde su caja. Si no alcanza y se permite, el monto queda
+ * como deuda vencida (con 3 % de recargo). El dinero nunca se inventa.
+ */
+export function coPay(
+  state: GameState, co: Company, account: CoAccountId, amount: Cents,
+  opt: { memo: string; tag?: string; cf?: CashFlowClass; kind?: Arrear['kind']; allowArrears?: boolean },
+): boolean {
+  if (amount <= 0) return true;
+  const cf = opt.cf ?? 'operating';
+  if (co.ledger.balances.cash >= amount) {
+    coPost(co.ledger, { day: state.day, memo: opt.memo, cf, tag: opt.tag, lines: [{ account, debit: amount }, { account: 'cash', credit: amount }] });
+    return true;
+  }
+  if (opt.allowArrears === false) return false;
+  const paid = Math.max(0, co.ledger.balances.cash);
+  const owed = amount - paid;
+  const fee = Math.max(100, applyRate(owed, ARREARS_FEE));
+  coPost(co.ledger, {
+    day: state.day, memo: `${opt.memo} (impago parcial)`, cf, tag: opt.tag,
+    lines: [{ account, debit: amount }, { account: 'penalties', debit: fee }, { account: 'cash', credit: paid }, { account: 'arrears', credit: owed + fee }],
+  });
+  co.arrears.push({ id: state.meta.nextId++, kind: opt.kind ?? 'otros', amount: owed + fee, since: state.day, label: opt.memo });
+  coLog(state, co, 'danger', '⛔', `sin caja para "${opt.memo}": quedó una deuda vencida.`, owed + fee);
+  return false;
+}
+
+/** Paga deudas vencidas en orden de antigüedad con la caja disponible. */
+export function settleArrears(state: GameState, co: Company, budget?: Cents): Cents {
+  let available = Math.min(co.ledger.balances.cash, budget ?? Infinity);
+  let paid = 0;
+  co.arrears.sort((a, b) => a.since - b.since);
+  for (const a of co.arrears) {
+    if (available <= 0) break;
+    const pay = Math.min(a.amount, available);
+    coPost(co.ledger, { day: state.day, memo: `Pago de deuda vencida: ${a.label}`, cf: 'operating', tag: 'arrears', lines: [{ account: 'arrears', debit: pay }, { account: 'cash', credit: pay }] });
+    a.amount -= pay;
+    available -= pay;
+    paid += pay;
+  }
+  co.arrears = co.arrears.filter((a) => a.amount > 0);
+  if (co.arrears.filter((a) => a.kind === 'proveedor').length === 0) co.blockedSuppliers = [];
+  return paid;
+}
+
+// ---------------------------------------------------------------- Personal
+
+export function employeeProductivity(state: GameState, co: Company, empId: number): number {
+  const e = co.employees.find((x) => x.id === empId)!;
+  if (e.absentUntil > state.day || e.trainingUntil > state.day) return 0;
+  return (0.5 + e.skill / 100) * (0.7 + (0.3 * e.morale) / 100);
+}
+
+export function countRole(co: Company, role: string): number {
+  return co.employees.filter((e) => e.role === role).length;
+}
+
+export function hasManager(co: Company): boolean {
+  return co.employees.some((e) => e.role === 'gerente');
+}
+
+export function managerSkill(co: Company): number {
+  const m = co.employees.filter((e) => e.role === 'gerente');
+  return m.length ? Math.max(...m.map((x) => x.skill)) : 0;
+}
+
+/** Efecto con rendimientos decrecientes de N personas de apoyo. */
+export function supportEffect(n: number, perHead: number, cap: number): number {
+  return Math.min(cap, n * perHead);
+}
+
+export function workingAssets(state: GameState, co: Company) {
+  return co.assets.filter((a) => a.brokenUntil <= state.day);
+}
+
+export function equipDef(co: Company, equipId: string) {
+  return sectorOf(co).equipment.find((e) => e.id === equipId)!;
+}
+
+export interface Capacity {
+  production: number;
+  service: number;
+  hours: number;
+  users: number;
+  equipmentBonus: number;
+}
+
+export function capacity(state: GameState, co: Company): Capacity {
+  const sec = sectorOf(co);
+  let bonus = 0;
+  for (const a of workingAssets(state, co)) bonus += equipDef(co, a.equipId).capacityBonus * (0.5 + a.condition / 200);
+  const mgr = hasManager(co) ? 1 + (managerSkill(co) - 50) / 500 : 1;
+  const cap: Capacity = { production: 0, service: 0, hours: 0, users: 0, equipmentBonus: bonus };
+  for (const e of co.employees) {
+    const r = roleDef(sec, e.role);
+    if (!r.capacity) continue;
+    const p = employeeProductivity(state, co, e.id);
+    cap[r.capacity.kind] += r.capacity.perDay * p;
+  }
+  cap.production *= (1 + bonus) * mgr;
+  cap.service *= (1 + bonus) * mgr;
+  cap.hours *= (1 + bonus) * mgr;
+  cap.users *= (1 + bonus) * mgr;
+  return cap;
+}
+
+/** Calidad 5–100: insumos, habilidad del personal, equipos, I+D, gestión y sobrecarga. */
+export function computeQuality(state: GameState, co: Company): number {
+  const sec = sectorOf(co);
+  const prodRoles = co.employees.filter((e) => roleDef(sec, e.role).capacity);
+  const staffSkill = prodRoles.length ? prodRoles.reduce((s, e) => s + e.skill, 0) / prodRoles.length : 30;
+  let equip = 0;
+  for (const a of workingAssets(state, co)) equip += equipDef(co, a.equipId).qualityBonus * (a.condition / 100);
+  const matWeight = sec.items.length ? 0.4 : 0;
+  const staffWeight = sec.items.length ? 0.3 : 0.55;
+  let q = 45 + (co.materialQuality - 60) * matWeight + (staffSkill - 50) * staffWeight + equip + co.rdBonus;
+  if (hasManager(co)) q += (managerSkill(co) - 50) * 0.05;
+  if (sec.model === 'subscription') {
+    const cap = capacity(state, co).users;
+    if (co.subscribers > cap && cap >= 0) q -= Math.min(40, ((co.subscribers - cap) / Math.max(1, cap)) * 60);
+  }
+  return clamp(Math.round(q * 10) / 10, 5, 100);
+}
+
+export function monthlyPayroll(_state: GameState, co: Company): Cents {
+  const wages = co.employees.reduce((s, e) => s + e.wage, 0);
+  return wages + roundCents(wages * EMPLOYER_PAYROLL_RATE);
+}
+
+/** Costos fijos mensuales (sin sueldos): alquiler, servicios, mantenimiento, administración, préstamos. */
+export function monthlyFixed(state: GameState, co: Company): Cents {
+  const sec = sectorOf(co);
+  let t = px(state, sec.rent) + px(state, sec.utilities) + px(state, LEGAL_FORM_BY_ID[co.legalForm].monthlyAdmin);
+  t += maintenanceCost(state, co);
+  for (const l of co.loans) if (l.balance > 0) t += l.payment;
+  return t;
+}
+
+export function maintenanceCost(state: GameState, co: Company): Cents {
+  const mult = co.maintenance === 'none' ? 0 : co.maintenance === 'basic' ? 0.6 : 1;
+  return co.assets.reduce((s, a) => s + px(state, equipDef(co, a.equipId).maintenance * mult), 0);
+}
