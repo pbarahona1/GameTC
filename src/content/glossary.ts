@@ -3,6 +3,7 @@ import { GLOSSARY_INVEST } from './glossaryInvest';
 import { GLOSSARY_WORLD } from './glossaryWorld';
 import { GLOSSARY_ACTIONS3 } from './glossaryActions3';
 import { GLOSSARY_V11 } from './glossaryV11';
+import { GLOSSARY_V12 } from './glossaryV12';
 /**
  * Glosario financiero y ayuda contextual.
  * Cada entrada sigue la estructura pedida: definición sencilla, para qué sirve,
@@ -13,7 +14,7 @@ export interface GlossaryEntry {
   id: string;
   term: string;
   category: 'Básicos' | 'Estados financieros' | 'Crédito y deuda' | 'Ahorro e inversión' | 'Impuestos' | 'Empleo' | 'Bienestar' | 'Empresas' | 'Acciones del juego'
-    | 'Bolsa e inversiones' | 'Bienes raíces' | 'Economía' | 'Grupos empresariales' | 'Profesionales' | 'Sistema legal';
+    | 'Bolsa e inversiones' | 'Bienes raíces' | 'Economía' | 'Grupos empresariales' | 'Profesionales' | 'Sistema legal' | 'Estilo de vida' | 'Mercado y competencia';
   short: string;
   purpose: string;
   /** Cómo funciona (mecánica en el juego). */
@@ -512,6 +513,6 @@ const BASE_GLOSSARY: GlossaryEntry[] = [
   },
 ];
 
-export const GLOSSARY: GlossaryEntry[] = [...BASE_GLOSSARY, ...GLOSSARY_BUSINESS, ...GLOSSARY_INVEST, ...GLOSSARY_WORLD, ...GLOSSARY_ACTIONS3, ...GLOSSARY_V11];
+export const GLOSSARY: GlossaryEntry[] = [...BASE_GLOSSARY, ...GLOSSARY_BUSINESS, ...GLOSSARY_INVEST, ...GLOSSARY_WORLD, ...GLOSSARY_ACTIONS3, ...GLOSSARY_V11, ...GLOSSARY_V12];
 
 export const GLOSSARY_BY_ID: Record<string, GlossaryEntry> = Object.fromEntries(GLOSSARY.map((g) => [g.id, g]));

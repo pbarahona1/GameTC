@@ -23,7 +23,7 @@ function richGame(seed: string, years: number): GameState {
   post(s.ledger, { day: 0, memo: 'Capital de prueba', cf: 'internal', lines: [{ account: 'checking', debit: usd(600000) }, { account: 'opening_equity', credit: usd(600000) }] });
   s.credit.score = 740;
   forceHire(s, 'ventas_asistente');
-  foundCompany(s, { sector: 'minimarket', name: 'Mercado Prueba', legalForm: 'srl', capital: usd(60000) });
+  foundCompany(s, { sector: 'minimarket', name: 'Mercado Prueba', legalForm: 'srl', capital: usd(150000) });
   placeStockOrder(s, { stockId: s.stocks.stocks[0].id, side: 'compra', type: 'mercado', qty: 100 });
   buyFund(s, 'F-IDX', usd(5000));
   const l = s.realEstate.listings.find((x) => x.property.type === 'vivienda') ?? s.realEstate.listings[0];

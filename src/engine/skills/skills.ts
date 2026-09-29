@@ -1,3 +1,4 @@
+import { possessionEffects } from '../lifestyle/effects';
 import { SKILL_BY_ID, SKILL_MAX_LEVEL, SkillId, xpToNext } from '../../content/skills';
 import type { GameState } from '../state';
 import { addLog } from '../log';
@@ -30,7 +31,8 @@ export function addXp(state: GameState, skill: SkillId, amount: number): number 
 
 /** Multiplicador de XP de estudio por disciplina: +0,3 % por nivel (hasta +30 %). */
 export function studyMultiplier(state: GameState): number {
-  return 1 + Math.min(100, state.skills.discipline.level) * 0.003;
+  // 1.2: notebook, tablet o escritorio: aprendés más en cada curso (cuenta el mejor).
+  return (1 + Math.min(100, state.skills.discipline.level) * 0.003) * (1 + possessionEffects(state).study);
 }
 
 const PRACTICE_FACTORS = [1, 0.5, 0.25];

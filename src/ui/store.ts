@@ -7,7 +7,7 @@ import { refreshListings } from '../engine/business/simulate';
 import { updateProgression } from '../engine/progression/progression';
 import { checkInvariants } from '../engine/invariants';
 import { takeSnapshot } from '../engine/snapshot';
-import { loadGame, saveGame, KV, serialize, deserializeAny, listBackups, restoreBackup, deleteAll } from '../persistence/save';
+import { loadGame, saveGame, KV, serialize, deserializeAny, listBackups, restoreBackup, deleteAll, snapshotBeforeUpdate } from '../persistence/save';
 import { offlineDays, DEFAULT_OFFLINE } from '../persistence/offline';
 import { createStorage, exportToFile } from '../persistence/platformStorage';
 
@@ -34,6 +34,10 @@ export interface Settings {
   reduceMotion: boolean;
   colorblind: boolean;
   density: 'comoda' | 'compacta';
+  /** Mostrar todas las secciones sin recomendaciones por etapa (1.2). */
+  showAllSections: boolean;
+  /** Buscar actualizaciones al abrir la app (1.2). */
+  autoUpdate: boolean;
 }
 
 const SETTINGS_KEY = 'urt.settings';
@@ -42,7 +46,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: 'system', learningMode: true, autoPause: true, offlineMaxDays: 30,
   alertCategories: ['liquidez', 'deuda', 'credito', 'ahorro', 'impuestos', 'carrera', 'bienestar', 'empresa', 'inversiones', 'inmuebles', 'legal', 'economia'],
   msPerDay: 2000, pauseOn: ['peligro', 'ofertas', 'logros', 'legal'], successToasts: true,
-  fontScale: 1, highContrast: false, reduceMotion: false, colorblind: false, density: 'comoda',
+  fontScale: 1, highContrast: false, reduceMotion: false, colorblind: false, density: 'comoda', showAllSections: false, autoUpdate: true,
 };
 
 /** Milisegundos reales por día de juego a velocidad 1× (valor por defecto). */
@@ -76,7 +80,7 @@ type Listener = () => void;
 export function pauseCategory(l: LogItem): PauseCategory | null {
   if (['⚖️', '🔒', '🚨', '⛓️', '🚔', '🕵️', '🔨', '📋'].includes(l.icon) && l.kind !== 'success' && l.kind !== 'info') return 'legal';
   if (l.kind === 'danger') return 'peligro';
-  if (l.icon === '📩') return 'ofertas';
+  if (l.icon === '📩' || l.icon === '🧲' || l.icon === '💼') return 'ofertas';
   if (l.icon === '🏆' || l.icon === '🚀') return 'logros';
   if (['📉', '💥', '🏚️'].includes(l.icon) && l.kind === 'warning') return 'inversiones';
   return null;
@@ -126,7 +130,8 @@ class GameStore {
       this.ui.state = report.state;
       if (!report.state.listings.length) refreshListings(report.state);
       const notices: string[] = [];
-      if (report.recovered) notices.push(`La partida principal no se pudo leer; se recuperó una copia de seguridad (${report.source}).`);
+      if (report.recovered && report.source === 'urt.save.preupdate') notices.push('Se cargó la copia guardada justo antes de la última actualización.');
+      else if (report.recovered) notices.push(`La partida principal no se pudo leer; se recuperó una copia de seguridad (${report.source}).`);
       if (report.migratedFrom !== null) notices.push(`Partida actualizada desde la versión ${report.migratedFrom}.`);
       this.ui.loadNotice = notices.join(' ') || null;
       const days = offlineDays(report.state.meta.lastRealTime, Date.now(), { ...DEFAULT_OFFLINE, maxDays: this.ui.settings.offlineMaxDays });
@@ -300,6 +305,19 @@ class GameStore {
     return this.dirty;
   }
 
+  /** Antes de cambiar de versión: pausa, guarda y deja una copia verificada "antes de actualizar". */
+  async saveForUpdate(): Promise<boolean> {
+    this.setSpeed(0);
+    if (!this.kv) return false;
+    if (!this.ui.state) return true;
+    if (!(await this.save())) return false;
+    try {
+      return await snapshotBeforeUpdate(this.kv);
+    } catch {
+      return false;
+    }
+  }
+
   exportText(): string | null {
     return this.ui.state ? serialize(this.ui.state, Date.now()) : null;
   }
@@ -336,6 +354,7 @@ class GameStore {
     if (!r.ok) return { ok: false, error: r.error };
     this.ui.state = r.state;
     this.ui.speed = 0;
+    void this.save();
     this.emit();
     return { ok: true, message: 'Copia restaurada.' };
   }

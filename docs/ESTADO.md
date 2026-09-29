@@ -1,4 +1,25 @@
-# Estado del proyecto — versión 1.1
+# Estado del proyecto — versión 1.2
+
+## Novedades de la versión 1.2
+
+- **Tiendas con sentido** (Más → Tiendas): 12 tiendas en 5 categorías (ropa, vehículos, tecnología, hogar, lujo) y 41 artículos. Cada uno tiene un efecto real: imagen, costos de transporte, salud, estrés, aprendizaje, red de contactos o ahorro en comida. Se paga con débito, efectivo, tarjeta (con reintegro según el nivel) o en cuotas (sin interés si la tienda y tu tarjeta lo permiten). Vehículos, tecnología, hogar y lujo son bienes que se deprecian y se pueden vender; la ropa se gasta.
+- **Tu personaje:** dibujo propio en SVG que se viste con lo que tenés puesto (camisa, saco, tapado, reloj, cadena, bolso…), apariencia elegible (tono de piel, peinado y color) y vestidor. **Imagen personal** 0–100: cambia la probabilidad en entrevistas (±6 puntos según el nivel del puesto), las negociaciones de sueldo, la reputación y el **trato en las tiendas** (atención fría, normal o de cliente preferente con descuento; las colecciones exclusivas solo se muestran con buena imagen).
+- **Tarjetas Clásica, Oro, Platino y Black:** requisitos de puntaje, ingresos o patrimonio e historial; costo anual; reintegro sobre todo lo que pagás con la tarjeta; cuotas sin interés; más límite; rebaja de tasa y reconocimiento en tiendas. Pedir una superior es una consulta de crédito y puede rechazarse.
+- **Mercado con vida:** 4 grupos rivales compran empresas e inmuebles en venta (antes que vos), abren competidores en tus sectores, cierran exclusividades con proveedores (suben su precio para vos), ofertan por tus empresas rentables y tientan a tus mejores empleados (igualás o lo dejás ir). **Noticias calibradas**: los eventos económicos se programan con anticipación, los balances tienen pistas previas y los movimientos de rivales se rumorean; hay rumores falsos. Analizar estima la confiabilidad con un error que baja con la habilidad y a veces da una pista: ventaja real, nunca certeza.
+- **Guía:** 26 misiones en 6 capítulos ("Comprá tu primera acción", "Cobrá tu primer alquiler", "Pedí una tarjeta Oro"…), con experiencia de recompensa. Secciones avanzadas (Negocios, Inmuebles, Trading Pro, Mogul, Gestor, Holding) muestran una **recomendación por etapa** la primera vez, con "Abrir igual"; en Ajustes se puede mostrar todo.
+- **Balance** medido con bots por estilo de juego (`docs/BALANCE.md`): cocheras y estudios baratos siempre a la venta, hipoteca mínima de $15.000, holding sin subsidiarias ~$135/mes (antes ~$750) con aviso claro y alerta del Asesor, etapa 4 que cuenta inmuebles, etapa 6 que cuenta las ganancias de tus empresas, etapa 10 alcanzable.
+- **Interfaz:** íconos de línea en toda la navegación, barra superior con tu personaje, noticias y asesor; menú "Más" agrupado; **Ajustes por secciones** con el interruptor de **actividades ilegales** bien visible (también arriba de todo en Más → Legal y al crear la partida); gráfico de velas de Trading Pro con **deslizar para ver cada día, pellizco con dos dedos para acercar y arrastre para moverse**, botones de zoom; microanimaciones; importar partida desde archivo en la pantalla inicial.
+- **Identidad y publicación:** ícono y pantalla de inicio propios (Android 12+ y anteriores), **firma fija** para que cada APK se instale encima sin perder la partida, Releases de GitHub para descargar desde el teléfono, **AAB firmado para Play Store** cuando se configuran los secretos, y **actualizaciones dentro de la app** (sin reinstalar, verificadas con SHA-256 y con vuelta atrás automática). Ver `docs/PUBLICAR.md`.
+
+### Verificación 1.2 (resultados reales en este entorno)
+
+- `npx vitest run`: ver `docs/RESULTADOS_PRUEBAS.txt` (21 archivos). Nuevas: `v12.test.ts` (migración 4→5, tiendas y contabilidad de bienes, transporte y comida, imagen en entrevistas, trato en tiendas, niveles de tarjeta, reintegros, cuotas, calibración de noticias con 12.000 candidatos, precisión del análisis según habilidad, 5 años de rivales con invariantes, ofertas por empleados, costos de holding, inmuebles de entrada, misiones, secciones, etapa 10, manifiesto de actualización), `ota.test.ts` (flujo de actualización con plugins simulados: descarga, archivo alterado, guardado previo fallido, confirmación, vuelta atrás por error o por partida ilegible, versión fallida no reofrecida, APK nueva requerida) y `balance.test.ts` (bots por estilo). La auditoría integral con bots aleatorios ahora también compra, vende, se viste, pide tarjetas, analiza noticias y responde ofertas, con invariantes, Δ patrimonio = resultado y conciliación del flujo de caja cada mes.
+- Recorrido en Chromium (390 × 844, táctil, temas claro y oscuro): pantalla inicial con importación y apariencia, Inicio, Más, Tiendas, compra con débito, tarjeta y cuotas, vestidor, noticias, competencia, tarjeta y niveles, recomendación por etapa y Trading Pro, Ajustes por secciones. Sin errores de consola.
+- **No verificado aquí:** la APK no se compiló ni se ejecutó en este entorno (no hay SDK de Android); se compila en GitHub Actions. El cambio de versión del WebView de Android en una actualización por internet se probó con los plugins simulados, no en un teléfono.
+
+---
+
+# Estado de la versión 1.1
 
 ## Novedades de la versión 1.1
 
@@ -85,6 +106,10 @@
 - Compatibilidad con WebView antiguos: copia profunda sin `structuredClone`, guardado sin compresión si no hay `CompressionStream`.
 
 ## Limitaciones conocidas
+
+- (1.2) Las APK instaladas a mano y la versión de Play Store tienen firmas distintas: no se instalan una encima de la otra (hay que exportar e importar la partida).
+- (1.2) Al pasar de la 1.1 a la 1.2 hay que reinstalar una única vez (la 1.1 tenía una firma de depuración al azar): exportar la partida antes e importarla después.
+- (1.2) Las actualizaciones por internet necesitan conexión y dependen de `raw.githubusercontent.com`.
 
 - APK no compilada ni probada en dispositivo desde este entorno (ver README → "Generar la APK").
 - Los informes de períodos antiguos que cortan un mes ya compactado se prorratean por días (los meses completos son exactos). El detalle de asientos de más de ~1–2 años se ve resumido por mes.

@@ -44,7 +44,10 @@ export function setupCosts(state: GameState, sector: BizSectorId, form: LegalFor
   const sec = SECTOR_BY_ID[sector];
   const legal = px(state, LEGAL_FORM_BY_ID[form].setupCost);
   const license = px(state, sec.license);
-  const deposit = px(state, sec.rent * sec.depositMonths);
+  // Holding (1.2): sin subsidiarias solo necesita un domicilio legal (80 USD/mes).
+  const rentBase = sector === 'holding' ? 80 : sec.rent;
+  const utilBase = sector === 'holding' ? 20 : sec.utilities;
+  const deposit = px(state, rentBase * sec.depositMonths);
   const equipment = sec.starterEquipment.reduce((s, id) => s + px(state, sec.equipment.find((e) => e.id === id)!.cost), 0);
   let payroll = 0;
   let hiring = 0;
@@ -53,7 +56,7 @@ export function setupCosts(state: GameState, sector: BizSectorId, form: LegalFor
     hiring += roundCents(px(state, roleDef(sec, role).baseWage) * 0.25) * n;
   }
   const firstMonthPayroll = roundCents(payroll * 1.12);
-  const firstMonthFixed = px(state, sec.rent + sec.utilities + LEGAL_FORM_BY_ID[form].monthlyAdmin);
+  const firstMonthFixed = px(state, rentBase + utilBase + LEGAL_FORM_BY_ID[form].monthlyAdmin);
   return { legal, license, deposit, equipment, hiring, total: legal + license + deposit + equipment + hiring, firstMonthFixed, firstMonthPayroll, recommended: px(state, sec.recommendedCapital) };
 }
 

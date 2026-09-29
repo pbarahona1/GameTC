@@ -1,4 +1,5 @@
 import { supplierCostIndex } from '../economy/economy';
+import { supplierShockMult } from '../world/rivals';
 import type { GameState } from '../state';
 import type { Company, Lot, PurchaseOrder } from './types';
 import { sectorOf, px, coLog, countRole, workingAssets, equipDef, coPay } from './common';
@@ -66,7 +67,7 @@ export function supplierFor(co: Company, supplierId: string): SupplierDef | unde
 }
 
 export function supplierUnitCost(state: GameState, s: SupplierDef): Cents {
-  return usd(s.unitCost * state.macro.priceIndex * supplierCostIndex(state));
+  return usd(s.unitCost * state.macro.priceIndex * supplierCostIndex(state) * supplierShockMult(state, s.id));
 }
 
 export function leadDays(co: Company, s: SupplierDef): number {

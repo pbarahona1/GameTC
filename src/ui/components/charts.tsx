@@ -1,4 +1,4 @@
-import { useMemo, useState, type PointerEvent as RPointerEvent } from 'react';
+import { useMemo, useRef, useState, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
 import type { Candle } from '../../engine/invest/types';
 import { fmtCompact, fmtMoney } from '../../engine/format';
 import { formatDate } from '../../engine/time/calendar';
@@ -23,9 +23,18 @@ function scale(min: number, max: number, top: number, bottom: number) {
 }
 
 /** Velas + volumen + superposiciones (medias, Bollinger). Precios en centavos. */
-export function CandleChart({ candles, overlays = [], height = 220, markers = [] }: { candles: Candle[]; overlays?: Overlay[]; height?: number; markers?: Array<{ price: number; label: string; color: string }> }) {
+export function CandleChart({ candles, overlays = [], height = 220, markers = [], onZoom, onPan }: {
+  candles: Candle[]; overlays?: Overlay[]; height?: number; markers?: Array<{ price: number; label: string; color: string }>;
+  /** Pellizco o rueda: factor < 1 acerca (menos velas), anclado en `anchor` (0–1 del ancho). */
+  onZoom?: (factor: number, anchor: number) => void;
+  /** Arrastre con dos dedos: desplaza la ventana N velas (negativo = hacia el pasado). */
+  onPan?: (candles: number) => void;
+}) {
   const n = candles.length;
   const [hover, setHover] = useState<number | null>(null);
+  const pts = useRef(new Map<number, number>());
+  const pinch = useRef<{ d: number; mid: number } | null>(null);
+  const [pinching, setPinching] = useState(false);
   const { lo, hi, vmax } = useMemo(() => {
     let lo = Infinity;
     let hi = -Infinity;
@@ -57,16 +66,57 @@ export function CandleChart({ candles, overlays = [], height = 220, markers = []
   const x = (i: number) => padL + step * (i + 0.5);
   const bw = Math.max(1, step * 0.62);
   const ticks = [lo, (lo + hi) / 2, hi];
+  const toSvgX = (el: Element, clientX: number) => {
+    const r = el.getBoundingClientRect();
+    return ((clientX - r.left) / r.width) * W;
+  };
   const pick = (e: RPointerEvent<SVGSVGElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    const px = ((e.clientX - r.left) / r.width) * W;
+    const px = toSvgX(e.currentTarget, e.clientX);
     setHover(Math.max(0, Math.min(n - 1, Math.floor((px - padL) / step))));
+  };
+  const plotFrac = (svgX: number) => Math.max(0, Math.min(1, (svgX - padL) / (W - padL - padR)));
+  const twoFinger = () => {
+    const xs = [...pts.current.values()];
+    return { d: Math.max(8, Math.abs(xs[0] - xs[1])), mid: (xs[0] + xs[1]) / 2 };
+  };
+  const down = (e: RPointerEvent<SVGSVGElement>) => {
+    pts.current.set(e.pointerId, toSvgX(e.currentTarget, e.clientX));
+    if (pts.current.size >= 2 && (onZoom || onPan)) {
+      pinch.current = twoFinger();
+      setPinching(true);
+      setHover(null);
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
+    } else pick(e);
+  };
+  const move = (e: RPointerEvent<SVGSVGElement>) => {
+    if (pts.current.has(e.pointerId)) pts.current.set(e.pointerId, toSvgX(e.currentTarget, e.clientX));
+    if (pinch.current && pts.current.size >= 2) {
+      const now = twoFinger();
+      const factor = pinch.current.d / now.d;
+      if (onZoom && Math.abs(1 - factor) > 0.01) onZoom(factor, plotFrac(now.mid));
+      const dx = now.mid - pinch.current.mid;
+      if (onPan && Math.abs(dx) > step * 0.5) onPan(-dx / step);
+      pinch.current = now;
+      return;
+    }
+    if (!pinching) pick(e);
+  };
+  const up = (e: RPointerEvent<SVGSVGElement>) => {
+    pts.current.delete(e.pointerId);
+    if (pts.current.size < 2) {
+      pinch.current = null;
+      setPinching(false);
+    }
+  };
+  const wheel = (e: RWheelEvent<SVGSVGElement>) => {
+    if (!onZoom || !e.ctrlKey && !e.altKey) return;
+    onZoom(e.deltaY > 0 ? 1.12 : 0.89, plotFrac(toSvgX(e.currentTarget, e.clientX)));
   };
   const hc = hover !== null ? candles[hover] : null;
   const tipW = 170;
   const tipX = hover !== null ? Math.min(W - tipW - 2, Math.max(padL, x(hover) - tipW / 2)) : 0;
   return (
-    <svg className="chart touch" viewBox={`0 0 ${W} ${height}`} role="img" aria-label="Gráfico de velas con volumen" onPointerMove={pick} onPointerDown={pick} onPointerLeave={() => setHover(null)}>
+    <svg className="chart touch" viewBox={`0 0 ${W} ${height}`} role="img" aria-label="Gráfico de velas con volumen: deslizá para ver cada día, pellizcá con dos dedos para acercar" onPointerMove={move} onPointerDown={down} onPointerUp={up} onPointerCancel={up} onPointerLeave={(e) => { up(e); setHover(null); }} onWheel={wheel}>
       {ticks.map((t, i) => (
         <g key={i}>
           <line className="grid" x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} />

@@ -1,11 +1,14 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { store, useUI, Speed } from './store';
 import { navStore, useNav, Tab } from './nav';
 import { formatDateShort } from '../engine/time/calendar';
 import { analyze } from '../engine/advisor/advisor';
 import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
-import { SheetHost } from './sheets';
+import { SheetHost, useOta } from './sheets';
+import { Icon, IconName } from './icons';
+import { Avatar, avatarOf } from './components/Avatar';
+import { unreadNews } from '../engine/world/news';
 const More = lazy(() => import('./screens/More').then((m) => ({ default: m.More })));
 const Invest = lazy(() => import('./screens/Invest').then((m) => ({ default: m.Invest })));
 const Reports = lazy(() => import('./screens/Reports').then((m) => ({ default: m.Reports })));
@@ -15,17 +18,17 @@ const Career = lazy(() => import('./screens/Career').then((m) => ({ default: m.C
 import { Money, Sheet, InfoButton } from './components/common';
 import { fmtMoney } from '../engine/format';
 
-const TABS: Array<{ id: Tab; label: string; icon: string }> = [
-  { id: 'home', label: 'Inicio', icon: '🏠' },
-  { id: 'career', label: 'Carrera', icon: '💼' },
-  { id: 'finance', label: 'Finanzas', icon: '🏦' },
-  { id: 'invest', label: 'Invertir', icon: '📈' },
-  { id: 'business', label: 'Negocios', icon: '🏭' },
-  { id: 'more', label: 'Más', icon: '☰' },
+const TABS: Array<{ id: Tab; label: string; icon: IconName }> = [
+  { id: 'home', label: 'Inicio', icon: 'home' },
+  { id: 'career', label: 'Carrera', icon: 'career' },
+  { id: 'finance', label: 'Finanzas', icon: 'finance' },
+  { id: 'invest', label: 'Invertir', icon: 'invest' },
+  { id: 'business', label: 'Negocios', icon: 'business' },
+  { id: 'more', label: 'Más', icon: 'more' },
 ];
 
 const SPEEDS: Array<{ s: Speed; label: string; aria: string }> = [
-  { s: 0, label: '❚❚', aria: 'Pausa' },
+  { s: 0, label: 'pause', aria: 'Pausa' },
   { s: 1, label: '1×', aria: 'Velocidad normal' },
   { s: 2, label: '2×', aria: 'Velocidad doble' },
   { s: 4, label: '4×', aria: 'Velocidad 4x' },
@@ -36,25 +39,30 @@ function TopBar() {
   const ui = useUI();
   const s = ui.state!;
   const alerts = useMemo(() => analyze(s).filter((i) => (i.severity === 'critical' || i.severity === 'warning') && ui.settings.alertCategories.includes(i.category)).length, [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const unread = unreadNews(s);
   return (
     <header className="topbar">
       <div className="topbar-row">
-        <div className="avatar" style={{ background: s.player.color }} aria-hidden>{s.player.name.slice(0, 1).toUpperCase()}</div>
+        <button className="avatar-btn" aria-label="Tu personaje" onClick={() => navStore.go('more', 'wardrobe')}>
+          <Avatar data={avatarOf(s)} size={40} bust />
+        </button>
         <div className="date-block">
           <div className="d">{formatDateShort(s.day)}</div>
           <div className="tiny muted">
             Disponible <Money c={s.ledger.balances.checking + s.ledger.balances.savings + s.ledger.balances.cash_wallet} />
           </div>
         </div>
-        <button className="icon-btn" aria-label="Asesor IA" onClick={() => navStore.open({ kind: 'advisor' })}>
-          🧭{alerts > 0 && <span className="badge">{alerts}</span>}
+        <button className="icon-btn" aria-label={`Noticias${unread ? ` (${unread} nuevas)` : ''}`} onClick={() => navStore.go('more', 'news')}>
+          <Icon name="news" />{unread > 0 && <span className="badge info">{unread > 9 ? '9+' : unread}</span>}
         </button>
-        <button className="icon-btn" aria-label="Glosario" onClick={() => navStore.open({ kind: 'glossary' })}>📖</button>
-        <button className="icon-btn" aria-label="Ajustes y guardado" onClick={() => navStore.open({ kind: 'settings' })}>⚙️</button>
+        <button className="icon-btn" aria-label="Asesor IA" onClick={() => navStore.open({ kind: 'advisor' })}>
+          <Icon name="advisor" />{alerts > 0 && <span className="badge">{alerts}</span>}
+        </button>
+        <button className="icon-btn" aria-label="Ajustes y guardado" onClick={() => navStore.open({ kind: 'settings' })}><Icon name="settings" /></button>
       </div>
       <div className="speed" role="group" aria-label="Control del tiempo">
         {SPEEDS.map((x) => (
-          <button key={x.s} aria-label={x.aria} className={ui.speed === x.s ? 'on' : ''} onClick={() => store.setSpeed(x.s)}>{x.label}</button>
+          <button key={x.s} aria-label={x.aria} className={ui.speed === x.s ? 'on' : ''} onClick={() => store.setSpeed(x.s)}>{x.label === 'pause' ? <Icon name="pause" size={15} /> : x.label}</button>
         ))}
         <span className="sep" />
         <button aria-label="Avanzar un día" onClick={() => store.step(1)}>+1d</button>
@@ -63,6 +71,21 @@ function TopBar() {
         <InfoButton term="accion_velocidad" />
       </div>
     </header>
+  );
+}
+
+/** Aviso de versión nueva (solo en la app de Android). */
+function UpdateBanner() {
+  const ota = useOta();
+  if (ota.check?.kind !== 'available') return null;
+  return (
+    <div style={{ padding: '10px 16px 0' }}>
+      <button className="update-banner" onClick={() => navStore.open({ kind: 'update' })}>
+        <Icon name="update" size={18} />
+        <span style={{ flex: 1, textAlign: 'left' }}><strong>Versión {ota.check.manifest.version} disponible.</strong> <span className="tiny">Se actualiza en segundos y conserva tu partida.</span></span>
+        <span className="btn sm primary">Ver</span>
+      </button>
+    </div>
   );
 }
 
@@ -75,7 +98,7 @@ function BottomNav() {
           const on = nav.tab === t.id || (t.id === 'more' && nav.tab === 'reports');
           return (
           <button key={t.id} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => (t.id === 'more' && nav.tab === 'more' ? navStore.setSub('more', 'menu') : navStore.go(t.id))}>
-            <span className="ic" aria-hidden>{t.icon}</span>
+            <span className="ic" aria-hidden><Icon name={t.icon} size={21} stroke={on ? 2.3 : 1.9} /></span>
             {t.label}
           </button>
           );
@@ -131,18 +154,25 @@ function AbsenceReport() {
 export function App() {
   const ui = useUI();
   const nav = useNav();
+  const ota = useOta();
+  const hasNews = !!(ota.justUpdated || ota.rolledBack);
+  useEffect(() => {
+    if (hasNews && ui.ready && !navStore.get().sheets.some((x) => x.kind === 'whatsnew')) navStore.open({ kind: 'whatsnew' });
+  }, [hasNews, ui.ready]);
   if (!ui.ready) {
     return (
       <div className="onboard" aria-busy="true">
+        <div className="boot-mark" aria-hidden><Icon name="invest" size={34} /></div>
         <div className="brand">Ultimate <em>Realistic</em> Tycoon</div>
         <p className="muted">Cargando tu partida y verificando la contabilidad…</p>
       </div>
     );
   }
-  if (!ui.state) return <><Onboarding /><Toasts /></>;
+  if (!ui.state) return <><Onboarding /><SheetHost /><Toasts /></>;
   return (
     <div className="app">
       <TopBar />
+      <UpdateBanner />
       {ui.loadNotice && (
         <div style={{ padding: '10px 16px 0' }}>
           <div className="alert warning">

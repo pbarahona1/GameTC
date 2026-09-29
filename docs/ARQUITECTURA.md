@@ -119,7 +119,22 @@ El motor de partida doble es genérico sobre un plan de cuentas (`Chart<A>`): `g
   - Android/iOS (1.1): `NativeKV` escribe todas las claves como archivos `saves/<clave>.json` en `Directory.Data` (`@capacitor/filesystem`) y una segunda copia SOLO de la partida principal en `@capacitor/preferences` (Android carga las preferencias enteras en memoria al abrir la app, así que no conviene llenarlas). Lee de archivos primero y luego de preferencias (compatible con instalaciones 1.0).
   - Navegador: `localStorage`; memoria como último recurso (se avisa).
 - Exportar a archivo (`exportToFile`): en Android se escribe en la caché y se abre el menú Compartir; en navegador se descarga. Importar desde archivo o texto pegado, con la misma verificación (checksum, migración, invariantes).
-- `SAVE_VERSION = 4` (1.1: habilidad Proyección de negocios, cuentas con gestor, proyecciones guardadas en empresas). Antes, `SAVE_VERSION = 3`. La migración 1→2 agrega las cuentas personales de empresas; la 2→3 crea bolsa, bonos, inmuebles, fondos, Mogul, profesionales, legal, jurisdicciones y macro v2 (`initWorldV3`). El campo `ledger.archive` (Fase 5) es opcional: partidas sin compactar se leen igual.
+- `SAVE_VERSION = 5` (1.2: `possessions` —guardarropa, bienes y apariencia—, `world` —noticias, rivales, intenciones, exclusividades y ofertas por empleados, con generador aleatorio propio—, tarjeta por niveles con cuotas y reintegros, cinco cuentas nuevas y `meta.gatesOpened`; la migración 4→5 marca como cumplidas sin recompensa las misiones que ya estaban hechas). Antes, `SAVE_VERSION = 4` (1.1: habilidad Proyección de negocios, cuentas con gestor, proyecciones guardadas en empresas).
+- Copia "antes de actualizar" (`urt.save.preupdate`, 1.2): se escribe verificada justo antes de cambiar de versión por internet y compite por fecha con la principal y la temporal; solo gana si la principal no se puede leer (por ejemplo, si hubo que volver a una versión anterior que no entiende un formato nuevo). Antes, `SAVE_VERSION = 3`. La migración 1→2 agrega las cuentas personales de empresas; la 2→3 crea bolsa, bonos, inmuebles, fondos, Mogul, profesionales, legal, jurisdicciones y macro v2 (`initWorldV3`). El campo `ledger.archive` (Fase 5) es opcional: partidas sin compactar se leen igual.
+
+## Actualizaciones por internet (1.2, `persistence/ota.ts`)
+
+- El juego es una sola página (compilación `build:single`). `npm run ota` la publica en `ota/web-<build>.html` con `ota/manifest.json` (versión, build = mayor·10000 + menor·100 + parche, `minNativeCode`, tamaño, SHA-256, novedades).
+- La app lee el manifiesto desde `raw.githubusercontent.com` (CORS abierto). `evaluateManifest` decide: nada nuevo, disponible, requiere APK nueva (si `versionCode` < `minNativeCode`), o ya falló antes.
+- Instalación: descarga con progreso → tamaño y SHA-256 → escritura en `Directory.Data/ota/<build>/index.html` y relectura verificada → `store.saveForUpdate()` (pausa, guarda y copia "antes de actualizar") → preferencia `urt.ota.pending` → `WebView.setServerBasePath` (sin persistir).
+- Arranque de la versión nueva (`otaBoot` + `markHealthy`): si carga la partida y funciona 6 s sin errores, `persistServerBasePath` la deja fija y muestra las novedades. Un error antes de confirmarse, o no poder leer la partida (`failBoot`), vuelve a la ruta anterior (u a los archivos de la APK) y marca el build como fallido. Si la versión nueva se cuelga, al reabrir la app arranca la anterior (la ruta persistida) y detecta el pendiente como fallido.
+- Capacitor descarta la ruta persistida cuando cambia el `versionCode` de la APK: instalar una APK nueva siempre arranca con su propia página.
+- Probado con los plugins simulados en memoria (`tests/ota.test.ts`). El WebView real de Android se prueba en el teléfono.
+
+## Firma de Android (1.2)
+
+- `android/app/urt-debug.keystore` (en el repositorio a propósito): firma fija de las APK instalables → cada APK nueva se instala encima de la anterior y conserva los datos.
+- Firma de publicación: variables `URT_KEYSTORE_FILE`, `URT_KEYSTORE_PASSWORD`, `URT_KEY_ALIAS`, `URT_KEY_PASSWORD`; en GitHub vienen de secretos (`URT_KEYSTORE_BASE64` se decodifica a un archivo temporal). Sin ellas, `bundleRelease` no se ejecuta. Ver `docs/PUBLICAR.md`.
 
 ## Progreso sin conexión
 
@@ -133,9 +148,20 @@ El motor de partida doble es genérico sobre un plan de cuentas (`Chart<A>`): `g
 - Medido en las pruebas (Node, un núcleo): **10 años con empresa, acciones, fondo e inmueble ≈ 3 s** (≈ 1.200 días/s); estado ≈ 2,2 MB, guardado comprimido ≈ 0,7 MB.
 - División de código: pantallas cargadas bajo demanda (`React.lazy`) y bloques separados para React y el glosario en la versión Android.
 
+## Sistemas de la versión 1.2
+
+- `engine/lifestyle/`: `effects.ts` (imagen, trato en tiendas, efectos mensuales de los bienes; sin dependencias pesadas para que lo usen carrera, educación, presupuesto y atributos) y `shops.ts` (compra con débito/efectivo/tarjeta/cuotas, venta, vestidor, depreciación y desgaste mensual).
+- `engine/finance/cardRewards.ts` + `creditCard.ts`: niveles, reintegros, cuotas, costo anual y solicitudes.
+- `engine/world/`: `news.ts` (publicación calibrada, análisis) y `rivals.ts` (IA de rivales, anticipos de eventos y balances, exclusividades, ofertas por empresas y empleados). `worldDay` y `worldMonth` se llaman desde `simulation.ts`; la economía programa sus eventos con anticipación y avisa a `announceMacroEvent`.
+- `engine/progression/tutorial.ts` (misiones por capítulos con recompensa) y `unlocks.ts` (secciones recomendadas por etapa; nunca bloquean).
+- `tests/bots/strategies.ts`: bots que juegan partidas completas por estilo; `URT_BOTS=1` genera `docs/BALANCE.md`.
+
 ## Interfaz
 
-- Diseño móvil primero: columna de 560 px máximo, navegación inferior de 6 secciones (Inicio, Carrera, Finanzas, Invertir, Negocios, Más), hojas modales inferiores, objetivos táctiles ≥ 44 px, áreas seguras (`env(safe-area-inset-*)`).
+- Íconos de línea (`lucide-react`, solo los usados) centralizados en `ui/icons.tsx`; los emojis quedan para el contenido (registro, sectores, eventos).
+- Personaje en SVG propio (`components/Avatar.tsx`) que dibuja la ropa puesta, el reloj y los accesorios.
+- Gráfico de velas táctil: un dedo = precio de cada día; dos dedos = pellizco para acercar y arrastre para moverse; botones de zoom y "Hoy".
+- Diseño móvil primero: columna de 560 px máximo, navegación inferior de 6 secciones (Inicio, Carrera, Finanzas, Invertir, Negocios, Más; "Más" agrupado en Tu vida, El mundo, Dinero y reglas, Juego), hojas modales inferiores, objetivos táctiles ≥ 44 px, áreas seguras (`env(safe-area-inset-*)`).
 - Tema claro/oscuro por tokens CSS (sistema, claro u oscuro), tamaño de texto (4 niveles), alto contraste, paleta para daltonismo, reducción de animaciones y densidad compacta (atributos en `<html>`).
 - Ganancias/pérdidas con color **y** símbolo (▲▼) para accesibilidad.
 - Ayuda contextual: componente `InfoButton` enlazado al glosario; punto dorado en conceptos no consultados; modo aprendizaje con explicaciones en línea.

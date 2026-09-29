@@ -1,0 +1,25 @@
+{
+  "format": "urt-ota",
+  "version": "1.2.0",
+  "build": 10200,
+  "minNativeCode": 5,
+  "file": "web-10200.html",
+  "sha256": "72eeade7d8efcd339df7d5cf843bae93a33f2a365f9b10e6617ba9f0f8a0680f",
+  "size": 1352709,
+  "date": "2026-09-29",
+  "notes": [
+    "Tiendas: ropa, vehículos, tecnología, hogar y lujo con efectos reales (imagen, gastos, salud, estudio).",
+    "Tu personaje: dibujo que se viste con lo que comprás, vestidor, apariencia y bienes que se deprecian y se pueden vender.",
+    "Imagen personal: cambia tus chances en entrevistas y negociaciones y cómo te atienden en las tiendas.",
+    "Tarjetas Clásica, Oro, Platino y Black: reintegros, cuotas sin interés y más límite según tu puntaje e ingresos.",
+    "Noticias y rumores calibrados: analizalos para anticiparte a eventos, balances y movimientos de rivales.",
+    "Competencia: grupos rivales compran empresas e inmuebles, abren competidores, cierran exclusividades con proveedores, ofertan por tus empresas y tientan a tus empleados.",
+    "Misiones por capítulos (por ejemplo, «Comprá tu primera acción» o «Cobrá tu primer alquiler») con experiencia de recompensa.",
+    "Secciones avanzadas con recomendación por etapa (nunca bloqueadas; se pueden abrir igual).",
+    "Inmuebles de entrada: cocheras y estudios baratos; hipoteca mínima de $15.000.",
+    "Holding sin subsidiarias mucho más barata y con aviso claro.",
+    "Trading Pro: deslizá para ver cada día y pellizcá con dos dedos para acercar; botones de zoom.",
+    "Nuevos íconos, menú «Más» ordenado, Ajustes por secciones y el interruptor de actividades ilegales a la vista.",
+    "Actualizaciones dentro de la app sin reinstalar y sin tocar tu partida; ícono y pantalla de inicio propios."
+  ]
+}

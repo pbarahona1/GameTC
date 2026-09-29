@@ -1,6 +1,13 @@
-# Compila la APK de depuración en GitHub (no hace falta instalar Android Studio).
-# Subí el proyecto a un repositorio, entrá a Actions → "APK Android" → Run workflow,
-# y descargá la APK desde los artefactos de la ejecución.
+# Compila el juego para Android en GitHub (no hace falta instalar Android Studio).
+#
+# En cada push a main (o con Actions → "APK Android" → Run workflow):
+#  1. Pruebas automáticas.
+#  2. APK instalable firmada con la llave FIJA del repositorio: se instala encima de la
+#     anterior sin desinstalar, así la partida se conserva. Se publica como artefacto y
+#     como "Release" de GitHub (descarga directa desde el teléfono).
+#  3. Paquete para Play Store (AAB) firmado con la llave de publicación, SOLO si están
+#     configurados los secretos URT_KEYSTORE_BASE64, URT_KEYSTORE_PASSWORD y URT_KEY_ALIAS
+#     (opcional URT_KEY_PASSWORD). Ver docs/PUBLICAR.md.
 #
 # No usa android-actions/setup-android: la imagen de GitHub (ubuntu-24.04) ya trae
 # el SDK de Android instalado en $ANDROID_HOME, con las licencias aceptadas.
@@ -9,9 +16,13 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      HAS_RELEASE_KEY: ${{ secrets.URT_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -33,13 +44,57 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npx cap sync android
-      - name: Compilar APK
+      - name: Versión
+        id: ver
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar APK instalable (firma fija)
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/ultimate-realistic-tycoon.apk"
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$RUNNER_TEMP/ultimate-realistic-tycoon.apk" | head -3 || true
       - uses: actions/upload-artifact@v4
         with:
-          name: ultimate-realistic-tycoon-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ultimate-realistic-tycoon-apk-${{ steps.ver.outputs.version }}
+          path: ${{ runner.temp }}/ultimate-realistic-tycoon.apk
           if-no-files-found: error
+
+      - name: Publicar la APK en Releases (descarga directa)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          TAG="v$VERSION"
+          NOTES="APK instalable de Ultimate Realistic Tycoon $VERSION. Se instala encima de la versión anterior (misma firma) y conserva la partida. Las versiones 1.1 y anteriores tenían otra firma: la primera vez hay que exportar la partida, desinstalar e importar."
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$RUNNER_TEMP/ultimate-realistic-tycoon.apk" --clobber
+          else
+            gh release create "$TAG" "$RUNNER_TEMP/ultimate-realistic-tycoon.apk" --title "Ultimate Realistic Tycoon $VERSION" --notes "$NOTES" --target "$GITHUB_SHA" --latest
+          fi
+
+      - name: Paquete para Play Store (AAB firmado)
+        if: env.HAS_RELEASE_KEY == 'true'
+        working-directory: android
+        env:
+          URT_KEYSTORE_BASE64: ${{ secrets.URT_KEYSTORE_BASE64 }}
+          URT_KEYSTORE_PASSWORD: ${{ secrets.URT_KEYSTORE_PASSWORD }}
+          URT_KEY_ALIAS: ${{ secrets.URT_KEY_ALIAS }}
+          URT_KEY_PASSWORD: ${{ secrets.URT_KEY_PASSWORD }}
+        run: |
+          echo "$URT_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export URT_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          ./gradlew bundleRelease --no-daemon --stacktrace
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab > /dev/null && echo "AAB firmado correctamente"
+          rm -f "$RUNNER_TEMP/release.jks"
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_RELEASE_KEY == 'true'
+        with:
+          name: play-store-aab-${{ steps.ver.outputs.version }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+      - name: Aviso de firma de publicación
+        if: env.HAS_RELEASE_KEY != 'true'
+        run: echo "::notice title=AAB para Play Store::No se generó el AAB firmado porque faltan los secretos URT_KEYSTORE_BASE64, URT_KEYSTORE_PASSWORD y URT_KEY_ALIAS. Ver docs/PUBLICAR.md."

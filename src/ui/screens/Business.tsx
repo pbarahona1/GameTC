@@ -15,6 +15,7 @@ import { fmtMoney, fmtPct } from '../../engine/format';
 import { usd, Cents } from '../../engine/money';
 import { Money, InfoButton, Pill, Empty, AmountInput, ConfirmButton, LineChart, CardHead, Act, Stat, Learn, Seg, ScreenIntro } from '../components/common';
 import { CompanyView } from './business/CompanyView';
+import { SoftGate } from '../components/Gate';
 import type { Company } from '../../engine/business/types';
 
 const COLORS = ['#d2a94f', '#4cc093', '#7fb2e0', '#ee7a66', '#b59be0', '#e6d27a'];
@@ -58,7 +59,7 @@ function Portfolio() {
   const c = useMemo(() => consolidated(s, s.day - 29, s.day), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <ScreenIntro icon="🏭" title="Negocios" text="Fundá, comprá y dirigí empresas. Antes de invertir podés proyectar cómo le iría a cada negocio." term="proyeccion_negocios" />
+      <ScreenIntro icon="business" title="Negocios" text="Fundá, comprá y dirigí empresas. Antes de invertir podés proyectar cómo le iría a cada negocio." term="proyeccion_negocios" />
       <div className="card">
         <CardHead title="Tus empresas" term="metodo_participacion" />
         {open.length === 0 ? (
@@ -75,6 +76,7 @@ function Portfolio() {
           <Act label="Fundar empresa" help="accion_fundar" className="btn primary" onClick={() => navStore.setSub('business', 'found')} />
           <Act label={`Comprar (${s.listings.length} en venta)`} help="accion_comprar_empresa" className="btn" onClick={() => navStore.setSub('business', 'market')} />
           <Act label="Crear holding" help="accion_fundar_holding" className="btn ghost" onClick={() => navStore.setSub('business', 'holding')} />
+          <Act label="Competencia" help="grupos_rivales" className="btn ghost" onClick={() => navStore.go('more', 'rivals')} />
         </div>
       </div>
       {open.map((co) => <CompanyCard key={co.id} co={co} />)}
@@ -314,7 +316,8 @@ export function Business() {
   }
   if (sub.startsWith('found')) return <Found parentId={sub.includes(':') ? Number(sub.split(':')[1]) : null} />;
   if (sub.startsWith('market')) return <Market buyerId={sub.includes(':') ? Number(sub.split(':')[1]) : null} />;
-  if (sub === 'holding') return <NewHolding />;
+  if (sub === 'holding') return <SoftGate id="holding"><NewHolding /></SoftGate>;
+  if (!s.companies.length && !s.formerCompanies.length) return <SoftGate id="business"><Portfolio /></SoftGate>;
   return <Portfolio />;
 }
 
@@ -347,6 +350,7 @@ function NewHolding() {
         <CardHead title="Crear una holding" term="holding" />
         <Learn term="holding" />
         <p className="small">Una holding es una sociedad cuyo negocio es ser dueña de otras empresas. Sirve para administrarlas como grupo: centralizar caja, prestarse dinero, cobrar honorarios de gestión y recibir dividendos de sus subsidiarias sin retención. No vende productos: sus ingresos vienen de las subsidiarias.</p>
+        <div className="alert warning"><span className="stripe" /><div className="small" style={{ flex: 1 }}><strong>Cuesta dinero todos los meses.</strong> Sin subsidiarias paga domicilio legal, servicios y administración (~{fmtMoney(usd((80 + 20 + lf.monthlyAdmin) * s.macro.priceIndex), { decimals: false })}/mes) y no tiene ingresos propios. Cada subsidiaria suma ~{fmtMoney(usd(180 * s.macro.priceIndex), { decimals: false })}/mes de gestión. Conviene cuando ya tenés al menos una SRL o corporación para transferirle.</div></div>
         <div className="field">
           <label htmlFor="h-name">Nombre</label>
           <input id="h-name" className="input" maxLength={32} value={name} placeholder={`Ej.: Grupo ${s.player.name.split(' ')[0]}`} onChange={(e) => setName(e.target.value)} />

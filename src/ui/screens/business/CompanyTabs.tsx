@@ -339,7 +339,7 @@ export function ManageTab({ co }: { co: Company }) {
         <CardHead title="Vender la empresa" term="accion_vender_empresa" />
         {offer ? (
           <>
-            <p className="small">Oferta: <strong>{fmtMoney(offer.price)}</strong> por el 100 % (tu parte {fmtMoney(Math.round(offer.price * co.ownership))}). Vence el {formatDate(offer.expires)}.</p>
+            <p className="small">Oferta{offer.from ? <> de <strong>{offer.from}</strong></> : ''}: <strong>{fmtMoney(offer.price)}</strong> por el 100 % (tu parte {fmtMoney(Math.round(offer.price * co.ownership))}). {v.value > 0 && <>Es {offer.price >= v.value ? `${Math.round((offer.price / v.value - 1) * 100)} % más` : `${Math.round((1 - offer.price / v.value) * 100)} % menos`} que la valoración. </>}Vence el {formatDate(offer.expires)}.</p>
             <ConfirmButton label="Aceptar oferta" className="btn primary" confirmLabel="Vender" help="accion_vender_empresa" detail={<>Recibirás tu parte menos 3 % de comisión y 15 % de impuesto sobre la ganancia frente a tu valor contable ({fmtMoney(co.carrying)}).</>} onConfirm={() => { const r = runCo(co.id, (st, c) => acceptSale(st, c)); if (r.ok) navStore.setSub('business', 'portfolio'); }} />
           </>
         ) : (

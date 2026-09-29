@@ -183,10 +183,21 @@ export function monthlyPayroll(_state: GameState, co: Company): Cents {
   return wages + roundCents(wages * EMPLOYER_PAYROLL_RATE);
 }
 
+/**
+ * Oficina y servicios (USD base). Una holding (1.2) solo necesita un domicilio legal
+ * mientras no tenga subsidiarias; cada subsidiaria suma espacio y servicios de gestión.
+ */
+export function premisesBase(state: GameState, co: Company): { rent: number; utilities: number } {
+  const sec = sectorOf(co);
+  if (co.sector !== 'holding') return { rent: sec.rent, utilities: sec.utilities };
+  const subs = state.companies.filter((c) => c.parentId === co.id && isOpen(c)).length;
+  return { rent: 80 + 150 * subs, utilities: 20 + 30 * subs };
+}
+
 /** Costos fijos mensuales (sin sueldos): alquiler, servicios, mantenimiento, administración, préstamos. */
 export function monthlyFixed(state: GameState, co: Company): Cents {
-  const sec = sectorOf(co);
-  let t = px(state, sec.rent) + px(state, sec.utilities) + px(state, LEGAL_FORM_BY_ID[co.legalForm].monthlyAdmin);
+  const pb = premisesBase(state, co);
+  let t = px(state, pb.rent) + px(state, pb.utilities) + px(state, LEGAL_FORM_BY_ID[co.legalForm].monthlyAdmin);
   t += maintenanceCost(state, co);
   for (const l of co.loans) if (l.balance > 0) t += l.payment;
   return t;

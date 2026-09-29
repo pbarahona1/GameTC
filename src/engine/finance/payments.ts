@@ -4,6 +4,7 @@ import type { Cents } from '../money';
 import { applyRate } from '../money';
 import type { GameState, PaymentMethod } from '../state';
 import { addLog } from '../log';
+import { accrueRewards, cardUsed } from './cardRewards';
 
 /**
  * Pagos con cadena de respaldo realista:
@@ -20,7 +21,7 @@ export const ARREARS_FEE_MIN = 1500;
 function cardAvailable(state: GameState): Cents {
   const c = state.bank.card;
   if (!c.active) return 0;
-  return Math.max(0, c.limit - state.ledger.balances.credit_card);
+  return Math.max(0, c.limit - cardUsed(state));
 }
 
 /** Asegura fondos en la cuenta corriente transfiriendo desde ahorro si está permitido. */
@@ -62,7 +63,10 @@ export function payExpense(state: GameState, account: AccountId, amount: Cents, 
     tryPost(state.ledger, { ...base, lines: [{ account, debit: amount }, { account: source, credit: amount }] });
 
   if (opt.method === 'card' && cardAvailable(state) >= amount) {
-    if (via('credit_card').ok) return { ok: true, via: 'card' };
+    if (via('credit_card').ok) {
+      accrueRewards(state, amount);
+      return { ok: true, via: 'card' };
+    }
   }
   if (opt.method === 'cash' && state.ledger.balances.cash_wallet >= amount) {
     if (via('cash_wallet').ok) return { ok: true, via: 'cash' };
@@ -71,6 +75,7 @@ export function payExpense(state: GameState, account: AccountId, amount: Cents, 
   if (state.ledger.balances.checking >= amount && via('checking').ok) return { ok: true, via: 'checking' };
   if (state.ledger.balances.cash_wallet >= amount && via('cash_wallet').ok) return { ok: true, via: 'cash' };
   if (cardAvailable(state) >= amount && via('credit_card').ok) {
+    accrueRewards(state, amount);
     addLog(state, 'warning', '💳', `Sin fondos: "${opt.memo}" se cargó a la tarjeta de crédito.`, amount);
     return { ok: true, via: 'card' };
   }

@@ -1,3 +1,4 @@
+import { resolveEarningsHints } from '../world/rivals';
 import { mandatesOnDividend, mandatesOnSplit } from './managed';
 import type { GameState } from '../state';
 import type { Stock, Candle, Order, OrderType, OrderSide } from './types';
@@ -192,7 +193,10 @@ function processEarnings(state: GameState): void {
   for (const s of state.stocks.stocks) {
     if (s.status !== 'activa' || state.day < s.nextEarnings) continue;
     const macroEff = (state.macro.gdpGrowth - 0.025) * 2 * s.beta + stockSectorDrift(state, s.sector) / 4;
-    const surprise = clamp(randNormal(state) * 0.07 + macroEff * 0.3 + (s.health - 60) / 1500, -0.6, 0.6);
+    const noise = s.earningsNoise ?? randNormal(state);
+    delete s.earningsNoise;
+    const surprise = clamp(noise * 0.07 + macroEff * 0.3 + (s.health - 60) / 1500, -0.6, 0.6);
+    resolveEarningsHints(state, s.id, surprise);
     const exp = s.expectedQEps;
     const actual = Math.round(exp + Math.abs(exp) * surprise);
     s.lastQEps = actual;

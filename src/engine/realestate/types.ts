@@ -1,7 +1,7 @@
 import type { Cents } from '../money';
 import type { JurisdictionId } from '../../content/jurisdictions';
 
-export type PropertyType = 'vivienda' | 'local' | 'oficina' | 'terreno';
+export type PropertyType = 'vivienda' | 'local' | 'oficina' | 'terreno' | 'cochera';
 
 export type PropertyOwner = { kind: 'personal' } | { kind: 'company'; id: number } | { kind: 'mogul'; id: string };
 

@@ -1,6 +1,6 @@
 import type { GameState } from '../state';
 import type { Company, DayStats } from './types';
-import { sectorOf, px, coLog, coPay, capacity, computeQuality, countRole, workingAssets, equipDef, isOpen } from './common';
+import { sectorOf, px, coLog, coPay, capacity, computeQuality, countRole, workingAssets, equipDef, isOpen, premisesBase } from './common';
 import { coPost } from './companyLedger';
 import { attractiveness, rivalsAttraction, demandFactor } from './market';
 import { takeFifo, onHand, receiveOrders, payDuePayables, expireLots, runReorderRules, monthlyStorage } from './inventory';
@@ -302,11 +302,12 @@ export function reputationDay(_state: GameState, co: Company): void {
 }
 
 /** Costos fijos del día 1 de cada mes. */
-export function monthStartCosts(state: GameState, co: Company, sec: SectorDef, adminFee: Cents, maintenance: Cents): void {
+export function monthStartCosts(state: GameState, co: Company, _sec: SectorDef, adminFee: Cents, maintenance: Cents): void {
   // Si la empresa usa un inmueble propio como local, no paga alquiler (paga mantenimiento e impuesto del inmueble).
   const ownPremises = (state.realEstate?.properties ?? []).some((p) => p.usedBy === co.id);
-  if (!ownPremises) coPay(state, co, 'rent', px(state, sec.rent), { memo: 'Alquiler del local', tag: 'rent', kind: 'alquiler' });
-  coPay(state, co, 'utilities', px(state, sec.utilities), { memo: 'Servicios (energía, agua, internet)', tag: 'utilities', kind: 'otros' });
+  const pb = premisesBase(state, co);
+  if (!ownPremises) coPay(state, co, 'rent', px(state, pb.rent), { memo: co.sector === 'holding' ? 'Oficina y domicilio legal' : 'Alquiler del local', tag: 'rent', kind: 'alquiler' });
+  coPay(state, co, 'utilities', px(state, pb.utilities), { memo: 'Servicios (energía, agua, internet)', tag: 'utilities', kind: 'otros' });
   if (adminFee > 0) coPay(state, co, 'admin', adminFee, { memo: 'Administración legal y contable de la sociedad', tag: 'admin', kind: 'otros' });
   if (maintenance > 0) coPay(state, co, 'maintenance', maintenance, { memo: 'Mantenimiento de equipos', tag: 'maintenance', kind: 'otros' });
 }

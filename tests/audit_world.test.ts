@@ -20,6 +20,11 @@ import { activeMandates, openMandate, depositMandate, withdrawMandate, setMandat
 import { setUnderreport, startVenture, depositUndeclared, launderThroughCompany, bribe, skimCash, voluntaryDisclosure, payFine, finePlan, prepareDefense, assignLawyer, acceptPlea, setCompanyIrregular, resolveInspection } from '../src/engine/legal/legal';
 import { requestResidence } from '../src/engine/tax/taxEngine';
 import { openDeposit } from '../src/engine/finance/banking';
+import { buyItem, sellItem, equip } from '../src/engine/lifestyle/shops';
+import { ITEMS } from '../src/content/shops';
+import { requestTier, payCard } from '../src/engine/finance/creditCard';
+import { analyzeNews } from '../src/engine/world/news';
+import { answerPoach } from '../src/engine/world/rivals';
 
 /**
  * AUDITORÍA INTEGRAL: bots que toman decisiones aleatorias en TODOS los
@@ -164,6 +169,33 @@ function worldAction(s: GameState, bot: RngHolder): void {
       else if (k < 0.9) trainPro(s, g.id);
       else firePro(s, g.id);
     }
+  } else if (r < 0.9) {
+    // 1.2: tiendas, bienes, tarjetas por niveles, cuotas y vestidor.
+    const k = nextRandom(bot);
+    if (k < 0.45) {
+      const it = pickOne(bot, ITEMS);
+      const method = (['debito', 'tarjeta', 'cuotas', 'efectivo'] as const)[randInt(bot, 0, 3)];
+      if (it) buyItem(s, it.id, method, [3, 6, 12][randInt(bot, 0, 2)]);
+    } else if (k < 0.6) {
+      const o = pickOne(bot, s.possessions.items.filter((x) => x.uid > 0));
+      if (o) sellItem(s, o.uid);
+    } else if (k < 0.7) {
+      const o = pickOne(bot, s.possessions.items);
+      if (o) equip(s, o.uid);
+    } else if (k < 0.8) {
+      requestTier(s, (['clasica', 'oro', 'platino', 'black'] as const)[randInt(bot, 0, 3)]);
+      s.bank.card.lastTierRequest = -999;
+    } else if (k < 0.9) {
+      const n = pickOne(bot, s.world.news.filter((x) => x.status === 'abierta'));
+      if (n) analyzeNews(s, n.id);
+    } else {
+      const p = pickOne(bot, s.world.poach.filter((x) => x.status === 'abierta'));
+      if (p) answerPoach(s, p.id, nextRandom(bot) < 0.5);
+      else if (s.bank.card.dueDay >= 0) payCard(s, s.bank.card.statementBalance);
+    }
+  } else if (r < 0.92) {
+    const l = pickOne(bot, s.realEstate.listings.filter((x) => x.property.type === 'cochera'));
+    if (l) buyProperty(s, l.id, { owner: { kind: 'personal' } });
   }
 }
 
@@ -200,6 +232,7 @@ describe('Auditoría integral de todos los sistemas (bots aleatorios)', () => {
       }
       expect(actions).toBeGreaterThan(300);
       expect(s.stocks.trades.length).toBeGreaterThan(10);
+      expect(s.possessions.spent).toBeGreaterThan(0);
     });
   }
 });

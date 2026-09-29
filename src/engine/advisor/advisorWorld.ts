@@ -1,3 +1,4 @@
+import { monthlyFixed } from '../business/common';
 import type { GameState } from '../state';
 import type { Insight, DataPoint } from './advisor';
 import { computeMetrics } from '../reports/metrics';
@@ -142,7 +143,7 @@ export function analyzeWorld(state: GameState): Insight[] {
       id: 'portfolio-drawdown', severity: 'warning', category: 'inversiones', term: 'drawdown',
       title: `📉 Tu cartera cae ${fmtPct(1 - inv / cost, 0)} respecto de lo invertido`,
       what: `Invertiste ${fmtMoney(cost)} y hoy vale ${fmtMoney(inv)}.`,
-      why: `La economía está en ${PHASES[state.macro.phase].name.toLowerCase()}; ${state.macro.events.filter((e) => e.endDay >= state.day).map((e) => e.name).join(', ') || 'sin eventos especiales activos'}.`,
+      why: `La economía está en ${PHASES[state.macro.phase].name.toLowerCase()}; ${state.macro.events.filter((e) => e.startDay <= state.day && e.endDay >= state.day).map((e) => e.name).join(', ') || 'sin eventos especiales activos'}.`,
       data: [H('Costo', fmtMoney(cost)), H('Valor actual', fmtMoney(inv)), H('Pérdida no realizada', fmtMoney(inv - cost))],
       consequence: 'Si vendés ahora, la pérdida se realiza (y compensa ganancias para impuestos). Si esperás, puede recuperarse… o no.',
       options: [
@@ -151,6 +152,27 @@ export function analyzeWorld(state: GameState): Insight[] {
       ],
       ifNothing: 'El resultado dependerá de la evolución del mercado.',
       uncertainty: 'Nadie puede predecir el rebote con certeza.',
+    });
+  }
+
+  // ------------------------------------------------ Holdings sin subsidiarias (1.2)
+  for (const h of state.companies.filter((c) => c.sector === 'holding' && (c.status === 'active' || c.status === 'insolvent'))) {
+    const subs = state.companies.filter((c) => c.parentId === h.id && (c.status === 'active' || c.status === 'insolvent')).length;
+    if (subs > 0 || state.day - h.foundedDay < 30) continue;
+    const cost = monthlyFixed(state, h);
+    out.push({
+      id: `holding-empty-${h.id}`, severity: 'warning', category: 'empresa', term: 'holding',
+      title: `🏛️ ${h.name} no tiene subsidiarias`,
+      what: `Paga ~${fmtMoney(cost)} por mes (domicilio, servicios y administración) y no tiene ingresos propios.`,
+      why: 'Una holding solo gana a través de las empresas que controla.',
+      data: [H('Costo fijo mensual', fmtMoney(cost)), H('Caja de la holding', fmtMoney(h.ledger.balances.cash)), H('Subsidiarias', '0')],
+      consequence: `En un año son ~${fmtMoney(cost * 12)} de pérdida.`,
+      options: [
+        { label: 'Transferirle una SRL o corporación tuya', pros: 'Empieza a cumplir su función (dividendos sin retención, préstamos intragrupo).', cons: 'Cada subsidiaria suma costos de gestión.', tab: 'business' },
+        { label: 'Fundar o comprar una empresa a nombre de la holding', pros: 'Usa la caja que ya tiene.', cons: 'Arriesgás ese capital.', tab: 'business' },
+        { label: 'Cerrar la holding', pros: 'Deja de generar costos.', cons: 'Perdés lo pagado en la constitución.', tab: 'business' },
+      ],
+      ifNothing: 'La caja de la holding se irá consumiendo mes a mes.',
     });
   }
 

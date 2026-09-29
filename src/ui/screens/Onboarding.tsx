@@ -6,17 +6,40 @@ import { store } from '../store';
 import { fmtMoney } from '../../engine/format';
 import { usd } from '../../engine/money';
 import { DIFFICULTIES, type Difficulty } from '../../engine/economy/difficulty';
+import { SKIN_TONES, HAIR_COLORS, HAIR_STYLES, HAIR_STYLE_NAMES } from '../../content/shops';
+import type { Look } from '../../engine/lifestyle/types';
+import { Avatar } from '../components/Avatar';
+import { Switch } from '../components/common';
+import { Icon } from '../icons';
 
 const COLORS = ['#d2a94f', '#4cc093', '#7fb2e0', '#ee7a66', '#b59be0', '#e6d27a'];
+
+function ImportCard() {
+  const [text, setText] = useState('');
+  return (
+    <div className="card import-card">
+      <div className="card-head"><span className="ss-icon" aria-hidden><Icon name="upload" size={18} /></span><h2>¿Ya tenías una partida?</h2></div>
+      <p className="small muted">Elegí el archivo .json que exportaste desde Ajustes → Guardado (por ejemplo, desde Descargas o Drive). Se verifica la contabilidad antes de cargarla y se actualiza a esta versión.</p>
+      <label className="btn dark block file-btn">
+        <Icon name="upload" size={16} /> Elegir archivo de partida
+        <input type="file" accept=".json,application/json,text/plain" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; await store.importText(await f.text()); e.target.value = ''; }} />
+      </label>
+      <details>
+        <summary className="small muted">O pegar el texto exportado</summary>
+        <textarea id="imp" className="input" style={{ minHeight: 100, padding: 10, marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Pegá acá el texto de la partida" />
+        <button className="btn sm" style={{ marginTop: 8 }} disabled={!text.trim()} onClick={() => store.importText(text)}>Importar y verificar</button>
+      </details>
+    </div>
+  );
+}
 
 export function Onboarding() {
   const [name, setName] = useState('');
   const [bg, setBg] = useState<BackgroundId>('egresado');
   const [style, setStyle] = useState<PlayStyle>('libre');
-  const [color, setColor] = useState(COLORS[0]);
+  const [color] = useState(COLORS[0]);
+  const [look, setLook] = useState<Look>({ skin: 1, hair: 'corto', hairColor: 1 });
   const [seed, setSeed] = useState('');
-  const [showImport, setShowImport] = useState(false);
-  const [importText, setImportText] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [illegal, setIllegal] = useState(true);
 
@@ -28,18 +51,21 @@ export function Onboarding() {
         <p className="muted">Empezás con poco dinero. Cada peso entra y sale por un libro contable real: nada aparece por arte de magia. Tu fortuna depende de tus decisiones.</p>
       </div>
 
-      <div className="card">
-        <div className="field">
-          <label htmlFor="pname">Nombre del personaje</label>
-          <input id="pname" className="input" value={name} maxLength={24} placeholder="Ej.: Adriana Paz" onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>Color de perfil</label>
-          <div className="chips">
-            {COLORS.map((c) => (
-              <button key={c} type="button" aria-label={`Color ${c}`} onClick={() => setColor(c)} style={{ width: 34, height: 34, borderRadius: 10, background: c, border: color === c ? '3px solid var(--text)' : '1px solid var(--line)' }} />
-            ))}
+      <ImportCard />
+
+      <div className="section-title"><h2>O empezá una partida nueva</h2></div>
+      <div className="card onboard-char">
+        <div className="oc-avatar"><Avatar data={{ look, items: [], outfit: {} }} size={92} /></div>
+        <div className="stack" style={{ flex: 1, minWidth: 0 }}>
+          <div className="field">
+            <label htmlFor="pname">Nombre del personaje</label>
+            <input id="pname" className="input" value={name} maxLength={24} placeholder="Ej.: Adriana Paz" onChange={(e) => setName(e.target.value)} />
           </div>
+          <span className="tiny muted">Tono de piel</span>
+          <div className="swatches">{SKIN_TONES.map((c, i) => <button key={c} type="button" className={`swatch ${look.skin === i ? 'on' : ''}`} style={{ background: c }} aria-label={`Tono ${i + 1}`} onClick={() => setLook({ ...look, skin: i })} />)}</div>
+          <span className="tiny muted">Peinado y color</span>
+          <div className="chips">{HAIR_STYLES.map((h) => <button key={h} type="button" className={look.hair === h ? 'on' : ''} onClick={() => setLook({ ...look, hair: h })}>{HAIR_STYLE_NAMES[h]}</button>)}</div>
+          <div className="swatches">{HAIR_COLORS.map((c, i) => <button key={c} type="button" className={`swatch ${look.hairColor === i ? 'on' : ''}`} style={{ background: c }} aria-label={`Color de pelo ${i + 1}`} onClick={() => setLook({ ...look, hairColor: i })} />)}</div>
         </div>
       </div>
 
@@ -76,10 +102,9 @@ export function Onboarding() {
           </button>
         ))}
       </div>
-      <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-        <input type="checkbox" checked={illegal} onChange={(e) => setIllegal(e.target.checked)} style={{ marginTop: 3 }} />
-        <span>Habilitar actividades ilegales ficticias (sobornos, evasión, negocios clandestinos). Son opcionales, tienen riesgos probabilísticos (investigaciones, multas, prisión) y se pueden desactivar después en Ajustes.</span>
-      </label>
+      <div className="card">
+        <Switch checked={illegal} onChange={() => setIllegal(!illegal)} label={<strong>Actividades ilegales ficticias: {illegal ? 'activadas' : 'desactivadas'}</strong>} sub="Sobornos, evasión y negocios clandestinos, con riesgos probabilísticos (investigaciones, multas, prisión). Se cambian cuando quieras en Ajustes → Partida o en Más → Legal." />
+      </div>
 
       <details>
         <summary className="small muted">Opciones avanzadas</summary>
@@ -89,18 +114,10 @@ export function Onboarding() {
         </div>
       </details>
 
-      <button className="btn primary block" style={{ minHeight: 52, fontSize: 16 }} onClick={() => store.startNewGame({ name: name || 'Jugador', background: bg, style, color, seed: seed || undefined, difficulty, illegalEnabled: illegal })}>
+      <button className="btn primary block" style={{ minHeight: 52, fontSize: 16 }} onClick={() => store.startNewGame({ name: name || 'Jugador', background: bg, style, color, seed: seed || undefined, difficulty, illegalEnabled: illegal, look })}>
         Comenzar partida
       </button>
 
-      <button className="btn ghost block" onClick={() => setShowImport((v) => !v)}>Importar una partida guardada</button>
-      {showImport && (
-        <div className="card">
-          <label className="small muted" htmlFor="imp">Pegá el texto exportado desde Ajustes → Exportar</label>
-          <textarea id="imp" className="input" style={{ minHeight: 120, padding: 10 }} value={importText} onChange={(e) => setImportText(e.target.value)} />
-          <button className="btn dark" onClick={() => store.importText(importText)}>Importar y verificar</button>
-        </div>
-      )}
     </div>
   );
 }

@@ -142,7 +142,7 @@ function PropertyDetail({ p }: { p: Property }) {
           <div className="card-head"><strong style={{ flex: 1 }}>{p.type === 'terreno' ? 'Construir' : 'Obras'}</strong><InfoButton term={p.type === 'terreno' ? 'accion_desarrollar' : 'accion_renovar'} /></div>
           {p.type === 'terreno' ? (
             <>
-              <Seg items={[{ id: 'vivienda', label: 'Viviendas' }, { id: 'local', label: 'Locales' }, { id: 'oficina', label: 'Oficinas' }]} value={devTo} onChange={setDevTo} />
+              <Seg items={[{ id: 'vivienda', label: 'Viviendas' }, { id: 'local', label: 'Locales' }, { id: 'oficina', label: 'Oficinas' }, { id: 'cochera', label: 'Cocheras' }]} value={devTo} onChange={setDevTo} />
               <p className="small">Construir {devM2} m² cuesta ≈ {fmtMoney(devCost)} y tarda 9–15 meses. Tasación estimada al terminar ≈ {fmtMoney(Math.round(devM2 * (ZONE_BY_ID[p.zoneId]?.price[devTo] ?? 0) * 100 * zoneState(s, p.zoneId).index))}.</p>
               <ConfirmButton label="Iniciar construcción" help="accion_desarrollar" className="btn sm" detail={`Se pagan ${fmtMoney(devCost)} ahora desde ${ownerLabel(s, p.owner)}.`} onConfirm={() => store.run((x) => developLand(x, p.id, devTo))} />
             </>
@@ -352,7 +352,12 @@ function Market({ selected }: { selected: number | null }) {
   return (
     <>
       {sel && <ListingDetail l={sel} />}
-      <Seg items={[{ id: 'todos', label: 'Todos' }, { id: 'vivienda', label: 'Viviendas' }, { id: 'local', label: 'Locales' }, { id: 'oficina', label: 'Oficinas' }, { id: 'terreno', label: 'Terrenos' }]} value={type} onChange={setType} />
+      <div className="chips">
+        {([['todos', 'Todos'], ['cochera', 'Cocheras'], ['vivienda', 'Viviendas'], ['local', 'Locales'], ['oficina', 'Oficinas'], ['terreno', 'Terrenos']] as Array<['todos' | PropertyType, string]>).map(([id, label]) => (
+          <button key={id} className={type === id ? 'on' : ''} onClick={() => setType(id)}>{label}</button>
+        ))}
+      </div>
+      <p className="tiny muted">Para empezar con poco capital: cocheras y estudios. <InfoButton term="cochera" /> <InfoButton term="estudio_inmueble" /></p>
       <div className="chips">
         {[{ id: 'todas', name: 'Todas las zonas' }, ...ZONES].map((z) => <button key={z.id} onClick={() => setZone(z.id)} style={zone === z.id ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{z.name}</button>)}
       </div>

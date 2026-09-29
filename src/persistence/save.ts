@@ -23,6 +23,8 @@ export const KEYS = {
   primary: 'urt.save.primary',
   temp: 'urt.save.tmp',
   backups: ['urt.save.bak1', 'urt.save.bak2', 'urt.save.bak3'],
+  /** Copia hecha justo antes de instalar una actualización (por si hay que volver atrás). */
+  preupdate: 'urt.save.preupdate',
 };
 
 export const BACKUP_SPACING_DAYS = 30;
@@ -237,7 +239,9 @@ export interface LoadReport {
 export async function loadGame(kv: KV): Promise<LoadReport> {
   const problems: string[] = [];
   const first: Array<{ key: string; r: LoadResult & { ok: true } }> = [];
-  for (const key of [KEYS.primary, KEYS.temp]) {
+  // La copia previa a una actualización compite por fecha: solo gana si la principal
+  // no se puede leer (por ejemplo, tras volver a una versión anterior del juego).
+  for (const key of [KEYS.primary, KEYS.temp, KEYS.preupdate]) {
     const text = await kv.get(key);
     if (!text) continue;
     const r = await deserializeAny(text);
@@ -247,7 +251,7 @@ export async function loadGame(kv: KV): Promise<LoadReport> {
   if (first.length) {
     first.sort((a, b) => b.r.envelope.savedAt - a.r.envelope.savedAt);
     const best = first[0];
-    return { state: best.r.state, source: best.key, recovered: best.key !== KEYS.primary && problems.length > 0, problems, migratedFrom: best.r.migratedFrom };
+    return { state: best.r.state, source: best.key, recovered: best.key !== KEYS.primary && (problems.length > 0 || best.key === KEYS.preupdate), problems, migratedFrom: best.r.migratedFrom };
   }
   for (const key of KEYS.backups) {
     const text = await kv.get(key);
@@ -272,7 +276,17 @@ export async function restoreBackup(kv: KV, key: string): Promise<LoadResult> {
 }
 
 export async function deleteAll(kv: KV): Promise<void> {
-  for (const k of [KEYS.primary, KEYS.temp, ...KEYS.backups]) await kv.remove(k);
+  for (const k of [KEYS.primary, KEYS.temp, KEYS.preupdate, ...KEYS.backups]) await kv.remove(k);
+}
+
+/** Copia la partida principal (ya verificada) a la ranura "antes de actualizar". */
+export async function snapshotBeforeUpdate(kv: KV): Promise<boolean> {
+  const primary = await kv.get(KEYS.primary);
+  if (!primary) return false;
+  const r = await deserializeAny(primary);
+  if (!r.ok) return false;
+  await kv.set(KEYS.preupdate, primary);
+  return (await kv.get(KEYS.preupdate)) === primary;
 }
 
 /** Memoria (pruebas y entornos sin almacenamiento persistente). */

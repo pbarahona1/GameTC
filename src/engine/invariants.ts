@@ -93,6 +93,12 @@ export function checkPhase34(state: GameState): string[] {
     if (m.balance < 0) errors.push(`Hipoteca ${m.id} con saldo negativo.`);
     if (!state.realEstate.properties.some((p) => p.id === m.propertyId)) errors.push(`Hipoteca ${m.id} sin inmueble.`);
   }
+  // 1.2: bienes personales y cuotas de tarjeta.
+  const goods = (state.possessions?.items ?? []).reduce((s, o) => s + o.carrying, 0);
+  if (goods !== (L.personal_assets ?? 0)) errors.push(`Bienes personales (${goods}) ≠ mayor (${L.personal_assets}).`);
+  if ((state.possessions?.items ?? []).some((o) => o.carrying < 0 || !Number.isSafeInteger(o.carrying))) errors.push('Bien personal con valor inválido.');
+  const inst = (state.bank.card.installments ?? []).reduce((s, i) => s + i.remaining, 0);
+  if (inst !== (L.card_installments ?? 0)) errors.push(`Cuotas pendientes (${inst}) ≠ mayor (${L.card_installments}).`);
   const fines = state.legal.fines.reduce((s, f) => s + f.balance, 0);
   if (fines !== L.fines_payable) errors.push(`Multas pendientes (${fines}) ≠ mayor (${L.fines_payable}).`);
   for (const co of state.companies) {

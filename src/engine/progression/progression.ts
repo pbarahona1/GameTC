@@ -2,6 +2,7 @@ import { usd } from '../money';
 import type { GameState } from '../state';
 import { addLog } from '../log';
 import { computeMetrics, Metrics } from '../reports/metrics';
+import { rewardMissions } from './tutorial';
 
 /**
  * Etapas de magnate. Ninguna exige una ruta concreta: cada criterio puede
@@ -42,7 +43,7 @@ export const STAGES: StageDef[] = [
   {
     n: 4, name: 'Primeras inversiones', description: 'Tu dinero empieza a trabajar para vos.', unlocks: 'Fase 3: bolsa de valores y Mogul Exchange.',
     criteria: (s, m) => [
-      { label: 'Tener inversiones activas (depósitos, empresas u otros activos)', met: m.investments > 0 || s.ledger.balances.business_equity > 0 || s.progression.achievements['first_deposit_matured'] !== undefined },
+      { label: 'Tener inversiones activas (depósitos, fondos, acciones, inmuebles o empresas)', met: m.investments > 0 || m.realEstate > 0 || s.ledger.balances.business_equity > 0 || s.progression.achievements['first_deposit_matured'] !== undefined },
       nw(m, 10_000),
     ],
   },
@@ -52,15 +53,23 @@ export const STAGES: StageDef[] = [
   },
   {
     n: 6, name: 'Empresario emergente', description: 'Ingresos más allá del salario.', unlocks: 'Fase 3: bienes raíces e hipotecas.',
-    criteria: (_s, m) => [nw(m, 150_000), { label: 'Ingresos pasivos ≥ 20 % de tus gastos', met: m.passiveMonthly >= m.recurringMonthly * 0.2 }, { label: 'Deuda / activos < 50 %', met: m.debtToAssets < 0.5 }],
+    criteria: (_s, m) => [nw(m, 150_000), { label: 'Ingresos pasivos (intereses, alquileres, dividendos o ganancias de tus empresas) ≥ 20 % de tus gastos', met: m.passiveMonthly >= m.recurringMonthly * 0.2 }, { label: 'Deuda / activos < 50 %', met: m.debtToAssets < 0.5 }],
   },
   { n: 7, name: 'Magnate regional', description: 'Un patrimonio que ya mueve tu región.', unlocks: 'Grupos empresariales.', criteria: (s, m) => [nw(m, 1_000_000), { label: 'Al menos una empresa propia con ganancias en los últimos 3 meses', met: s.companies.some((c) => c.status === 'active' && c.history.length >= 3 && c.history.slice(-3).reduce((a, h) => a + h.netIncome, 0) > 0) }] },
   { n: 8, name: 'Empresario nacional', description: 'Tu nombre se conoce en todo el país.', unlocks: 'Emisión de bonos.', criteria: (s, m) => [nw(m, 10_000_000), { label: 'Reputación ≥ 60', met: s.player.attributes.reputation >= 60 }] },
   { n: 9, name: 'Grupo empresarial', description: 'Varias empresas bajo tu control.', unlocks: 'Sociedades matrices y filiales (Fase 4).', criteria: (s, m) => [nw(m, 50_000_000), { label: '3 empresas activas o más', met: s.companies.filter((c) => c.status === 'active').length >= 3 }] },
-  { n: 10, name: 'Corporación internacional', description: 'Operaciones en varias jurisdicciones.', unlocks: 'Planificación fiscal internacional.', criteria: (_s, m) => [nw(m, 250_000_000), { label: 'Presencia en 2 jurisdicciones', met: false, future: 'Fase 4' }] },
+  { n: 10, name: 'Corporación internacional', description: 'Operaciones en varias jurisdicciones.', unlocks: 'Planificación fiscal internacional.', criteria: (s, m) => [nw(m, 250_000_000), { label: 'Empresas o inmuebles en 2 jurisdicciones', met: jurisdictionsPresent(s) >= 2 }] },
   { n: 11, name: 'Conglomerado global', description: 'Diversificado en múltiples sectores.', unlocks: 'Adquisiciones hostiles.', criteria: (s, m) => [nw(m, 1_000_000_000), { label: 'Empresas en 5 sectores distintos', met: new Set(s.companies.filter((c) => c.status === 'active').map((c) => c.sector)).size >= 5 }] },
   { n: 12, name: 'Imperio económico', description: 'La cima.', unlocks: '—', criteria: (_s, m) => [nw(m, 10_000_000_000)] },
 ];
+
+/** Jurisdicciones donde tenés empresas activas o inmuebles (propios o de tus empresas). */
+export function jurisdictionsPresent(s: GameState): number {
+  const set = new Set<string>();
+  for (const c of s.companies) if (c.status === 'active' || c.status === 'insolvent') set.add(c.jurisdiction ?? 'valdoria');
+  for (const p of s.realEstate?.properties ?? []) if (p.owner.kind !== 'mogul') set.add(p.jurisdiction);
+  return set.size;
+}
 
 export interface AchievementDef {
   id: string;
@@ -116,6 +125,7 @@ export function updateProgression(state: GameState): void {
     const st = STAGES[current - 1];
     addLog(state, 'success', '🏆', `Nueva etapa: ${st.name}. Desbloquea: ${st.unlocks}`);
   }
+  rewardMissions(state);
   for (const a of ACHIEVEMENTS) {
     if (state.progression.achievements[a.id] !== undefined || !a.check) continue;
     if (a.check(state, m)) {

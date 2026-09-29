@@ -24,8 +24,13 @@ import type { RealEstateState } from './realestate/types';
 import type { ProsState } from './pros/types';
 import type { LegalState } from './legal/types';
 import { initWorldV3 } from './worldInit';
+import type { PossessionsState } from './lifestyle/types';
+import type { WorldLifeState } from './world/types';
+import type { CardTier } from '../content/cards';
+import { STARTER_OUTFIT } from '../content/shops';
+import { initWorldLife } from './world/rivals';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export type PaymentMethod = 'checking' | 'card' | 'cash';
 
@@ -71,6 +76,32 @@ export interface CardState {
   cycleBalanceDays: number;
   cycleStartDay: number;
   fullPayStreak: number;
+  /** Nivel de la tarjeta (1.2). */
+  tier: CardTier;
+  /** Día en que se cobra el próximo costo anual. */
+  feeDay: number;
+  /** Reintegro acumulado en el ciclo (se acredita en el resumen). */
+  rewardsPending: Cents;
+  rewardsTotal: Cents;
+  /** Compras en cuotas pendientes. */
+  installments: CardInstallment[];
+  /** Última solicitud de cambio de nivel (para no pedir todos los días). */
+  lastTierRequest: number;
+}
+
+export interface CardInstallment {
+  id: number;
+  desc: string;
+  principal: Cents;
+  /** Capital que falta pasar a los resúmenes. */
+  remaining: Cents;
+  n: number;
+  paidCount: number;
+  /** Cuota fija (capital + interés). */
+  payment: Cents;
+  /** Tasa mensual (0 = sin interés). */
+  rate: number;
+  startDay: number;
 }
 
 export interface Loan {
@@ -289,6 +320,8 @@ export interface MetaState {
   /** Registro de práctica por actividad: último día y XP otorgada ese día (anti-grinding). */
   practice: Record<string, { day: number; count: number }>;
   seenTerms: string[];
+  /** Secciones recomendadas para más adelante que el jugador decidió abrir igual (1.2). */
+  gatesOpened?: string[];
 }
 
 export interface GameState {
@@ -325,6 +358,10 @@ export interface GameState {
   realEstate: RealEstateState;
   pros: ProsState;
   legal: LegalState;
+  /** Ropa, vehículos, tecnología, hogar y lujo (1.2). */
+  possessions: PossessionsState;
+  /** Noticias, rivales y competencia (1.2). */
+  world: WorldLifeState;
 }
 
 export interface NewGameOptions {
@@ -336,6 +373,8 @@ export interface NewGameOptions {
   seed?: string;
   color?: string;
   nowReal?: number;
+  /** Apariencia elegida al crear el personaje (1.2). */
+  look?: Partial<import('./lifestyle/types').Look>;
 }
 
 export const INITIAL_POLICY_RATE = 0.05;
@@ -378,6 +417,12 @@ export function newGame(opts: NewGameOptions): GameState {
         cycleBalanceDays: 0,
         cycleStartDay: 0,
         fullPayStreak: 0,
+        tier: 'clasica',
+        feeDay: 365,
+        rewardsPending: 0,
+        rewardsTotal: 0,
+        installments: [],
+        lastTierRequest: -999,
       },
       loans: [],
       pensionRate: 0.05,
@@ -410,9 +455,12 @@ export function newGame(opts: NewGameOptions): GameState {
     realEstate: { zones: [], properties: [], mortgages: [], listings: [] },
     pros: { market: [], hires: [], audits: [], lastRefresh: -1 },
     legal: { heat: 0, acts: [], cases: [], fines: [], prison: null, criminalRecord: 0, ventures: [], log: [], lastTaxAudit: 0, contracts: [], inspections: [] },
+    possessions: newPossessions(seed, opts.look),
+    world: { news: [], rivals: [], intents: [], supplierShocks: [], poach: [], lastRead: 0 },
   };
   state.markets = initMarkets(state);
   initWorldV3(state);
+  initWorldLife(state);
 
   // Suerte: rasgo fijo entre 30 y 70.
   state.skills.luck.level = 30 + Math.floor(((seed >>> 0) % 4001) / 100);
@@ -436,6 +484,17 @@ export function newGame(opts: NewGameOptions): GameState {
   state.bank.checkingBalanceDays = state.ledger.balances.checking;
   state.bank.savingsBalanceDays = state.ledger.balances.savings;
   return state;
+}
+
+/** Guardarropa inicial: ropa básica usada puesta y apariencia elegida por la semilla. */
+export function newPossessions(seed: number, look?: Partial<import('./lifestyle/types').Look>): PossessionsState {
+  const items = STARTER_OUTFIT.map((x, i) => ({ uid: -(i + 1), itemId: x.id, boughtDay: 0, price: 0, carrying: 0, condition: x.condition }));
+  return {
+    items,
+    outfit: { torso: -1, piernas: -2, calzado: -3 },
+    look: { skin: (seed >>> 3) % 5, hair: (['corto', 'largo', 'rulos', 'recogido'] as const)[(seed >>> 7) % 4], hairColor: (seed >>> 11) % 4, ...(look ?? {}) },
+    spent: 0,
+  };
 }
 
 export function nextId(state: GameState): number {

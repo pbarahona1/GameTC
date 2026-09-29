@@ -1,3 +1,4 @@
+import { announceMacroEvent } from '../world/rivals';
 import type { GameState } from '../state';
 import { clamp } from '../money';
 import { dateOf } from '../time/calendar';
@@ -222,7 +223,7 @@ export function monthlyMacro(state: GameState): void {
   // 5. Eventos
   m.events = m.events.filter((e) => e.endDay >= state.day - 400);
   if (!forced && !state.meta.projection && chance(state, 0.07 * diff.events)) {
-    const active = new Set(m.events.filter((e) => e.endDay >= state.day).map((e) => e.kind));
+    const active = new Set(m.events.filter((e) => e.endDay >= state.day).map((e) => e.kind)); // incluye los programados
     const pool = EVENT_CATALOG.filter((e) => !active.has(e.kind) && (!e.phases || e.phases.includes(m.phase)));
     if (pool.length) {
       const total = pool.reduce((s, e) => s + e.weight, 0);
@@ -236,9 +237,13 @@ export function monthlyMacro(state: GameState): void {
         }
       }
       const months = randInt(state, pick.months[0], pick.months[1]);
-      const ev: EconEvent = { id: state.meta.nextId++, kind: pick.kind, name: pick.name, icon: pick.icon, description: pick.description, startDay: state.day, endDay: state.day + months * 30, effects: pick.effects };
+      // Los eventos se programan con anticipación (1.2): las noticias a veces los anticipan,
+      // así que leer y analizar da ventaja. El aviso llega el día que empiezan (world/rivals.ts).
+      const lead = state.world ? randInt(state, 20, 50) : 0;
+      const ev: EconEvent = { id: state.meta.nextId++, kind: pick.kind, name: pick.name, icon: pick.icon, description: pick.description, startDay: state.day + lead, endDay: state.day + lead + months * 30, effects: pick.effects };
       m.events.push(ev);
-      addLog(state, 'warning', pick.icon, `${pick.name}: ${pick.description} (duración estimada: ${months} meses)`);
+      if (lead > 0) announceMacroEvent(state, ev);
+      else addLog(state, 'warning', pick.icon, `${pick.name}: ${pick.description} (duración estimada: ${months} meses)`);
     }
   }
 

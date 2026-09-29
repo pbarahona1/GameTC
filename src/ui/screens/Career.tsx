@@ -1,3 +1,4 @@
+import { imageJobBonus } from '../../engine/lifestyle/effects';
 import { Fragment, useMemo, useState } from 'react';
 import { useGame, useUI, store } from '../store';
 import { navStore, useNav } from '../nav';
@@ -201,7 +202,10 @@ function JobBoard() {
               </ul>
             )}
             <div className="btn-row" style={{ alignItems: 'center' }}>
-              {req.ok && !current && <span className="small muted" style={{ flex: 1 }}>Probabilidad de oferta ≈ {Math.round(applicationChance(s, j) * 100)} % <InfoButton term="probabilidad_oferta" /></span>}
+              {req.ok && !current && (() => {
+                const ib = Math.round(imageJobBonus(s, j.level) * 100);
+                return <span className="small muted" style={{ flex: 1 }}>Probabilidad de oferta ≈ {Math.round(applicationChance(s, j) * 100)} % <InfoButton term="probabilidad_oferta" />{ib !== 0 && <span className={`tiny ${ib > 0 ? 'gain' : 'loss'}`} style={{ display: 'block' }}>Tu imagen: {ib > 0 ? '+' : ''}{ib} pts{ib < 0 ? ' · vestite mejor en Tiendas' : ''}</span>}</span>;
+              })()}
               <InfoButton term="accion_postular" />
               <button className="btn sm primary" disabled={!req.ok || active || current} onClick={() => store.run((st) => apply(st, j.id))}>
                 {current ? 'Tu puesto actual' : active ? 'Postulado' : 'Postularme'}
@@ -344,7 +348,7 @@ export function Career() {
   const offers = useMemo(() => s.career.applications.filter((a) => a.status === 'offer').length, [s.career.applications.length, s.day]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <ScreenIntro icon="💼" title="Carrera" text="Tu trabajo y tu formación: postulate a empleos, estudiá para subir tus habilidades y negociá tu sueldo." term="nivel_profesional" />
+      <ScreenIntro icon="career" title="Carrera" text="Tu trabajo y tu formación: postulate a empleos, estudiá para subir tus habilidades y negociá tu sueldo." term="nivel_profesional" />
       <Tabs<Sub>
         items={[
           { id: 'job', label: offers ? `Empleo · ${offers} oferta${offers > 1 ? 's' : ''}` : 'Empleo' },

@@ -4,9 +4,12 @@ import { navStore, useNav } from '../nav';
 import type { AccountId } from '../../engine/ledger/accounts';
 import { accountDef } from '../../engine/ledger/accounts';
 import { transfer, savingsRate, depositRate, openDeposit, breakDeposit, depositInterest, earlyBreakCost, DEPOSIT_TERMS, MIN_DEPOSIT, setPensionRate, CHECKING_FEE_WAIVER_AVG } from '../../engine/finance/banking';
-import { payCard, setAutopay, requestLimitIncrease, statementRemaining, minRemaining, cardAvailable, STATEMENT_DAY } from '../../engine/finance/creditCard';
+import { payCard, setAutopay, requestLimitIncrease, statementRemaining, minRemaining, cardAvailable, STATEMENT_DAY, effectiveApr, checkTier, requestTier } from '../../engine/finance/creditCard';
+import { cardTier } from '../../engine/finance/cardRewards';
+import { CARD_TIER_ORDER, CardTier } from '../../content/cards';
+import { Icon } from '../icons';
 import { quoteAll, takeLoan, negotiateRate, prepayLoan, amortizationSchedule, LOAN_TERMS, MAX_ACTIVE_LOANS } from '../../engine/finance/loans';
-import { changeLifestyle, movingCost, setPaymentMethod, setPrivateInsurance, payArrears, hasEmployerInsurance, insuranceCost, monthlyRecurring } from '../../engine/finance/budget';
+import { changeLifestyle, movingCost, setPaymentMethod, setPrivateInsurance, payArrears, hasEmployerInsurance, insuranceCost, monthlyRecurring, effectiveAmount } from '../../engine/finance/budget';
 import { computeCreditScore, scoreBand } from '../../engine/finance/credit';
 import { BANK_BY_ID } from '../../content/banks';
 import { LIFESTYLES } from '../../content/lifestyle';
@@ -84,23 +87,72 @@ function Accounts() {
   );
 }
 
+function CardVisual() {
+  const s = useGame();
+  const t = cardTier(s);
+  return (
+    <div className="cc" style={{ background: `linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]})`, color: t.ink }}>
+      <div className="cc-top"><span className="cc-bank">Banco de Valoria</span><span className="cc-tier">{t.name.toUpperCase()}</span></div>
+      <div className="cc-chip" aria-hidden />
+      <div className="cc-num num">•••• •••• •••• {String(1000 + (Math.abs(s.seed) % 9000))}</div>
+      <div className="cc-bottom"><span>{s.player.name.toUpperCase()}</span><span className="num">{fmtMoney(s.bank.card.limit, { decimals: false })}</span></div>
+    </div>
+  );
+}
+
+function TierOption({ id }: { id: CardTier }) {
+  const s = useGame();
+  const cur = s.bank.card.tier ?? 'clasica';
+  const chk = checkTier(s, id);
+  const t = chk.tier;
+  const higher = CARD_TIER_ORDER.indexOf(id) > CARD_TIER_ORDER.indexOf(cur);
+  const wait = higher && s.day - (s.bank.card.lastTierRequest ?? -999) < 30;
+  return (
+    <div className="card flat tier-opt">
+      <div className="card-head">
+        <span className="tier-dot" style={{ background: `linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]})` }} aria-hidden />
+        <h2>{t.name}</h2>
+        <span className="tiny muted">{t.annualFee ? `${fmtMoney(usd(t.annualFee * s.macro.priceIndex), { decimals: false })}/año` : 'Sin costo'}</span>
+      </div>
+      <ul className="small tier-perks">{t.perks.map((p) => <li key={p}>{p}</li>)}</ul>
+      {higher && (
+        <>
+          <div className="stack" style={{ gap: 3 }}>
+            {chk.items.map((i) => <span key={i.label} className={`tiny ${i.met ? 'gain' : 'loss'}`}>{i.met ? '✓' : '✗'} {i.label}</span>)}
+          </div>
+          <span className="tiny muted">{chk.eligible ? `Aprobación estimada ${Math.round(chk.chance * 100)} % · límite ofrecido ~${fmtMoney(chk.limit, { decimals: false })}` : 'Todavía no cumplís los requisitos: pedirla igual registra una consulta y será rechazada.'}</span>
+          <ConfirmButton label={wait ? 'Podés volver a pedir en 30 días' : `Pedir tarjeta ${t.name}`} disabled={wait} help="accion_pedir_tarjeta" className={`btn sm ${chk.eligible ? 'primary' : ''}`} confirmLabel="Pedir" detail="El banco consulta tu historial (baja un poco tu puntaje por unos meses). Si la aprueban, se cobra el costo anual." onConfirm={() => store.run((x) => requestTier(x, id))} />
+        </>
+      )}
+      {!higher && id !== cur && <ConfirmButton label={`Pasar a ${t.name}`} help="accion_pedir_tarjeta" className="btn sm ghost" confirmLabel="Cambiar" detail="Pagás menos costo anual y perdés beneficios. Tu límite puede bajar al máximo de ese nivel." onConfirm={() => store.run((x) => requestTier(x, id))} />}
+      {id === cur && <Pill tone="accent">Tu tarjeta actual</Pill>}
+    </div>
+  );
+}
+
 function Card() {
   const s = useGame();
+  useUI();
   const c = s.bank.card;
   const bal = s.ledger.balances.credit_card;
+  const inst = s.ledger.balances.card_installments ?? 0;
   const [amount, setAmount] = useState(0);
-  const util = c.limit ? bal / c.limit : 0;
+  const util = c.limit ? (bal + inst) / c.limit : 0;
   const rem = statementRemaining(s);
   const min = minRemaining(s);
+  const t = cardTier(s);
   return (
     <>
+      <CardVisual />
       <div className="card">
-        <div className="card-head"><h2>Tarjeta Clásica</h2><InfoButton term="tarjeta_credito" /></div>
+        <div className="card-head"><h2>Tarjeta {t.name}</h2><InfoButton term="tarjeta_credito" /><InfoButton term="nivel_tarjeta" /></div>
         <div className="kv">
           <dt>Saldo actual</dt><dd>{fmtMoney(bal)}</dd>
+          {inst > 0 && <><dt>Cuotas a vencer <InfoButton term="cuotas_tarjeta" /></dt><dd>{fmtMoney(inst)}</dd></>}
           <dt>Límite</dt><dd>{fmtMoney(c.limit)}</dd>
           <dt>Disponible</dt><dd>{fmtMoney(cardAvailable(s))}</dd>
-          <dt>Tasa anual (variable)</dt><dd>{fmtPct(c.apr)}</dd>
+          <dt>Tasa anual (variable)</dt><dd>{fmtPct(effectiveApr(s))}{t.aprDiscount > 0 && <span className="tiny muted"> (−{fmtPct(t.aprDiscount, 0)} por tu nivel)</span>}</dd>
+          <dt>Reintegro <InfoButton term="reintegro_tarjeta" /></dt><dd>{t.cashback ? `${fmtPct(t.cashback, 1)} · acumulado ${fmtMoney(c.rewardsPending ?? 0)} · total ${fmtMoney(c.rewardsTotal ?? 0, { decimals: false })}` : 'Sin reintegro'}</dd>
           <dt>Corte · vencimiento</dt><dd>día {STATEMENT_DAY} · +20 días</dd>
           <dt>Período de gracia <InfoButton term="periodo_gracia" /></dt><dd>{c.revolving ? <span className="loss">Perdido</span> : <span className="gain">Activo</span>}</dd>
         </div>
@@ -108,6 +160,7 @@ function Card() {
           <span className="small">Utilización {Math.round(util * 100)} % <InfoButton term="utilizacion_credito" /></span>
           <Bar value={util} tone={util > 0.3 ? 'warn' : 'gain'} />
         </div>
+        <div className="btn-row"><button className="btn sm" onClick={() => navStore.go('more', 'shops')}><Icon name="shop" size={15} /> Usarla en Tiendas</button></div>
       </div>
       <div className="card">
         <div className="card-head"><h2>Resumen</h2><InfoButton term="periodo_gracia" /></div>
@@ -125,17 +178,34 @@ function Card() {
         <div className="chips">
           {min > 0 && <button onClick={() => setAmount(min)}>Mínimo pendiente {fmtMoney(min)}</button>}
           {rem > 0 && <button onClick={() => setAmount(rem)}>Total del resumen {fmtMoney(rem)}</button>}
+          {bal > 0 && <button onClick={() => setAmount(bal)}>Todo el saldo {fmtMoney(bal)}</button>}
         </div>
         <span className="act"><button className="btn primary" disabled={amount <= 0} onClick={() => { const r = store.run((st) => payCard(st, amount)); if (r.ok) setAmount(0); }}>Pagar desde cuenta corriente</button><InfoButton term="accion_pagar_tarjeta" /></span>
       </div>
+      {(c.installments ?? []).length > 0 && (
+        <div className="card">
+          <div className="card-head"><h2>Compras en cuotas</h2><InfoButton term="cuotas_tarjeta" /></div>
+          <div className="rows">
+            {c.installments.map((i) => (
+              <div className="row" key={i.id}>
+                <div className="grow"><div className="title small">{i.desc}</div><div className="meta">Cuota {i.paidCount}/{i.n} · {fmtMoney(i.payment)} por mes{i.rate > 0 ? ` · ${fmtPct(i.rate * 12, 1)} anual` : ' · sin interés'}</div></div>
+                <span className="amt small">{fmtMoney(i.remaining)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="card">
         <div className="card-head"><h2>Débito automático</h2><InfoButton term="accion_debito_automatico" /></div>
         <Seg items={[{ id: 'none', label: 'No' }, { id: 'min', label: 'Mínimo' }, { id: 'full', label: 'Total' }]} value={c.autopay} onChange={(v) => store.run((st) => setAutopay(st, v))} />
         <p className="tiny muted">Se ejecuta el día del vencimiento con los fondos de la cuenta corriente (y el ahorro, si el barrido está activo).</p>
       </div>
+      <div className="section-title"><h2>Niveles de tarjeta</h2><InfoButton term="nivel_tarjeta" /></div>
+      <p className="small muted">Con mejor puntaje e ingresos podés pedir una tarjeta de mayor nivel: más límite, reintegro en todo lo que pagues con ella, cuotas sin interés en tiendas y mejor trato. Tiene un costo anual.</p>
+      {CARD_TIER_ORDER.map((id) => <TierOption key={id} id={id} />)}
       <div className="card">
         <div className="card-head"><h2>Aumento de límite</h2><InfoButton term="accion_aumento_limite" /></div>
-        <p className="small muted">Requiere puntaje ≥ 680 e ingreso estable. Registra una consulta de crédito que baja levemente tu puntaje.</p>
+        <p className="small muted">Requiere puntaje ≥ 680 e ingreso estable, hasta {Math.max(1.5, t.limitMult)}× tu ingreso mensual con tope de {fmtMoney(usd(t.limitCap), { decimals: false })} para una {t.name}. Registra una consulta de crédito.</p>
         <ConfirmButton label="Solicitar aumento" help="accion_aumento_limite" confirmLabel="Solicitar" detail="Se registrará una consulta en tu historial crediticio." onConfirm={() => store.run(requestLimitIncrease)} />
       </div>
     </>
@@ -326,7 +396,7 @@ function Budget() {
                   {it.key !== 'rent' && <option value="card">Tarjeta</option>}
                   <option value="cash">Efectivo</option>
                 </select>
-                <Money c={it.amount} className="amt" />
+                <span className="amt"><Money c={effectiveAmount(s, it)} />{effectiveAmount(s, it) !== it.amount && <span className="tiny muted" style={{ display: 'block' }}>{it.key === 'transport' ? 'con tu vehículo' : 'con tu cocina'}</span>}</span>
               </div>
             );
           })}
@@ -426,7 +496,7 @@ export function Finance() {
   const sub = (nav.sub.finance as Sub) ?? 'accounts';
   return (
     <>
-      <ScreenIntro icon="🏦" title="Finanzas" text="Tu dinero del día a día: cuentas, presupuesto, tarjeta, préstamos, depósitos y puntaje de crédito." term="presupuesto" />
+      <ScreenIntro icon="finance" title="Finanzas" text="Tu dinero del día a día: cuentas, presupuesto, tarjeta, préstamos, depósitos y puntaje de crédito." term="presupuesto" />
       <Tabs<Sub>
         items={[
           { id: 'accounts', label: 'Cuentas' },

@@ -1,3 +1,4 @@
+import { imageJobBonus, imageNegotiationBonus } from '../lifestyle/effects';
 import { JOB_BY_ID, JobDef, SECTOR_NAMES, EDUCATION_RANK, EDUCATION_NAMES, FIELD_NAMES } from '../../content/jobs';
 import { SKILL_BY_ID } from '../../content/skills';
 import { post } from '../ledger/ledger';
@@ -71,6 +72,8 @@ export function applicationChance(state: GameState, job: JobDef): number {
   const exp = state.career.experience[job.sector] ?? 0;
   p += Math.min(0.1, Math.max(0, exp - (job.requires.expSectorMonths ?? 0)) * 0.003);
   p += luckBias(state);
+  // 1.2: tu imagen en la entrevista (±6 puntos según lo que se espera para el nivel del puesto).
+  p += imageJobBonus(state, job.level);
   // Mercado laboral: con desempleo alto hay más competencia por cada puesto.
   p *= jobMarketFactor(state);
   if (state.legal?.criminalRecord) p *= 0.6;
@@ -131,7 +134,7 @@ export function processApplications(state: GameState): void {
 }
 
 export function negotiationChance(state: GameState, pct: number): number {
-  return clamp(0.55 + state.skills.negotiation.level * 0.005 + state.skills.social.level * 0.002 - pct * 2.5, 0.05, 0.9);
+  return clamp(0.55 + state.skills.negotiation.level * 0.005 + state.skills.social.level * 0.002 - pct * 2.5 + imageNegotiationBonus(state), 0.05, 0.9);
 }
 
 export function negotiateOffer(state: GameState, appId: number, pct: number): ActionResult {

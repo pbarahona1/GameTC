@@ -9,6 +9,7 @@ import { payExpense, canPayFromChecking } from './payments';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtMoney } from '../format';
 import { jurisdictionById } from '../../content/jurisdictions';
+import { possessionEffects, vehicleTransport } from '../lifestyle/effects';
 
 export function buildLifestyleItems(id: LifestyleId, priceIndex: number): RecurringItem[] {
   return LIFESTYLE_BY_ID[id].items.map((it) => ({
@@ -31,10 +32,27 @@ export function insuranceCost(state: GameState): Cents {
   return usd(PRIVATE_HEALTH_INSURANCE * livingIndex(state));
 }
 
+/**
+ * Importe real de un gasto recurrente este mes (1.2):
+ *  - Comida: menos si tenés cocina equipada.
+ *  - Transporte: si tenés vehículo, se reemplaza (todo o parte) por sus costos propios.
+ */
+export function effectiveAmount(state: GameState, it: RecurringItem): Cents {
+  if (it.key === 'food') {
+    const save = possessionEffects(state).food;
+    return save > 0 ? Math.round(it.amount * (1 - save)) : it.amount;
+  }
+  if (it.key === 'transport') {
+    const v = vehicleTransport(state);
+    if (v) return Math.round(it.amount * (1 - v.share)) + usd(v.running * livingIndex(state));
+  }
+  return it.amount;
+}
+
 /** Total mensual de gastos recurrentes (presupuesto). */
 export function monthlyRecurring(state: GameState, essentialOnly = false): Cents {
   let t = 0;
-  for (const it of state.budget.items) if (!essentialOnly || it.essential) t += it.amount;
+  for (const it of state.budget.items) if (!essentialOnly || it.essential) t += effectiveAmount(state, it);
   if (state.budget.privateInsurance) t += insuranceCost(state);
   return t;
 }
@@ -44,7 +62,9 @@ export function processRecurring(state: GameState): void {
   const g = dateOf(state.day);
   for (const it of state.budget.items) {
     if (it.day !== g.d) continue;
-    const res = payExpense(state, it.account, it.amount, { memo: it.name, tag: `recurring:${it.key}`, method: it.method });
+    const amount = effectiveAmount(state, it);
+    const v = it.key === 'transport' ? vehicleTransport(state) : null;
+    const res = payExpense(state, it.account, amount, { memo: v ? `${it.name} y ${v.name}` : it.name, tag: `recurring:${it.key}`, method: it.method });
     if (!res.ok && it.key === 'rent') {
       state.player.attributes.stress = Math.min(100, state.player.attributes.stress + 8);
       state.player.attributes.reputation = Math.max(0, state.player.attributes.reputation - 1);

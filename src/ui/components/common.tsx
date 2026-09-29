@@ -1,3 +1,4 @@
+import { Icon, isIconName, IconName } from '../icons';
 import { ReactNode, useEffect, useMemo, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Cents } from '../../engine/money';
 import { fmtMoney, fmtCompact } from '../../engine/format';
@@ -65,12 +66,12 @@ export function Pill({ tone, children }: { tone: 'gain' | 'loss' | 'warn' | 'inf
   return <span className={`pill ${tone}`}>{children}</span>;
 }
 
-export function Tabs<T extends string>({ items, value, onChange }: { items: Array<{ id: T; label: string }>; value: T; onChange: (v: T) => void }) {
+export function Tabs<T extends string>({ items, value, onChange }: { items: Array<{ id: T; label: string; icon?: IconName; badge?: number }>; value: T; onChange: (v: T) => void }) {
   return (
     <div className="tabs" role="tablist">
       {items.map((it) => (
         <button key={it.id} role="tab" aria-selected={value === it.id} className={value === it.id ? 'on' : ''} onClick={() => onChange(it.id)}>
-          {it.label}
+          {it.icon && <Icon name={it.icon} size={15} />}{it.label}{it.badge ? <span className="count-badge sm">{it.badge}</span> : null}
         </button>
       ))}
     </div>
@@ -102,7 +103,7 @@ export function Sheet({ title, children, onClose }: { title: ReactNode; children
         <div className="sheet-grip" />
         <div className="sheet-head">
           <h2>{title}</h2>
-          <button className="icon-btn" onClick={close} aria-label="Cerrar">✕</button>
+          <button className="icon-btn" onClick={close} aria-label="Cerrar"><Icon name="close" /></button>
         </div>
         <div className="sheet-body">{children}</div>
       </div>
@@ -320,15 +321,29 @@ export function NumInput({ id, value, onChange, min = 0, step = 1, suffix }: { i
 }
 
 /** Encabezado de sección en lenguaje simple: qué es y para qué sirve (se oculta al desactivar el modo aprendizaje). */
-export function ScreenIntro({ icon, title, text, term }: { icon: string; title: string; text: string; term?: string }) {
+export function ScreenIntro({ icon, title, text, term, right }: { icon: string; title: string; text: string; term?: string; right?: ReactNode }) {
   const ui = useUI();
   return (
     <div className="screen-intro">
-      <span className="si-icon" aria-hidden>{icon}</span>
+      <span className="si-icon" aria-hidden>{isIconName(icon) ? <Icon name={icon} size={20} /> : icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <h1>{title}</h1>
         {ui.settings.learningMode && <p className="small muted">{text}</p>}
       </div>
+      {right}
+      {term && <InfoButton term={term} />}
+    </div>
+  );
+}
+
+/** Interruptor accesible (reemplaza a las casillas de verificación en Ajustes). */
+export function Switch({ checked, onChange, label, sub, term }: { checked: boolean; onChange: () => void; label: ReactNode; sub?: ReactNode; term?: string }) {
+  return (
+    <div className="switch-line">
+      <button className={`switch-row ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} onClick={onChange}>
+        <span className="switch" aria-hidden><span /></span>
+        <span className="sw-text"><span className="small sw-label">{label}</span>{sub && <span className="tiny muted">{sub}</span>}</span>
+      </button>
       {term && <InfoButton term={term} />}
     </div>
   );

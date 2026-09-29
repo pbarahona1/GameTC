@@ -62,6 +62,8 @@ export interface Stock {
   weekly: Candle[];
   news: NewsItem[];
   splits: Array<{ day: number; ratio: number }>;
+  /** Componente aleatorio del próximo balance ya sorteado (cuando hubo una pista). */
+  earningsNoise?: number;
 }
 
 export type OrderType = 'mercado' | 'limite' | 'stop' | 'stop_limite' | 'take_profit' | 'trailing';

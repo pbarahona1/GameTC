@@ -244,7 +244,7 @@ export interface Company {
   /** Dinero aportado y recibido por el jugador (para medir su resultado). */
   investedByOwner: Cents;
   receivedByOwner: Cents;
-  saleOffer: { price: Cents; expires: number } | null;
+  saleOffer: { price: Cents; expires: number; from?: string } | null;
   taxFilings: CoTaxFiling[];
   /** Jurisdicción donde está registrada (impuesto de sociedades y dividendos). */
   jurisdiction: JurisdictionId;

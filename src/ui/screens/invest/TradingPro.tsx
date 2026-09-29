@@ -10,6 +10,7 @@ import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { OrderType, OrderSide } from '../../../engine/invest/types';
 import { portfolioRisk } from './Portfolio';
+import { Icon } from '../../icons';
 
 const TYPES: Array<{ id: OrderType; label: string; term: string }> = [
   { id: 'mercado', label: 'Mercado', term: 'orden_mercado' },
@@ -115,13 +116,30 @@ export function TradingPro({ selected }: { selected: string | null }) {
   const ui = useUI();
   const id = selected && stockById(s, selected) ? selected : s.stocks.stocks[0].id;
   const st = stockById(s, id)!;
-  const [range, setRange] = useState<60 | 120 | 260>(60);
+  const total = st.history.length;
+  // Ventana visible sobre todo el historial: cantidad de velas y distancia al último día.
+  const [win, setWin] = useState<{ count: number; end: number }>({ count: 60, end: 0 });
+  const minCount = 15;
+  const clampWin = (count: number, end: number) => {
+    const c = Math.max(Math.min(minCount, total), Math.min(total, count));
+    return { count: c, end: Math.max(0, Math.min(total - c, end)) };
+  };
+  const zoom = (factor: number, anchor = 0.5) => setWin((w) => {
+    const start = total - w.end - w.count;
+    const anchorIdx = start + anchor * w.count;
+    const count = Math.max(minCount, Math.min(total, w.count * factor));
+    const newStart = anchorIdx - anchor * count;
+    return clampWin(count, total - newStart - count);
+  });
+  const pan = (d: number) => setWin((w) => clampWin(w.count, w.end - d));
+  const range = Math.round(win.count);
+  const endOff = Math.round(win.end);
   const [ov, setOv] = useState<Record<string, boolean>>({ sma20: true, sma50: false, ema20: false, boll: false });
   const [panel, setPanel] = useState<'rsi' | 'macd'>('rsi');
   const data = useMemo(() => {
     const all = st.history;
     const closes = all.map((c) => c.c);
-    const cut = (arr: Array<number | null>) => arr.slice(-range);
+    const cut = <T,>(arr: T[]) => arr.slice(Math.max(0, arr.length - endOff - range), arr.length - endOff);
     const overlays: Overlay[] = [];
     if (ov.sma20) overlays.push({ name: 'SMA 20', values: cut(sma(closes, 20)), color: 'var(--accent)' });
     if (ov.sma50) overlays.push({ name: 'SMA 50', values: cut(sma(closes, 50)), color: 'var(--info)' });
@@ -131,8 +149,8 @@ export function TradingPro({ selected }: { selected: string | null }) {
       overlays.push({ name: 'Bollinger sup.', values: cut(bb.upper), color: 'var(--faint)', dashed: true }, { name: 'Bollinger inf.', values: cut(bb.lower), color: 'var(--faint)', dashed: true });
     }
     const m = macd(closes);
-    return { candles: all.slice(-range), overlays, rsi: cut(rsi(closes)), macd: { macd: cut(m.macd), signal: cut(m.signal), hist: cut(m.hist) } };
-  }, [st, range, ov, ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+    return { candles: cut(all), overlays, rsi: cut(rsi(closes)), macd: { macd: cut(m.macd), signal: cut(m.signal), hist: cut(m.hist) } };
+  }, [st, range, endOff, ov, ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
   const orders = s.stocks.orders.filter((o) => o.status === 'abierta');
   const closed = s.stocks.orders.filter((o) => o.status !== 'abierta').slice(-10).reverse();
   const risk = portfolioRisk(s);
@@ -156,8 +174,17 @@ export function TradingPro({ selected }: { selected: string | null }) {
           <span className="num" style={{ fontSize: 22, fontWeight: 700 }}>{fmtMoney(st.price)}</span>
           <span className="tiny muted">Ap {fmtMoney(st.open)} · Máx {fmtMoney(st.high)} · Mín {fmtMoney(st.low)} · Vol {st.volume.toLocaleString('es')}</span>
         </div>
-        <Seg items={[{ id: 60 as const, label: '3 m' }, { id: 120 as const, label: '6 m' }, { id: 260 as const, label: '1 a' }]} value={range} onChange={setRange} />
-        <CandleChart candles={data.candles} overlays={data.overlays} markers={markers} />
+        <Seg items={[{ id: 60, label: '3 m' }, { id: 120, label: '6 m' }, { id: 260, label: '1 a' }, { id: 0, label: 'Todo' }]} value={[60, 120, 260].includes(range) && endOff === 0 ? range : range >= total && endOff === 0 ? 0 : -1} onChange={(v) => setWin(clampWin(v === 0 ? total : v, 0))} />
+        <CandleChart candles={data.candles} overlays={data.overlays} markers={markers} onZoom={zoom} onPan={pan} />
+        <div className="chart-tools" role="group" aria-label="Zoom y desplazamiento del gráfico">
+          <button className="icon-btn sm" aria-label="Alejar" onClick={() => zoom(1.4)} disabled={range >= total}><Icon name="zoomOut" size={16} /></button>
+          <button className="icon-btn sm" aria-label="Acercar" onClick={() => zoom(0.7)} disabled={range <= minCount}><Icon name="zoomIn" size={16} /></button>
+          <button className="icon-btn sm" aria-label="Ver días anteriores" onClick={() => pan(-Math.max(5, range / 4))} disabled={endOff >= total - range}>‹</button>
+          <button className="icon-btn sm" aria-label="Ver días posteriores" onClick={() => pan(Math.max(5, range / 4))} disabled={endOff === 0}>›</button>
+          <button className="btn sm ghost" onClick={() => setWin(clampWin(win.count, 0))} disabled={endOff === 0}>Hoy</button>
+          <span className="tiny muted" style={{ flex: 1, textAlign: 'right' }}>{range} días{endOff ? ` · hasta hace ${endOff}` : ''}</span>
+        </div>
+        <p className="tiny muted">Tocá y deslizá sobre el gráfico para ver el precio de cada día. Con dos dedos: pellizcá para acercar o alejar y arrastrá para moverte en el tiempo.</p>
         <div className="chips">
           {[['sma20', 'SMA 20', 'media_movil'], ['sma50', 'SMA 50', 'media_movil'], ['ema20', 'EMA 20', 'media_movil'], ['boll', 'Bollinger', 'bollinger']].map(([k, label]) => (
             <button key={k} onClick={() => setOv({ ...ov, [k]: !ov[k] })} style={ov[k] ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{label}</button>

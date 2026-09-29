@@ -6,7 +6,12 @@ import { analyze } from '../../engine/advisor/advisor';
 import { cashFlowStatement, incomeStatement } from '../../engine/reports/statements';
 import { startOfMonth, formatMonth, formatDate } from '../../engine/time/calendar';
 import { STAGES, professionalLevel } from '../../engine/progression/progression';
-import { TUTORIAL } from '../../engine/progression/tutorial';
+import { TUTORIAL, nextMission, CHAPTERS } from '../../engine/progression/tutorial';
+import { Icon, IconName } from '../icons';
+import { imageScore, imageLabel } from '../../engine/lifestyle/effects';
+import { unreadNews, TOPIC_NAMES } from '../../engine/world/news';
+import { cardTier } from '../../engine/finance/cardRewards';
+import { PoachCard } from './more/Rivals';
 import { Money, InfoButton, Learn, LineChart, Bar } from '../components/common';
 import { JOB_BY_ID } from '../../content/jobs';
 import { fmtMoney } from '../../engine/format';
@@ -47,21 +52,28 @@ export function Home() {
   const prof = professionalLevel(s);
   const job = s.career.job ? JOB_BY_ID[s.career.job.jobId] : null;
   const tutorialOpen = !s.tutorial.dismissed;
-  const tutDone = TUTORIAL.filter((t) => !t.future && t.done(s)).length;
+  const tutDone = TUTORIAL.filter((t) => !t.future && t.done(s)).length; // eslint-disable-line
   const tutTotal = TUTORIAL.filter((t) => !t.future).length;
-  const nextStep = TUTORIAL.find((t) => !t.future && !t.done(s));
+  const nextStep = nextMission(s);
+  const img = imageScore(s);
+  const unread = unreadNews(s);
+  const openNews = s.world.news.filter((n) => n.status === 'abierta').slice(-2).reverse();
+  const poach = s.world.poach.filter((p) => p.status === 'abierta');
+  const rivalOffers = s.companies.filter((c) => c.saleOffer && c.saleOffer.expires >= s.day && c.saleOffer.from);
 
   const ph = phaseInfo(s);
   const nwLabels = [...hist.map((h) => formatMonth(h.day)), 'Hoy'];
   const openCos = s.companies.filter((c) => c.status === 'active' || c.status === 'insolvent');
   const invValue = m.securities + (s.ledger.balances.term_deposits ?? 0);
-  const areas: Array<{ icon: string; title: string; value: ReactNode; sub: string; go: () => void; term: string }> = [
-    { icon: '💼', title: 'Trabajo', value: job ? <Money c={m.monthlyGross} /> : 'Sin empleo', sub: job ? `${job.title} · nivel ${prof.level}` : 'Buscá empleo en Carrera', go: () => navStore.go('career'), term: 'salario_bruto' },
-    { icon: '📈', title: 'Inversiones', value: <Money c={invValue} />, sub: invValue > 0 ? 'Tocá para ver y operar todo' : 'Empezá con un fondo índice', go: () => navStore.go('invest', 'portfolio'), term: 'mis_inversiones' },
-    { icon: '🏠', title: 'Inmuebles', value: <Money c={m.realEstate - m.mortgages} />, sub: m.realEstate ? `Alquileres ${fmtMoney(m.rentIncome, { decimals: false })}/mes` : 'Comprá, alquilá o viví en uno', go: () => navStore.go('invest', 'realestate'), term: 'inmueble' },
-    { icon: '🏭', title: 'Negocios', value: openCos.length ? `${openCos.length} empresa${openCos.length > 1 ? 's' : ''}` : 'Ninguno', sub: openCos.length ? `Tu parte ${fmtMoney(s.ledger.balances.business_equity, { decimals: false })}` : 'Proyectá y fundá tu primera', go: () => navStore.go('business'), term: 'metodo_participacion' },
-    { icon: '💳', title: 'Crédito', value: String(s.credit.score), sub: m.debt ? `Deudas ${fmtMoney(m.debt, { decimals: false })}` : 'Sin deudas', go: () => navStore.go('finance', 'credit'), term: 'puntaje_crediticio' },
-    { icon: '🏆', title: 'Progreso', value: `Etapa ${s.progression.stage}/12`, sub: stage.name, go: () => navStore.open({ kind: 'progress' }), term: 'nivel_magnate' },
+  const areas: Array<{ icon: IconName; title: string; value: ReactNode; sub: string; go: () => void; term: string; badge?: number }> = [
+    { icon: 'career', title: 'Trabajo', value: job ? <Money c={m.monthlyGross} /> : 'Sin empleo', sub: job ? `${job.title} · nivel ${prof.level}` : 'Buscá empleo en Carrera', go: () => navStore.go('career'), term: 'salario_bruto' },
+    { icon: 'invest', title: 'Inversiones', value: <Money c={invValue} />, sub: invValue > 0 ? 'Tocá para ver y operar todo' : 'Empezá con un fondo índice', go: () => navStore.go('invest', 'portfolio'), term: 'mis_inversiones' },
+    { icon: 'realestate', title: 'Inmuebles', value: <Money c={m.realEstate - m.mortgages} />, sub: m.realEstate ? `Alquileres ${fmtMoney(m.rentIncome, { decimals: false })}/mes` : 'Cocheras y estudios desde poco', go: () => navStore.go('invest', 'realestate'), term: 'inmueble' },
+    { icon: 'business', title: 'Negocios', value: openCos.length ? `${openCos.length} empresa${openCos.length > 1 ? 's' : ''}` : 'Ninguno', sub: openCos.length ? `Tu parte ${fmtMoney(s.ledger.balances.business_equity, { decimals: false })}` : 'Proyectá y fundá tu primera', go: () => navStore.go('business'), term: 'metodo_participacion' },
+    { icon: 'card', title: `Crédito · ${cardTier(s).name}`, value: String(s.credit.score), sub: m.debt ? `Deudas ${fmtMoney(m.debt, { decimals: false })}` : 'Sin deudas', go: () => navStore.go('finance', 'card'), term: 'puntaje_crediticio' },
+    { icon: 'wardrobe', title: 'Tu imagen', value: `${img} · ${imageLabel(img)}`, sub: 'Vestidor, bienes y tiendas', go: () => navStore.go('more', 'wardrobe'), term: 'imagen_personal' },
+    { icon: 'news', title: 'Noticias', value: unread ? `${unread} nueva${unread > 1 ? 's' : ''}` : 'Al día', sub: 'Rumores que podés analizar', go: () => navStore.go('more', 'news'), term: 'noticias_rumores', badge: unread },
+    { icon: 'progress', title: 'Progreso', value: `Etapa ${s.progression.stage}/12`, sub: stage.name, go: () => navStore.open({ kind: 'progress' }), term: 'nivel_magnate' },
   ];
   return (
     <>
@@ -107,17 +119,33 @@ export function Home() {
         </button>
       </div>
 
+      {(poach.length > 0 || rivalOffers.length > 0) && (
+        <div className="stack" style={{ gap: 8 }}>
+          {poach.slice(0, 2).map((p) => <PoachCard key={p.id} p={p} />)}
+          {rivalOffers.map((c) => (
+            <button key={c.id} className="alert opportunity" style={{ textAlign: 'left' }} onClick={() => navStore.go('business', `co:${c.id}:manage`)}>
+              <span className="stripe" />
+              <div className="small" style={{ flex: 1 }}><strong>{c.saleOffer!.from} ofrece {fmtMoney(c.saleOffer!.price, { decimals: false })} por {c.name}.</strong> Vence el {formatDate(c.saleOffer!.expires)}.</div>
+            </button>
+          ))}
+        </div>
+      )}
+
       {tutorialOpen && nextStep && (
         <div className="card next-step">
           <div className="card-head">
-            <span className="eyebrow" style={{ flex: 1 }}>Tu próximo paso · {tutDone}/{tutTotal} <InfoButton term="guia_inicio" /></span>
-            <button className="btn sm ghost" onClick={() => navStore.open({ kind: 'tutorial' })}>Ver todos</button>
-            <button className="btn sm ghost" onClick={() => store.run((st) => { st.tutorial.dismissed = true; }, { toast: false })}>Ocultar</button>
+            <span className="eyebrow" style={{ flex: 1 }}><Icon name="missions" size={13} /> Misiones {tutDone}/{tutTotal} <InfoButton term="misiones" /></span>
+            <button className="btn sm ghost" onClick={() => navStore.open({ kind: 'tutorial' })}>Ver todas</button>
+            <button className="btn sm ghost" aria-label="Ocultar misiones" onClick={() => store.run((st) => { st.tutorial.dismissed = true; }, { toast: false })}><Icon name="close" size={15} /></button>
           </div>
           <Bar value={tutDone / tutTotal} />
+          <span className="tiny muted">{CHAPTERS[nextStep.chapter - 1].icon} {CHAPTERS[nextStep.chapter - 1].name}</span>
           <strong>{nextStep.title}</strong>
           <p className="small muted">{nextStep.body}</p>
-          <button className="btn sm dark" onClick={() => navStore.go(nextStep.tab, nextStep.sub)}>Hacerlo ahora</button>
+          <div className="btn-row" style={{ alignItems: 'center' }}>
+            <button className="btn sm dark" onClick={() => navStore.go(nextStep.tab, nextStep.sub)}>Hacerlo ahora</button>
+            {nextStep.reward && <span className="tiny muted">Recompensa: +{nextStep.reward.xp} XP</span>}
+          </div>
         </div>
       )}
 
@@ -140,12 +168,31 @@ export function Home() {
       <div className="area-grid">
         {areas.map((a) => (
           <button key={a.title} className="area" onClick={a.go}>
-            <span className="area-top"><span className="area-icon" aria-hidden>{a.icon}</span><span className="tiny muted">{a.title}</span><InfoButton term={a.term} /></span>
+            <span className="area-top"><span className="area-icon" aria-hidden><Icon name={a.icon} size={16} /></span><span className="tiny muted">{a.title}</span>{a.badge ? <span className="count-badge">{a.badge}</span> : <InfoButton term={a.term} />}</span>
             <strong className="area-value">{a.value}</strong>
             <span className="tiny faint">{a.sub}</span>
           </button>
         ))}
       </div>
+
+      {openNews.length > 0 && (
+        <>
+          <div className="section-title">
+            <h2>Rumores abiertos</h2>
+            <button className="btn sm ghost" onClick={() => navStore.go('more', 'news')}>Ver todos</button>
+          </div>
+          {openNews.map((n) => (
+            <button key={n.id} className="news-mini" onClick={() => navStore.go('more', 'news')}>
+              <span className="news-icon" aria-hidden>{n.icon}</span>
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <strong className="small">{n.title}</strong>
+                <span className="tiny muted" style={{ display: 'block' }}>{TOPIC_NAMES[n.topic]} · {n.source}{n.analysis ? ` · tu estimación ~${Math.round(n.analysis.estimate * 100)} %` : ' · sin analizar'}</span>
+              </span>
+              <Icon name="chevron" size={16} />
+            </button>
+          ))}
+        </>
+      )}
 
       <div className="section-title">
         <h2>Actividad reciente</h2>

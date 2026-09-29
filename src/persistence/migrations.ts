@@ -1,4 +1,6 @@
-import { SAVE_VERSION, GameState } from '../engine/state';
+import { SAVE_VERSION, GameState, newPossessions } from '../engine/state';
+import { initWorldLife } from '../engine/world/rivals';
+import { TUTORIAL } from '../engine/progression/tutorial';
 import { initMarkets } from '../engine/business/market';
 import { newMacroV2 } from '../engine/economy/economy';
 import { emptyYtd } from '../engine/tax/incomeTax';
@@ -81,6 +83,34 @@ export const MIGRATIONS: Record<number, (s: AnyState) => AnyState> = {
     s.version = 4;
     return s;
   },
+  4: (s) => {
+    // v5 (1.2): tiendas y posesiones, niveles de tarjeta y cuotas, noticias y rivales.
+    for (const a of ['personal_assets', 'card_installments', 'card_rewards', 'shopping', 'goods_depreciation']) if (s.ledger.balances[a] === undefined) s.ledger.balances[a] = 0;
+    const c = s.bank.card;
+    c.tier = c.tier ?? 'clasica';
+    c.feeDay = c.feeDay ?? s.day + 365;
+    c.rewardsPending = c.rewardsPending ?? 0;
+    c.rewardsTotal = c.rewardsTotal ?? 0;
+    c.installments = c.installments ?? [];
+    c.lastTierRequest = c.lastTierRequest ?? -999;
+    s.possessions = s.possessions ?? newPossessions(s.seed ?? 0);
+    if (!s.world) {
+      s.world = { news: [], rivals: [], intents: [], supplierShocks: [], poach: [], lastRead: 0 };
+      initWorldLife(s as GameState);
+    }
+    s.meta.gatesOpened = s.meta.gatesOpened ?? [];
+    // Las misiones que ya estaban hechas se marcan sin recompensa (evita una lluvia de avisos).
+    s.tutorial.completed = s.tutorial.completed ?? [];
+    for (const t of TUTORIAL) {
+      try {
+        if (!s.tutorial.completed.includes(t.id) && t.done(s as GameState)) s.tutorial.completed.push(t.id);
+      } catch {
+        /* misión que depende de datos que la partida vieja no tenía */
+      }
+    }
+    s.version = 5;
+    return s;
+  },
 };
 
 export function migrate(raw: AnyState): { state: GameState; migratedFrom: number | null } {
@@ -102,6 +132,7 @@ export function validateShape(s: AnyState): string[] {
   const need = ['player', 'ledger', 'bank', 'budget', 'career', 'skills', 'education', 'tax', 'macro', 'credit', 'progression', 'history', 'log', 'meta', 'tutorial'];
   if (typeof s.version === 'number' && s.version >= 3) need.push('stocks', 'bonds', 'funds', 'mogul', 'realEstate', 'pros', 'legal', 'options');
   if (typeof s.version === 'number' && s.version >= 4) need.push('managed');
+  if (typeof s.version === 'number' && s.version >= 5) need.push('possessions', 'world');
   for (const k of need) if (s[k] === undefined || s[k] === null) errs.push(`Falta la sección "${k}".`);
   if (!Array.isArray(s.ledger?.entries)) errs.push('Libro mayor inválido.');
   if (typeof s.day !== 'number') errs.push('Día inválido.');

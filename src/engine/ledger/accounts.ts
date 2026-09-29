@@ -40,6 +40,7 @@ export const ACCOUNTS = {
   managed: { name: 'Cartera con gestor', type: 'asset', noNegative: true, term: 'gestor_inversiones' },
   real_estate: { name: 'Inmuebles (tasación)', type: 'asset', noNegative: true, term: 'inmueble' },
   undeclared_cash: { name: 'Efectivo no declarado', type: 'asset', noNegative: true, term: 'efectivo_no_declarado' },
+  personal_assets: { name: 'Bienes personales (vehículos, tecnología, hogar, lujo)', type: 'asset', noNegative: true, term: 'bienes_personales' },
   // PASIVOS
   credit_card: { name: 'Tarjeta de crédito', type: 'liability', noNegative: true, term: 'tarjeta_credito' },
   personal_loans: { name: 'Préstamos personales', type: 'liability', noNegative: true, term: 'prestamo' },
@@ -47,6 +48,7 @@ export const ACCOUNTS = {
   arrears: { name: 'Pagos vencidos (atrasos)', type: 'liability', noNegative: true, term: 'mora' },
   mortgages: { name: 'Hipotecas', type: 'liability', noNegative: true, term: 'hipoteca' },
   fines_payable: { name: 'Multas y sanciones por pagar', type: 'liability', noNegative: true, term: 'multa' },
+  card_installments: { name: 'Cuotas de tarjeta a vencer', type: 'liability', noNegative: true, term: 'cuotas_tarjeta' },
   // PATRIMONIO
   opening_equity: { name: 'Patrimonio inicial', type: 'equity', term: 'patrimonio_neto' },
   // INGRESOS
@@ -62,6 +64,7 @@ export const ACCOUNTS = {
   realized_gains: { name: 'Ganancias de capital realizadas', type: 'income', term: 'ganancia_capital' },
   unrealized_gains: { name: 'Revalorización no realizada', type: 'income', term: 'ganancia_no_realizada', nonCash: true },
   illicit_income: { name: 'Ingresos no declarados (ficticio)', type: 'income', term: 'efectivo_no_declarado' },
+  card_rewards: { name: 'Reintegros de tarjeta', type: 'income', term: 'reintegro_tarjeta' },
   // GASTOS DE VIDA
   housing: { name: 'Vivienda', type: 'expense', group: 'living' },
   food: { name: 'Alimentación', type: 'expense', group: 'living' },
@@ -69,6 +72,7 @@ export const ACCOUNTS = {
   utilities: { name: 'Servicios y teléfono', type: 'expense', group: 'living' },
   leisure: { name: 'Ocio y estilo de vida', type: 'expense', group: 'living' },
   health: { name: 'Salud', type: 'expense', group: 'living' },
+  shopping: { name: 'Ropa y compras personales', type: 'expense', group: 'living', term: 'imagen_personal' },
   education: { name: 'Educación', type: 'expense', group: 'education' },
   // GASTOS FINANCIEROS
   interest_expense: { name: 'Intereses pagados', type: 'expense', group: 'financial', term: 'interes' },
@@ -90,6 +94,7 @@ export const ACCOUNTS = {
   fines: { name: 'Multas y sanciones', type: 'expense', group: 'legal', term: 'multa' },
   illicit_costs: { name: 'Pagos no documentados (ficticio)', type: 'expense', group: 'legal', term: 'soborno' },
   seizures: { name: 'Decomisos y embargos', type: 'expense', group: 'legal', term: 'embargo' },
+  goods_depreciation: { name: 'Depreciación de bienes personales', type: 'expense', group: 'other', term: 'bienes_personales' },
   other_expense: { name: 'Otros gastos', type: 'expense', group: 'other' },
 } as const satisfies Record<string, Omit<AccountDef, 'id'>>;
 

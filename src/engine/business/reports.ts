@@ -3,7 +3,7 @@ import type { Company } from './types';
 import { CO_ACCOUNTS, CO_ACCOUNT_IDS, CoAccountId, coPeriodTotals, coGroup, CO_CHART } from './companyLedger';
 import { gEntryDelta, gBucketShare } from '../ledger/core';
 import { Cents, roundCents } from '../money';
-import { sectorOf, coEquity, monthlyPayroll, monthlyFixed, isOpen } from './common';
+import { sectorOf, coEquity, monthlyPayroll, monthlyFixed, isOpen, premisesBase } from './common';
 import { inventoryValue } from './inventory';
 import { companyShareEstimate } from './market';
 import { averageMorale } from './staff';
@@ -337,7 +337,7 @@ export function subsidiariesValue(state: GameState, co: Company): Cents {
 /** Alquiler anual que la empresa se ahorra por usar un inmueble propio. */
 export function ownPremisesRentAnnual(state: GameState, co: Company): Cents {
   const used = (state.realEstate?.properties ?? []).some((p) => p.usedBy === co.id);
-  return used ? roundCents(sectorOf(co).rent * 100 * state.macro.priceIndex * 12) : 0;
+  return used ? roundCents(premisesBase(state, co).rent * 100 * state.macro.priceIndex * 12) : 0;
 }
 
 export interface Consolidated {

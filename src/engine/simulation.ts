@@ -32,6 +32,8 @@ import { embezzlementMonth, prosMonthEnd } from './pros/pros';
  *     atributos, puntaje, foto mensual).
  */
 import { compactLedgers } from './ledger/compaction';
+import { worldDay, worldMonth } from './world/rivals';
+import { possessionsMonth } from './lifestyle/shops';
 
 export function advanceDay(state: GameState): void {
   state.day++;
@@ -41,7 +43,10 @@ export function advanceDay(state: GameState): void {
     fileAnnualReturn(state);
     yearStartMacro(state);
   }
-  if (g.d === 1) monthlyMacro(state);
+  if (g.d === 1) {
+    monthlyMacro(state);
+    worldMonth(state);
+  }
   processCardDue(state);
   processApplications(state);
   processEducation(state);
@@ -57,6 +62,7 @@ export function advanceDay(state: GameState): void {
   investmentsDay(state);
   realEstateDay(state);
   legalDay(state);
+  worldDay(state);
 
   accrueDaily(state);
   processCardEndOfDay(state);
@@ -68,6 +74,7 @@ export function advanceDay(state: GameState): void {
     legalMonth(state);
     monthEndCareer(state);
     monthEndBanking(state);
+    possessionsMonth(state);
     monthlyAttributes(state);
     refreshCreditScore(state);
     takeSnapshot(state);

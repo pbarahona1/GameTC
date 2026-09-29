@@ -12,6 +12,7 @@ import { sectorOf } from '../../../engine/business/common';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { LegalCase } from '../../../engine/legal/types';
+import { IllegalToggle } from '../../components/IllegalToggle';
 
 const STAGE: Record<LegalCase['stage'], string> = { investigacion: 'Investigación', imputacion: 'Imputación', juicio: 'Juicio', sentencia: 'Sentencia', cerrado: 'Cerrado' };
 
@@ -157,6 +158,7 @@ export function LegalScreen() {
   const acts = L.acts.filter((a) => a.status === 'oculto');
   return (
     <>
+      <IllegalToggle />
       {L.prison && (
         <div className="alert critical">
           <span className="stripe" />

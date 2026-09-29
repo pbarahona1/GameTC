@@ -2,7 +2,7 @@
 
 Simulador móvil de finanzas personales, carrera, empresas, inversiones, bienes raíces, impuestos internacionales, grupos empresariales y un sistema legal ficticio. Cada movimiento de dinero pasa por un **libro mayor de partida doble**: nada aparece ni desaparece sin un asiento contable que lo explique.
 
-**Estado:** versión 1.1 — Fases 1 a 5 más: habilidad **Proyección de negocios** (simula varios futuros de un negocio antes de crearlo o comprarlo), **gestor de inversiones** contratable y capacitable, apartado único **Mis inversiones** (comprar/vender tocando cada inversión), gráficos táctiles e inicio rediseñado. Incluye de la 1.0: finanzas personales y carrera; empresas; bolsa (Lite y Pro), bonos, fondos, Mogul Exchange y bienes raíces con hipotecas; economía dinámica, 4 jurisdicciones fiscales, profesionales, holdings y consolidación, sistema legal ficticio y asesor IA avanzado; optimización, personalización y guardado robusto. Ver [`docs/ESTADO.md`](docs/ESTADO.md) para lo implementado, los resultados reales de las pruebas y las limitaciones.
+**Estado:** versión 1.2 — sobre todo lo anterior suma **tiendas** (ropa, vehículos, tecnología, hogar y lujo) con efectos reales, un **personaje** dibujado que se viste con lo que comprás e **imagen personal** (entrevistas, negociaciones, trato en tiendas), **tarjetas Clásica/Oro/Platino/Black** con reintegros y cuotas, **noticias y rumores calibrados** que se pueden analizar, **grupos rivales** que compiten por empresas, inmuebles, empleados y proveedores, **misiones por capítulos**, secciones recomendadas por etapa (sin bloquear), cocheras y estudios baratos, holding sin subsidiarias más barata, **zoom táctil** en Trading Pro, íconos nuevos, **actualizaciones dentro de la app** y firma fija para instalar encima sin perder la partida. Ver [`docs/ESTADO.md`](docs/ESTADO.md) para lo implementado, los resultados reales de las pruebas y las limitaciones.
 
 ## Requisitos
 
@@ -21,10 +21,12 @@ Abrilo con las herramientas de desarrollo en modo móvil (≈ 390 × 844) para l
 ## Pruebas
 
 ```bash
-npm test             # 143 pruebas en 18 archivos: contabilidad, impuestos, crédito, simulación, empresas,
+npm test             # 180 pruebas en 21 archivos: contabilidad, impuestos, crédito, simulación, empresas,
                      # inversiones, inmuebles, economía, grupos, legal, auditorías con bots aleatorios,
-                     # compactación, guardado seguro, insolvencia y rendimiento
+                     # compactación, guardado seguro, insolvencia, rendimiento, tiendas, tarjetas,
+                     # noticias calibradas, rivales, misiones, actualizaciones y balance por estilo
 npm run typecheck    # TypeScript estricto
+URT_BOTS=1 npx vitest run tests/balance.test.ts   # bots de balance completos → docs/BALANCE.md
 ```
 
 ## Compilar
@@ -36,9 +38,16 @@ npm run build:single   # un único index.html autocontenido en dist-single/ (vis
 
 ## Generar la APK de Android
 
-> La APK se compila en GitHub Actions (la versión 1.0 se compiló allí correctamente). No se probó en un teléfono físico desde el entorno de desarrollo. Se verificó la configuración de Capacitor (`capacitor.config.ts`, `webDir: dist`), el proyecto `android/` sincronizado con `npx cap sync android` (4 plugins: app, filesystem, preferences, share; `versionCode 4`, `versionName 1.1.0`, minSdk 22, target/compile 34) y el flujo `.github/workflows/android.yml`. Seguí cualquiera de estas opciones para generarla.
+> La APK se compila en GitHub Actions. No se probó en un teléfono físico desde el entorno de desarrollo. Proyecto Capacitor 6 (`webDir: dist`, plugins app, filesystem, preferences, share; `versionCode 5`, `versionName 1.2.0`, minSdk 22, target/compile 34), ícono y pantalla de inicio propios (`npm run icons` los regenera) y **firma fija** para instalar encima sin perder la partida. Guía completa: [`docs/PUBLICAR.md`](docs/PUBLICAR.md).
 
-### Opción A — en tu computadora
+### Opción A — sin instalar nada (GitHub Actions, recomendada)
+
+1. Cada push a `main` (o **Actions → APK Android → Run workflow**) corre las pruebas, compila y firma la APK.
+2. Descargala desde **Releases** (`https://github.com/pbarahona1/gametc/releases/latest`, directo desde el teléfono) o desde los artefactos de la ejecución.
+3. Se instala **encima** de la versión anterior (misma firma): la partida se conserva. Solo al pasar de la 1.1 a la 1.2 hay que exportar la partida, reinstalar e importarla (la 1.1 tenía una firma al azar).
+4. Si configurás los secretos de firma de publicación, el mismo flujo genera el **AAB firmado para Play Store** (ver `docs/PUBLICAR.md`).
+
+### Opción B — en tu computadora
 
 1. Instalá Android Studio (incluye el SDK) y JDK 17.
 2. En la carpeta del proyecto:
@@ -46,36 +55,21 @@ npm run build:single   # un único index.html autocontenido en dist-single/ (vis
    npm install
    npm run build
    npx cap sync android
+   cd android && ./gradlew assembleDebug        # en Windows: gradlew.bat assembleDebug
    ```
-3. APK de depuración (instalable directamente en el teléfono):
-   ```bash
-   cd android
-   ./gradlew assembleDebug        # en Windows: gradlew.bat assembleDebug
-   ```
-   Resultado: `android/app/build/outputs/apk/debug/app-debug.apk`.
-4. O abrí el proyecto con `npx cap open android` y usá *Build → Build APK(s)*.
-5. Instalación en el teléfono: copiá la APK y abrila (habilitá "instalar apps desconocidas"), o con el teléfono conectado por USB: `adb install -r app-debug.apk`.
+   Resultado: `android/app/build/outputs/apk/debug/app-debug.apk` (firmada con la llave fija del repositorio).
+3. Instalación: abrí la APK en el teléfono (habilitá "instalar apps desconocidas") o `adb install -r app-debug.apk`.
 
-### Opción B — sin instalar nada (GitHub Actions)
+### Actualizaciones sin reinstalar
 
-1. Subí el proyecto a un repositorio de GitHub.
-2. Pestaña **Actions → APK Android → Run workflow**.
-3. El flujo usa Node 22, JDK 17 y el SDK de Android que ya trae la máquina de GitHub (ubuntu-24.04); ejecuta `npm ci`, **las 143 pruebas**, `npm run build`, `npx cap sync android` y `./gradlew assembleDebug`.
-4. Al terminar (≈ 3–5 min), descargá `ultimate-realistic-tycoon-debug-apk` desde los artefactos de la ejecución, descomprimí el ZIP e instalá `app-debug.apk`.
+La app busca versiones nuevas del juego en `ota/manifest.json` y las instala en segundos, verificadas con SHA-256 y con vuelta atrás automática si algo falla. Para publicar una: subí la versión en `package.json`, anotá las novedades en `src/content/changelog.json`, ejecutá `npm run ota` y hacé push.
 
 ### Problemas frecuentes
 
 - `SDK location not found`: creá `android/local.properties` con `sdk.dir=/ruta/a/Android/Sdk` (Windows: `sdk.dir=C\:\Users\VOS\AppData\Local\Android\Sdk`).
 - `Unsupported class file major version`: usá JDK 17 (`java -version`).
 - Cambios en el código que no aparecen en la APK: repetí `npm run build && npx cap sync android` antes de compilar.
-
-### APK de publicación (Play Store)
-
-```bash
-keytool -genkey -v -keystore urt-release.keystore -alias urt -keyalg RSA -keysize 2048 -validity 10000
-cd android && ./gradlew bundleRelease    # AAB para Play Store
-```
-Configurá la firma en `android/app/build.gradle` (`signingConfigs`). Nunca subas el keystore al repositorio.
+- "La app no está instalada" al actualizar: la APK anterior tenía otra firma (1.1 o anterior). Exportá la partida, desinstalá, instalá la nueva e importala.
 
 ## Estructura
 
@@ -97,16 +91,20 @@ src/
     snapshot.ts      Deshacer liviano de acciones
     business/        Empresas: libro propio, mercado, inventario, personal, marketing,
                      operaciones, finanzas, propiedad, gerente, informes y asesor empresarial
-    advisor/         Asesor IA basado en reglas y escenarios hipotéticos
-    progression/     Etapas, logros, guía de inicio
+    advisor/         Asesor IA basado en reglas, escenarios y proyección de negocios
+    lifestyle/       Tiendas, posesiones, imagen personal y sus efectos (1.2)
+    world/           Noticias calibradas, rivales, exclusividades y ofertas por empleados (1.2)
+    progression/     Etapas, logros, misiones por capítulos y secciones recomendadas
     simulation.ts    Orquestador diario
     invariants.ts    Auditoría contable
   content/           Datos del juego: empleos, cursos, sectores, glosario, estilos de vida, bancos
   persistence/       Guardado con checksum, copias, migraciones, progreso offline,
-                     almacenamiento nativo espejado y exportación a archivo
+                     almacenamiento nativo espejado, exportación a archivo y actualizaciones (ota.ts)
   ui/                Interfaz React (pantallas, hojas, componentes, tema)
-tests/               Pruebas unitarias e integradas (Vitest)
-docs/                Documentación técnica y económica
+tests/               Pruebas unitarias e integradas (Vitest) y bots de balance (tests/bots)
+docs/                Documentación técnica, económica, balance y publicación
+ota/                 Actualización por internet publicada (manifiesto + página)
+scripts/             Generación de íconos y del paquete de actualización
 android/             Proyecto nativo generado por Capacitor
 ```
 
@@ -114,6 +112,7 @@ android/             Proyecto nativo generado por Capacitor
 
 - **Android (APK):** en archivos privados de la app (principal, temporal y copias) y una segunda copia de la partida principal en las preferencias del sistema. Si uno falla o se borra, se lee del otro. No depende del navegador.
 - **Navegador:** `localStorage`.
+- **Actualizaciones:** la partida vive fuera de la página del juego, así que actualizar no la toca; antes de cambiar de versión se guarda una copia extra "antes de actualizar".
 - **En ambos:** guardado comprimido con checksum, 3 copias rotativas (una copia dañada nunca borra a las otras; se carga la más reciente válida; con el almacenamiento lleno se liberan primero las copias más viejas), y *Ajustes → Exportar a archivo* (en Android abre el menú Compartir: Archivos, Drive, correo…) e *Importar desde archivo*.
 
 ## Documentación
@@ -122,6 +121,8 @@ android/             Proyecto nativo generado por Capacitor
 - [`docs/REGLAS_ECONOMICAS.md`](docs/REGLAS_ECONOMICAS.md) — todas las fórmulas y reglas de negocio.
 - [`docs/ESTADO.md`](docs/ESTADO.md) — funcionalidades implementadas, resultados de pruebas, limitaciones y guía para continuar.
 - [`docs/DISENO_FASES_3_5.md`](docs/DISENO_FASES_3_5.md) — decisiones de diseño de las Fases 3 a 5.
+- [`docs/BALANCE.md`](docs/BALANCE.md) — cuánto tarda cada estilo de juego en llegar a cada etapa (bots) y los ajustes hechos.
+- [`docs/PUBLICAR.md`](docs/PUBLICAR.md) — firma, APK, AAB para Play Store y actualizaciones por internet.
 
 ## Modelo de negocio
 

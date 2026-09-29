@@ -8,3 +8,9 @@ android/local.properties
 android/app/src/main/assets/public/
 *.keystore
 .DS_Store
+
+# Llave de depuración fija (pública a propósito: permite actualizar la APK sin perder la partida)
+!android/app/urt-debug.keystore
+# Llaves de publicación: nunca al repositorio
+*.jks
+keystore.b64

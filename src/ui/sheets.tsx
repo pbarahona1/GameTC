@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, ReactNode, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { navStore, useNav, SheetSpec } from './nav';
 import { store, useUI, useGame } from './store';
 import { GLOSSARY, GLOSSARY_BY_ID, GlossaryEntry } from '../content/glossary';
@@ -7,13 +7,23 @@ import { DIFFICULTIES, DIFFICULTY_BY_ID } from '../engine/economy/difficulty';
 import type { PauseCategory } from './store';
 import { runScenario, ScenarioInput, ScenarioResult } from '../engine/advisor/scenarios';
 import { STAGES, ACHIEVEMENTS, evaluateStage } from '../engine/progression/progression';
-import { TUTORIAL } from '../engine/progression/tutorial';
+import { TUTORIAL, CHAPTERS, nextMission } from '../engine/progression/tutorial';
+import { SKILL_BY_ID } from '../content/skills';
 import { LIFESTYLES } from '../content/lifestyle';
 import { BANKS } from '../content/banks';
 import { fmtMoney } from '../engine/format';
 import { usd } from '../engine/money';
 import { formatDate } from '../engine/time/calendar';
-import { Sheet, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton } from './components/common';
+import { Sheet, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton, Switch } from './components/common';
+import { Icon, IconName } from './icons';
+import { Avatar, avatarOf } from './components/Avatar';
+import { IllegalToggle } from './components/IllegalToggle';
+import { APP_VERSION } from '../version';
+import { otaStore, applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
+
+export function useOta() {
+  return useSyncExternalStore(otaStore.subscribe, otaStore.get);
+}
 import { LogRow } from './screens/Home';
 
 function TermView({ id }: { id: string }) {
@@ -231,17 +241,55 @@ function AdvisorView() {
   );
 }
 
-function GameOptionsCard() {
-  const s = useGame();
-  useUI();
+function SettingsSection({ id, icon, title, summary, open, onToggle, children }: { id: string; icon: IconName; title: string; summary: ReactNode; open: boolean; onToggle: (id: string) => void; children: ReactNode }) {
   return (
-    <div className="card">
-      <div className="card-head"><h2>Partida</h2><InfoButton term="accion_dificultad" /></div>
-      <span className="small">Dificultad económica (se aplica desde ahora)</span>
-      <Seg items={DIFFICULTIES.map((d) => ({ id: d.id, label: d.name }))} value={s.options.difficulty} onChange={(v) => store.run((x) => { x.options.difficulty = v; return { ok: true, message: `Dificultad: ${DIFFICULTY_BY_ID[v].name}.` }; })} />
-      <p className="tiny muted">{DIFFICULTY_BY_ID[s.options.difficulty].description}</p>
-      <label className="row"><input type="checkbox" checked={s.options.illegalEnabled} onChange={() => store.run((x) => { x.options.illegalEnabled = !x.options.illegalEnabled; if (!x.options.illegalEnabled) { x.tax.underreport = 0; for (const c of x.companies) c.irregular = { inflatedBooks: 0, underreport: 0 }; } return { ok: true, message: x.options.illegalEnabled ? 'Actividades ilegales ficticias habilitadas.' : 'Actividades ilegales desactivadas. Los actos pasados pueden seguir descubriéndose.' }; })} /><span className="grow">Actividades ilegales ficticias <span className="tiny muted">(al desactivarlas, lo hecho antes puede seguir investigándose)</span></span></label>
-    </div>
+    <section className={`card settings-section ${open ? 'open' : ''}`}>
+      <button className="ss-head" aria-expanded={open} onClick={() => onToggle(id)}>
+        <span className="ss-icon" aria-hidden><Icon name={icon} size={19} /></span>
+        <span className="ss-text"><strong>{title}</strong><span className="tiny muted">{summary}</span></span>
+        <Icon name="chevron" size={16} className={`ss-chev ${open ? 'rot' : ''}`} />
+      </button>
+      {open && <div className="ss-body">{children}</div>}
+    </section>
+  );
+}
+
+function UpdatesPanel() {
+  const ota = useOta();
+  const [busy, setBusy] = useState(false);
+  const c = ota.check;
+  const install = async () => {
+    if (!c || c.kind !== 'available') return;
+    setBusy(true);
+    const err = await applyUpdate(c.manifest, () => store.saveForUpdate());
+    setBusy(false);
+    if (err) store.toast(err, 'error');
+  };
+  return (
+    <>
+      <div className="kv">
+        <dt>Versión del juego</dt><dd>{APP_VERSION}</dd>
+        {ota.native && <><dt>Aplicación instalada (APK)</dt><dd>{ota.native.version} · código {ota.native.code}</dd></>}
+      </div>
+      {!ota.native && <p className="small muted">En el navegador siempre jugás la última versión publicada. Las actualizaciones automáticas son para la app de Android.</p>}
+      {ota.native && (
+        <>
+          {c?.kind === 'none' && <p className="small gain">Tenés la última versión.</p>}
+          {c?.kind === 'available' && (
+            <div className="update-box">
+              <strong>Versión {c.manifest.version} disponible</strong>
+              <ul className="small">{c.manifest.notes.slice(0, 8).map((n) => <li key={n}>{n}</li>)}</ul>
+              <span className="tiny muted">{(c.manifest.size / 1024 / 1024).toFixed(1)} MB · se guarda tu partida y una copia antes de actualizar; si algo falla, vuelve sola a la versión actual.</span>
+              <button className="btn primary" disabled={busy} onClick={() => void install()}>{busy ? (ota.phase === 'downloading' ? `Descargando… ${Math.round(ota.progress * 100)} %` : ota.phase === 'verifying' ? 'Verificando…' : 'Instalando…') : 'Actualizar ahora'}</button>
+            </div>
+          )}
+          {c?.kind === 'failed-before' && <p className="small warn">La versión {c.manifest.version} no pudo iniciar en tu teléfono la última vez. Podés intentarlo de nuevo con "Buscar actualización".</p>}
+          {c?.kind === 'needs-apk' && <p className="small warn">La versión {c.manifest.version} necesita instalar una APK nueva (cambió algo del sistema). Se instala encima de la actual y conserva tu partida: <a href={`https://github.com/${OTA_REPO}/releases/latest`} target="_blank" rel="noreferrer">descargala acá</a>.</p>}
+          {(ota.phase === 'error' || c?.kind === 'error') && <p className="small loss">{ota.message ?? (c?.kind === 'error' ? c.message : '')}</p>}
+          <span className="act"><button className="btn" disabled={busy || ota.phase === 'checking'} onClick={() => void checkForUpdate(true)}>{ota.phase === 'checking' ? 'Buscando…' : 'Buscar actualización'}</button><InfoButton term="accion_buscar_actualizacion" /></span>
+        </>
+      )}
+    </>
   );
 }
 
@@ -251,57 +299,74 @@ function SettingsView() {
   const [importText, setImportText] = useState('');
   const [backups, setBackups] = useState<Awaited<ReturnType<typeof store.backups>>>([]);
   const [audit, setAudit] = useState<string[] | null>(null);
+  const [open, setOpen] = useState<string>('game');
   useEffect(() => { void store.backups().then(setBackups); }, [ui.lastSaved]);
   const st = ui.settings;
+  const s = ui.state;
+  const toggle = (id: string) => setOpen((o) => (o === id ? '' : id));
+  const ota = useOta();
   return (
     <Sheet title="Ajustes">
-      <div className="card">
-        <div className="card-head"><h2>Apariencia</h2></div>
+      {s && (
+        <div className="settings-hero">
+          <Avatar data={avatarOf(s)} size={46} bust />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <strong>{s.player.name}</strong>
+            <div className="tiny muted">{formatDate(s.day)} · dificultad {DIFFICULTY_BY_ID[s.options.difficulty].name.toLowerCase()} · {ui.lastSaved ? `guardado ${new Date(ui.lastSaved).toLocaleTimeString()}` : 'sin guardar aún'}</div>
+          </div>
+          <span className="act"><button className="btn sm dark" onClick={async () => { if (await store.save()) store.toast('Partida guardada.', 'ok'); }}><Icon name="save" size={15} /> Guardar</button><InfoButton term="accion_guardar" /></span>
+        </div>
+      )}
+      {s && (
+        <SettingsSection id="game" icon="rocket" title="Partida" summary={`${DIFFICULTY_BY_ID[s.options.difficulty].name} · ilegales ${s.options.illegalEnabled ? 'activadas' : 'desactivadas'}`} open={open === 'game'} onToggle={toggle}>
+          <span className="small">Dificultad económica <InfoButton term="accion_dificultad" /></span>
+          <Seg items={DIFFICULTIES.map((d) => ({ id: d.id, label: d.name }))} value={s.options.difficulty} onChange={(v) => store.run((x) => { x.options.difficulty = v; return { ok: true, message: `Dificultad: ${DIFFICULTY_BY_ID[v].name}.` }; })} />
+          <p className="tiny muted">{DIFFICULTY_BY_ID[s.options.difficulty].description}</p>
+          <IllegalToggle />
+          <Switch checked={st.showAllSections} onChange={() => store.updateSettings({ showAllSections: !st.showAllSections })} label="Mostrar todas las secciones desde el inicio" sub="Sin avisos de «recomendado desde la etapa…». Nada está bloqueado de todos modos." term="secciones_recomendadas" />
+          <div className="btn-row">
+            <button className="btn sm" onClick={() => { store.run((x) => { x.tutorial.dismissed = false; }, { toast: false }); navStore.open({ kind: 'tutorial' }); }}><Icon name="missions" size={15} /> Ver misiones</button>
+          </div>
+          <ConfirmButton label="Empezar una partida nueva" className="btn sm danger" confirmLabel="Borrar y empezar de nuevo" detail="Se eliminarán la partida y sus copias de este dispositivo. Exportala antes si querés conservarla." onConfirm={() => { navStore.closeAll(); void store.abandonGame(); }} />
+        </SettingsSection>
+      )}
+      <SettingsSection id="look" icon="palette" title="Apariencia" summary={`${st.theme === 'system' ? 'Tema del sistema' : st.theme === 'dark' ? 'Oscuro' : 'Claro'} · aprendizaje ${st.learningMode ? 'activado' : 'desactivado'}`} open={open === 'look'} onToggle={toggle}>
         <Seg items={[{ id: 'system', label: 'Sistema' }, { id: 'light', label: 'Claro' }, { id: 'dark', label: 'Oscuro' }]} value={st.theme} onChange={(v) => store.updateSettings({ theme: v })} />
-        <label className="row"><input type="checkbox" checked={st.learningMode} onChange={() => store.updateSettings({ learningMode: !st.learningMode })} /><span className="grow">Modo aprendizaje <span className="tiny muted">(explicaciones en pantalla)</span></span></label>
-        <label className="row"><input type="checkbox" checked={st.autoPause} onChange={() => store.updateSettings({ autoPause: !st.autoPause })} /><span className="grow">Pausa automática ante eventos importantes</span></label>
-      </div>
-      <div className="card">
-        <div className="card-head"><h2>Accesibilidad</h2><InfoButton term="accion_accesibilidad" /></div>
-        <span className="small">Tamaño del texto</span>
+        <Switch checked={st.learningMode} onChange={() => store.updateSettings({ learningMode: !st.learningMode })} label="Modo aprendizaje" sub="Explicaciones cortas en cada pantalla." />
+      </SettingsSection>
+      <SettingsSection id="access" icon="access" title="Accesibilidad" summary={`Texto ${st.fontScale === 1 ? 'normal' : st.fontScale > 1 ? 'grande' : 'chico'} · densidad ${st.density}`} open={open === 'access'} onToggle={toggle}>
+        <span className="small">Tamaño del texto <InfoButton term="accion_accesibilidad" /></span>
         <Seg items={[{ id: 0.9, label: 'A−' }, { id: 1, label: 'A' }, { id: 1.15, label: 'A+' }, { id: 1.3, label: 'A++' }]} value={st.fontScale} onChange={(v) => store.updateSettings({ fontScale: v })} />
         <span className="small">Densidad</span>
         <Seg items={[{ id: 'comoda', label: 'Cómoda' }, { id: 'compacta', label: 'Compacta' }]} value={st.density} onChange={(v) => store.updateSettings({ density: v })} />
-        <label className="row"><input type="checkbox" checked={st.highContrast} onChange={() => store.updateSettings({ highContrast: !st.highContrast })} /><span className="grow">Alto contraste</span></label>
-        <label className="row"><input type="checkbox" checked={st.colorblind} onChange={() => store.updateSettings({ colorblind: !st.colorblind })} /><span className="grow">Colores para daltonismo <span className="tiny muted">(ganancias en azul, pérdidas en naranja)</span></span></label>
-        <label className="row"><input type="checkbox" checked={st.reduceMotion} onChange={() => store.updateSettings({ reduceMotion: !st.reduceMotion })} /><span className="grow">Reducir animaciones</span></label>
-      </div>
-      {ui.state && <GameOptionsCard />}
-      <div className="card">
-        <div className="card-head"><h2>Tiempo y notificaciones</h2><InfoButton term="accion_velocidad" /></div>
-        <span className="small">Velocidad base (a 1×)</span>
-        <Seg items={[{ id: 4000, label: 'Lenta · 4 s/día' }, { id: 2000, label: 'Normal · 2 s/día' }, { id: 1000, label: 'Rápida · 1 s/día' }]} value={st.msPerDay} onChange={(v) => store.updateSettings({ msPerDay: v })} />
-        <span className="small">Pausar automáticamente cuando ocurra…</span>
-        {([['peligro', 'Peligros (impagos, quiebras, embargos)'], ['ofertas', 'Ofertas de empleo'], ['logros', 'Logros y nuevas etapas'], ['legal', 'Investigaciones, juicios e inspecciones'], ['inversiones', 'Caídas fuertes de inversiones']] as Array<[PauseCategory, string]>).map(([id, label]) => (
-          <label className="row" key={id}><input type="checkbox" checked={st.pauseOn.includes(id)} onChange={() => store.updateSettings({ pauseOn: st.pauseOn.includes(id) ? st.pauseOn.filter((x) => x !== id) : [...st.pauseOn, id] })} /><span className="grow small">{label}</span></label>
-        ))}
-        <label className="row"><input type="checkbox" checked={st.successToasts} onChange={() => store.updateSettings({ successToasts: !st.successToasts })} /><span className="grow">Mostrar confirmaciones de acciones exitosas <span className="tiny muted">(los errores siempre se muestran)</span></span></label>
-        <p className="tiny muted">Las categorías de alertas del Asesor IA se eligen en el Asesor → Preferencias.</p>
-      </div>
-      <div className="card">
-        <div className="card-head"><h2>Progreso sin conexión</h2></div>
-        <p className="small muted">Con la app cerrada pasa 1 día de juego cada 10 minutos reales, con las mismas reglas económicas. Tope:</p>
+        <Switch checked={st.highContrast} onChange={() => store.updateSettings({ highContrast: !st.highContrast })} label="Alto contraste" />
+        <Switch checked={st.colorblind} onChange={() => store.updateSettings({ colorblind: !st.colorblind })} label="Colores para daltonismo" sub="Ganancias en azul, pérdidas en naranja." />
+        <Switch checked={st.reduceMotion} onChange={() => store.updateSettings({ reduceMotion: !st.reduceMotion })} label="Reducir animaciones" />
+      </SettingsSection>
+      <SettingsSection id="time" icon="clock" title="Tiempo y avisos" summary={`${st.msPerDay / 1000} s por día · pausa automática ${st.autoPause ? 'activada' : 'desactivada'}`} open={open === 'time'} onToggle={toggle}>
+        <span className="small">Velocidad base (a 1×) <InfoButton term="accion_velocidad" /></span>
+        <Seg items={[{ id: 4000, label: 'Lenta · 4 s' }, { id: 2000, label: 'Normal · 2 s' }, { id: 1000, label: 'Rápida · 1 s' }]} value={st.msPerDay} onChange={(v) => store.updateSettings({ msPerDay: v })} />
+        <Switch checked={st.autoPause} onChange={() => store.updateSettings({ autoPause: !st.autoPause })} label="Pausa automática ante eventos importantes" />
+        {st.autoPause && (([['peligro', 'Peligros (impagos, quiebras, embargos)'], ['ofertas', 'Ofertas de empleo y de rivales'], ['logros', 'Logros y nuevas etapas'], ['legal', 'Investigaciones, juicios e inspecciones'], ['inversiones', 'Caídas fuertes de inversiones']] as Array<[PauseCategory, string]>).map(([id, label]) => (
+          <Switch key={id} checked={st.pauseOn.includes(id)} onChange={() => store.updateSettings({ pauseOn: st.pauseOn.includes(id) ? st.pauseOn.filter((x) => x !== id) : [...st.pauseOn, id] })} label={label} />
+        )))}
+        <Switch checked={st.successToasts} onChange={() => store.updateSettings({ successToasts: !st.successToasts })} label="Confirmaciones de acciones exitosas" sub="Los errores siempre se muestran." />
+        <span className="small">Progreso sin conexión (1 día cada 10 minutos reales, tope):</span>
         <Seg items={[{ id: 0, label: 'Nada' }, { id: 7, label: '7 días' }, { id: 30, label: '30 días' }, { id: 90, label: '90 días' }]} value={st.offlineMaxDays} onChange={(v) => store.updateSettings({ offlineMaxDays: v })} />
-      </div>
-      <div className="card">
-        <div className="card-head"><h2>Guardado</h2></div>
+        <p className="tiny muted">Las alertas del Asesor IA se eligen en el Asesor → Preferencias.</p>
+      </SettingsSection>
+      <SettingsSection id="save" icon="disk" title="Guardado y copias" summary={ui.storageKind === 'native' ? 'Archivos privados de la app · 3 copias automáticas' : ui.storageKind === 'local' ? 'Navegador · exportá una copia' : 'Solo memoria: exportá'} open={open === 'save'} onToggle={toggle}>
         <p className="small muted">
-          Guardado automático cada 30 días de juego y al salir. Almacenamiento: {ui.storageKind === 'native' ? 'nativo de Android (archivos privados de la app + segunda copia de la partida principal en las preferencias del sistema)' : ui.storageKind === 'local' ? 'almacenamiento del navegador (exportá un archivo como respaldo)' : 'solo memoria: exportá para no perder la partida'}.
-          {ui.lastSaved && ` Último guardado: ${new Date(ui.lastSaved).toLocaleTimeString()}.`}
-          {ui.saveBytes && ` Tamaño: ${(ui.saveBytes / 1024).toFixed(0)} KB (comprimido).`}
-          {ui.state?.ledger.archive && ` Libro mayor: ${ui.state.ledger.entries.length} asientos detallados + ${ui.state.ledger.archive.entries} resumidos en ${ui.state.ledger.archive.buckets.length} meses.`}
+          Guardado automático cada 30 días de juego y al salir. {ui.storageKind === 'native' ? 'Tu partida vive en los archivos privados de la app (con una segunda copia en las preferencias del sistema): las actualizaciones no la borran.' : ui.storageKind === 'local' ? 'Se guarda en el navegador: exportá un archivo como respaldo.' : 'Sin almacenamiento: exportá para no perder la partida.'}
+          {ui.saveBytes && ` Tamaño: ${(ui.saveBytes / 1024).toFixed(0)} KB.`}
+          {s?.ledger.archive && ` Libro mayor: ${s.ledger.entries.length} asientos detallados + ${s.ledger.archive.entries} resumidos.`}
         </p>
         {ui.saveError && <p className="small loss">{ui.saveError}</p>}
         <div className="btn-row">
-          <span className="act"><button className="btn sm dark" onClick={async () => { if (await store.save()) store.toast('Partida guardada.', 'ok'); }}>Guardar ahora</button><InfoButton term="accion_guardar" /></span>
+          <span className="act"><button className="btn sm dark" onClick={() => void store.exportFile()}><Icon name="upload" size={15} /> Exportar a archivo</button><InfoButton term="accion_exportar" /></span>
           <span className="act"><button className="btn sm" onClick={() => setAudit(store.audit())}>Auditar contabilidad</button><InfoButton term="accion_auditar" /></span>
         </div>
-        {audit && (audit.length === 0 ? <p className="small gain">✓ {ui.state?.ledger.entries.length} asientos verificados: todo cuadra.</p> : <ul className="small loss">{audit.map((a) => <li key={a}>{a}</li>)}</ul>)}
+        {audit && (audit.length === 0 ? <p className="small gain">✓ {s?.ledger.entries.length} asientos verificados: todo cuadra.</p> : <ul className="small loss">{audit.map((a) => <li key={a}>{a}</li>)}</ul>)}
         <span className="eyebrow">Copias de seguridad</span>
         <div className="rows">
           {backups.filter((b) => b.header).map((b) => (
@@ -311,10 +376,7 @@ function SettingsView() {
             </div>
           ))}
         </div>
-        <div className="btn-row">
-          <span className="act"><button className="btn sm dark" onClick={() => void store.exportFile()}>Exportar a archivo</button><InfoButton term="accion_exportar" /></span>
-          <button className="btn sm" onClick={() => setExportText(store.exportText())}>Mostrar como texto</button>
-        </div>
+        <button className="btn sm" onClick={() => setExportText(store.exportText())}>Mostrar como texto</button>
         {exportText && (
           <>
             <textarea className="input" readOnly value={exportText} style={{ minHeight: 90, padding: 8, fontSize: 11 }} onFocus={(e) => e.target.select()} />
@@ -325,13 +387,12 @@ function SettingsView() {
         <input id="import-file" type="file" accept=".json,application/json,text/plain" className="small" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const r = await store.importText(await f.text()); if (r.ok) navStore.closeAll(); e.target.value = ''; }} />
         <textarea className="input" placeholder="…o pegá aquí el texto de una partida exportada" value={importText} onChange={(e) => setImportText(e.target.value)} style={{ minHeight: 60, padding: 8, fontSize: 12 }} />
         <span className="act"><button className="btn sm" disabled={!importText.trim()} onClick={async () => { const r = await store.importText(importText); if (r.ok) { setImportText(''); navStore.closeAll(); } }}>Importar y verificar</button><InfoButton term="accion_exportar" /></span>
-      </div>
-      <div className="card">
-        <div className="card-head"><h2>Guía y partida</h2></div>
-        <span className="act"><button className="btn sm" onClick={() => { store.run((s) => { s.tutorial.dismissed = false; }, { toast: false }); navStore.open({ kind: 'tutorial' }); }}>Ver la guía de inicio</button><InfoButton term="guia_inicio" /></span>
-        <ConfirmButton label="Empezar una partida nueva" className="btn sm danger" confirmLabel="Borrar y empezar de nuevo" detail="Se eliminarán la partida y sus copias de este dispositivo. Exportala antes si querés conservarla." onConfirm={() => { navStore.closeAll(); void store.abandonGame(); }} />
-      </div>
-      <p className="tiny faint">Ultimate Realistic Tycoon · versión 1.1 · sin anuncios ni compras.</p>
+      </SettingsSection>
+      <SettingsSection id="updates" icon="update" title="Actualizaciones" summary={ota.check?.kind === 'available' ? `Versión ${ota.check.manifest.version} disponible` : `Versión ${APP_VERSION}`} open={open === 'updates'} onToggle={toggle}>
+        <UpdatesPanel />
+        <Switch checked={st.autoUpdate} onChange={() => store.updateSettings({ autoUpdate: !st.autoUpdate })} label="Buscar actualizaciones al abrir la app" sub="Solo consulta si hay una versión nueva; nunca instala sin que lo confirmes." term="actualizaciones" />
+      </SettingsSection>
+      <p className="tiny faint" style={{ textAlign: 'center' }}>Ultimate Realistic Tycoon · versión {APP_VERSION} · simulación ficticia sin anuncios ni compras.</p>
     </Sheet>
   );
 }
@@ -413,24 +474,73 @@ function LogView() {
 function TutorialView() {
   const s = useGame();
   useUI();
+  const next = nextMission(s);
+  const total = TUTORIAL.filter((t) => !t.future).length;
+  const done = TUTORIAL.filter((t) => !t.future && t.done(s)).length;
   return (
-    <Sheet title="Guía de inicio">
-      <p className="small muted">Opcional. Cada paso se marca solo cuando lo hacés de verdad. Ninguno bloquea nada.</p>
-      {TUTORIAL.map((t, i) => {
-        const done = !t.future && t.done(s);
+    <Sheet title="Misiones">
+      <div className="card">
+        <div className="card-head"><h2>{done} de {total} cumplidas</h2><InfoButton term="misiones" /></div>
+        <Bar value={done / total} />
+        <p className="small muted">Misiones cortas que te enseñan cada sistema. Se marcan solas cuando lo hacés de verdad y dan experiencia en la habilidad relacionada. Ninguna bloquea nada: hacelas en el orden que quieras.</p>
+      </div>
+      {CHAPTERS.map((ch) => {
+        const list = TUTORIAL.filter((t) => t.chapter === ch.n);
+        const chDone = list.filter((t) => t.done(s)).length;
+        const early = s.progression.stage < ch.stage;
         return (
-          <div key={t.id} className="card" style={{ gap: 6, opacity: t.future ? 0.6 : 1 }}>
-            <div className="card-head">
-              <span className="num faint">{i + 1}</span>
-              <h2>{t.title}</h2>
-              {done ? <Pill tone="gain">Hecho</Pill> : t.future ? <Pill tone="neutral">{t.future}</Pill> : null}
+          <div key={ch.n} className="stack" style={{ gap: 6 }}>
+            <div className="section-title"><h2>{ch.icon} {ch.name}</h2><span className="tiny muted">{chDone}/{list.length}{early ? ` · recomendado desde la etapa ${ch.stage}` : ''}</span></div>
+            <div className="card" style={{ paddingBlock: 4 }}>
+              <div className="rows">
+                {list.map((t) => {
+                  const ok = t.done(s);
+                  return (
+                    <div key={t.id} className={`row mission ${ok ? 'done' : ''} ${next?.id === t.id ? 'next' : ''}`}>
+                      <span className={`m-check ${ok ? 'on' : ''}`} aria-hidden>{ok ? <Icon name="check" size={14} /> : null}</span>
+                      <div className="grow">
+                        <div className="title small">{t.title} {next?.id === t.id && <Pill tone="accent">Siguiente</Pill>}</div>
+                        {!ok && <div className="meta">{t.body}</div>}
+                        {t.reward && <div className="tiny faint">+{t.reward.xp} XP en {SKILL_BY_ID[t.reward.skill].name}</div>}
+                      </div>
+                      {!ok && <button className="btn sm" onClick={() => navStore.go(t.tab, t.sub)}>Ir</button>}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <p className="small muted">{t.body}</p>
-            {!t.future && !done && <button className="btn sm" onClick={() => navStore.go(t.tab, t.sub)}>Ir</button>}
           </div>
         );
       })}
-      <button className="btn ghost" onClick={() => { store.run((st) => { st.tutorial.dismissed = true; }, { toast: false }); navStore.close(); }}>Ocultar la guía</button>
+      <button className="btn ghost" onClick={() => { store.run((st) => { st.tutorial.dismissed = true; }, { toast: false }); navStore.close(); }}>Ocultar la tarjeta de misiones en Inicio</button>
+    </Sheet>
+  );
+}
+
+function UpdateSheet() {
+  return (
+    <Sheet title="Actualización disponible">
+      <UpdatesPanel />
+      <p className="tiny muted">Tu partida está en los archivos privados de la app: la actualización no la toca. Antes de cambiar de versión se guarda y se hace una copia extra.</p>
+    </Sheet>
+  );
+}
+
+function WhatsNewSheet() {
+  const ota = useOta();
+  const j = ota.justUpdated;
+  const r = ota.rolledBack;
+  const close = () => { void dismissUpdateNotes(); navStore.close(); };
+  return (
+    <Sheet title={j ? `Novedades de la versión ${j.to}` : 'Actualización no aplicada'} onClose={close}>
+      {j && (
+        <>
+          <p className="small">Actualizaste de {j.from} a {j.to}. Tu partida se conservó.</p>
+          {j.notes.length > 0 && <ul className="small whatsnew">{j.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
+        </>
+      )}
+      {r && <p className="small warn">La versión {r.version} no se pudo usar ({r.reason}). Seguís con la versión {APP_VERSION} y tu partida está intacta.</p>}
+      <button className="btn primary block" onClick={close}>Entendido</button>
     </Sheet>
   );
 }
@@ -444,6 +554,8 @@ function render(spec: SheetSpec) {
     case 'progress': return <ProgressView />;
     case 'log': return <LogView />;
     case 'tutorial': return <TutorialView />;
+    case 'update': return <UpdateSheet />;
+    case 'whatsnew': return <WhatsNewSheet />;
   }
 }
 

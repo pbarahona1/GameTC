@@ -9,7 +9,9 @@ export type SheetSpec =
   | { kind: 'settings' }
   | { kind: 'progress' }
   | { kind: 'log' }
-  | { kind: 'tutorial' };
+  | { kind: 'tutorial' }
+  | { kind: 'update' }
+  | { kind: 'whatsnew' };
 
 interface NavState {
   tab: Tab;

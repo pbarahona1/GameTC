@@ -21,9 +21,11 @@ export interface Metrics {
   totalLiabilities: Cents;
   liquid: Cents;
   investments: Cents;
-  /** Acciones, bonos, fondos y Mogul a valor de mercado. */
+  /** Acciones, bonos, fondos, Mogul y cuentas con gestor a valor de mercado. */
   securities: Cents;
   realEstate: Cents;
+  /** Tu parte de las ganancias mensuales de tus empresas (promedio 3 meses, 1.2). */
+  businessPassive: Cents;
   mortgages: Cents;
   /** Cuotas hipotecarias personales mensuales. */
   mortgagePayments: Cents;
@@ -65,8 +67,14 @@ export function computeMetrics(state: GameState): Metrics {
   const propertyCosts = personalProps.reduce((s, p) => s + Math.round(p.appraisal * ((1 - p.landShare) * 0.001 + 0.01 / 12)), 0);
   const tuitionMonthly = state.education.active.reduce((s, a) => s + tuition(state, COURSE_BY_ID[a.courseId]), 0);
   const depositMonthly = state.bank.deposits.reduce((s, d) => s + depositInterest(d) / Math.max(1, d.termMonths), 0);
-  const securities = b.stocks + b.bonds + b.funds + b.mogul;
-  const passiveMonthly = roundCents((b.savings * savingsRate(state)) / 12 + depositMonthly + rentIncome * 0.9 - propertyCosts + securities * 0.02 / 12);
+  const securities = b.stocks + b.bonds + b.funds + b.mogul + (b.managed ?? 0);
+  // Tu parte de las ganancias de tus empresas (promedio de los últimos 3 meses, si es positivo):
+  // también es ingreso más allá del salario, aunque la empresa lo reinvierta.
+  const businessPassive = state.companies.filter((c) => !c.parentId && c.status === 'active' && c.history.length >= 3).reduce((acc, c) => {
+    const avg = c.history.slice(-3).reduce((a, h) => a + h.netIncome, 0) / 3;
+    return acc + Math.max(0, Math.round(avg * c.ownership));
+  }, 0);
+  const passiveMonthly = roundCents((b.savings * savingsRate(state)) / 12 + depositMonthly + rentIncome * 0.9 - propertyCosts + securities * 0.02 / 12 + businessPassive);
   const expectedMonthlyNet = expectedNetPay + passiveMonthly - recurringMonthly - debtPayments - tuitionMonthly;
   const liquid = bs.liquid;
   let runwayMonths: number | null = null;
@@ -94,6 +102,7 @@ export function computeMetrics(state: GameState): Metrics {
     investments: b.term_deposits + securities,
     securities,
     realEstate: b.real_estate,
+    businessPassive,
     mortgages: b.mortgages,
     mortgagePayments,
     rentIncome,

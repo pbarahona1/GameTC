@@ -1,78 +1,93 @@
-Resultados reales — 2026-09-29T00:12Z — Node v22.22.2 — versión 1.1.0
+Resultados reales — 2026-09-29T05:27Z — Node v22.22.2 — versión 1.2.0
 
 $ npx tsc -b
 sin errores
 
 $ npx vitest run
- ✓ tests/business.test.ts (27 tests) 4814ms
-   ✓ Empresas: contabilidad > Cafetería y cocina: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 887ms
-   ✓ Empresas: contabilidad > Minimercado de barrio: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 477ms
-   ✓ Empresas: contabilidad > Fábrica de muebles: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 473ms
-   ✓ Empresas: contabilidad > Software por suscripción: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 493ms
-   ✓ Empresas: contabilidad > Consultora contable: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 348ms
- ✓ tests/world.test.ts (13 tests) 2793ms
-   ✓ Jurisdicciones fiscales > el cambio de residencia cuesta hoy, rige el 1 de enero y ajusta el costo de vida 507ms
-   ✓ Jurisdicciones fiscales > una empresa registrada en Meridia paga el 21 % de impuesto de sociedades 365ms
-   ✓ Asesor avanzado y escenarios > escenarios: recesión, suba de tasas, caída de mercados y compra de inmueble sobre una copia de la partida 659ms
+ ✓ tests/business.test.ts (27 tests) 5905ms
+   ✓ Empresas: contabilidad > Cafetería y cocina: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 1180ms
+   ✓ Empresas: contabilidad > Minimercado de barrio: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 576ms
+   ✓ Empresas: contabilidad > Fábrica de muebles: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 578ms
+   ✓ Empresas: contabilidad > Software por suscripción: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 544ms
+   ✓ Empresas: contabilidad > Consultora contable: 2 años con invariantes, estados coherentes y patrimonio personal conciliado 454ms
+   ✓ Empresas: compraventa, inversionistas y personal > el escenario "fundar empresa" no modifica la partida real 380ms
+ ✓ tests/v12.test.ts (21 tests) 3501ms
+   ✓ 1.2 · Migración de partidas > una partida v4 se migra a v5 con tiendas, tarjeta por niveles y mundo, y la contabilidad cuadra 642ms
+   ✓ 1.2 · Mercado con vida > años con empresa: los rivales actúan, se anticipan eventos y la contabilidad cuadra 1768ms
+   ✓ 1.2 · Inmuebles de entrada, misiones, secciones y etapas > siempre hay una cochera y un estudio baratos a la venta 321ms
+ ✓ tests/world.test.ts (13 tests) 3045ms
+   ✓ Economía dinámica > en 20 años recorre fases, las variables quedan acotadas y ocurren eventos 322ms
+   ✓ Jurisdicciones fiscales > el cambio de residencia cuesta hoy, rige el 1 de enero y ajusta el costo de vida 572ms
+   ✓ Jurisdicciones fiscales > una empresa registrada en Meridia paga el 21 % de impuesto de sociedades 394ms
+   ✓ Sistema legal (ficticio) > la evasión en la declaración genera un acto con el impuesto evitado; regularizar crea una deuda sin proceso penal 331ms
+   ✓ Asesor avanzado y escenarios > escenarios: recesión, suba de tasas, caída de mercados y compra de inmueble sobre una copia de la partida 622ms
+ ✓ tests/audit_world.test.ts (3 tests) 4337ms
+   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w1: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 2133ms
+   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w2: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 1167ms
+   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w3: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 1035ms
 stdout | tests/phase5.test.ts > Fase 5 · rendimiento > 10 años de simulación completa en un tiempo razonable y con guardado acotado
-10 años: 2.0 s (1835 días/s) · estado 2539 KB · guardado 735 KB · asientos personales 1520 + 3507 resumidos
- ✓ tests/phase5.test.ts (12 tests) 5725ms
-   ✓ Fase 5 · guardado comprimido y seguro > una copia dañada no destruye las demás: se carga la mejor copia válida 644ms
-   ✓ Fase 5 · guardado comprimido y seguro > con el almacenamiento lleno libera copias viejas, nunca la principal, y no rompe nada 1297ms
-   ✓ Fase 5 · rendimiento > 10 años de simulación completa en un tiempo razonable y con guardado acotado 2129ms
-   ✓ Fase 5 · instantánea liviana para deshacer acciones > restaurar devuelve exactamente el estado previo aunque la acción haya escrito asientos y operado 615ms
-   ✓ Fase 5 · insolvencia personal de punta a punta > sin ingresos y con deudas: el asesor la anticipa, aparecen atrasos, cae el puntaje y la contabilidad sigue cuadrando 304ms
- ✓ tests/audit_world.test.ts (3 tests) 3410ms
-   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w1: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 1542ms
-   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w2: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 1033ms
-   ✓ Auditoría integral de todos los sistemas (bots aleatorios) > semilla w3: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal 834ms
- ✓ tests/v11.test.ts (13 tests) 12705ms
-   ✓ Proyección de negocios > no es un oráculo: no modifica la partida y devuelve rangos con incertidumbre 807ms
-   ✓ Proyección de negocios > con nivel alto, lo que realmente pasa suele caer dentro del rango proyectado 5341ms
-   ✓ Proyección de negocios > la proyección guardada se compara con la realidad y da experiencia 361ms
-   ✓ Gestor de inversiones > abrir, aportar, cambiar perfil, retirar y cerrar: la contabilidad siempre cuadra 350ms
-   ✓ Gestor de inversiones > mejor capacitado y con más experiencia elige mejor (en promedio), pero no gana siempre 5119ms
- ✓ tests/invest.test.ts (10 tests) 1824ms
-   ✓ Bolsa de valores > cobra dividendos con retención y los precios se mantienen positivos durante 3 años de mercado 1019ms
- ✓ tests/audit.test.ts (10 tests) 5783ms
-   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla a: 4 años de acciones aleatorias sin estados imposibles 1510ms
-   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla b: 4 años de acciones aleatorias sin estados imposibles 884ms
-   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla c: 4 años de acciones aleatorias sin estados imposibles 743ms
-   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla d: 4 años de acciones aleatorias sin estados imposibles 894ms
-   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla e: 4 años de acciones aleatorias sin estados imposibles 586ms
-   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla f: 4 años de acciones aleatorias sin estados imposibles 591ms
- ✓ tests/realestate.test.ts (6 tests) 1369ms
-   ✓ Bienes raíces > compra al contado: gastos de escritura, alquiler cobrado, gastos, impuesto trimestral y tasación a mercado 843ms
- ✓ tests/simulation.test.ts (11 tests) 3020ms
-   ✓ Simulación integrada > 5 años con empleo, ahorro, depósitos y estudios: la contabilidad cuadra cada mes 1340ms
-   ✓ Simulación integrada > es determinista: misma semilla y mismas acciones → mismo estado 371ms
-   ✓ Simulación integrada > la inflación REALIZADA del año (acumulada mes a mes) indexa los gastos y se declara el impuesto 363ms
- ✓ tests/audit_business.test.ts (4 tests) 3831ms
-   ✓ Auditoría de empresas (bots aleatorios) > semilla p: 3 años con decisiones empresariales aleatorias sin estados imposibles 1338ms
-   ✓ Auditoría de empresas (bots aleatorios) > semilla q: 3 años con decisiones empresariales aleatorias sin estados imposibles 841ms
-   ✓ Auditoría de empresas (bots aleatorios) > semilla r: 3 años con decisiones empresariales aleatorias sin estados imposibles 718ms
-   ✓ Auditoría de empresas (bots aleatorios) > semilla s: 3 años con decisiones empresariales aleatorias sin estados imposibles 932ms
- ✓ tests/save_v2.test.ts (4 tests) 980ms
-   ✓ Guardado v2 (empresas) y almacenamiento espejado > una partida con empresas se guarda y se recupera idéntica 550ms
- ✓ tests/save.test.ts (6 tests) 579ms
-   ✓ Guardado y recuperación > guardar y cargar produce exactamente el mismo estado 307ms
+10 años: 3.3 s (1111 días/s) · estado 2759 KB · guardado 782 KB · asientos personales 1518 + 3533 resumidos
+ ✓ tests/phase5.test.ts (12 tests) 7703ms
+   ✓ Fase 5 · guardado comprimido y seguro > una copia dañada no destruye las demás: se carga la mejor copia válida 739ms
+   ✓ Fase 5 · guardado comprimido y seguro > con el almacenamiento lleno libera copias viejas, nunca la principal, y no rompe nada 1658ms
+   ✓ Fase 5 · rendimiento > 10 años de simulación completa en un tiempo razonable y con guardado acotado 3465ms
+   ✓ Fase 5 · instantánea liviana para deshacer acciones > restaurar devuelve exactamente el estado previo aunque la acción haya escrito asientos y operado 718ms
+   ✓ Fase 5 · insolvencia personal de punta a punta > sin ingresos y con deudas: el asesor la anticipa, aparecen atrasos, cae el puntaje y la contabilidad sigue cuadrando 315ms
+ ✓ tests/v11.test.ts (13 tests) 15925ms
+   ✓ Proyección de negocios > no es un oráculo: no modifica la partida y devuelve rangos con incertidumbre 1178ms
+   ✓ Proyección de negocios > con nivel alto, lo que realmente pasa suele caer dentro del rango proyectado 6492ms
+   ✓ Proyección de negocios > la proyección guardada se compara con la realidad y da experiencia 440ms
+   ✓ Gestor de inversiones > abrir, aportar, cambiar perfil, retirar y cerrar: la contabilidad siempre cuadra 404ms
+   ✓ Gestor de inversiones > mejor capacitado y con más experiencia elige mejor (en promedio), pero no gana siempre 6511ms
+   ✓ Versión 1.1: guardado, mercado y habilidades > Android: todas las copias van a archivos; en preferencias solo la principal 344ms
+ ✓ tests/invest.test.ts (10 tests) 2359ms
+   ✓ Bolsa de valores > cobra dividendos con retención y los precios se mantienen positivos durante 3 años de mercado 1364ms
+   ✓ Bonos, fondos y Mogul Exchange > el precio de un bono cae si suben las tasas (duración) y paga cupones y nominal 338ms
+ ✓ tests/audit.test.ts (10 tests) 7714ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla a: 4 años de acciones aleatorias sin estados imposibles 1667ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla b: 4 años de acciones aleatorias sin estados imposibles 1129ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla c: 4 años de acciones aleatorias sin estados imposibles 1113ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla d: 4 años de acciones aleatorias sin estados imposibles 929ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla e: 4 años de acciones aleatorias sin estados imposibles 1004ms
+   ✓ Auditoría de la Fase 1 (bots aleatorios) > semilla f: 4 años de acciones aleatorias sin estados imposibles 1115ms
+ ✓ tests/realestate.test.ts (6 tests) 1555ms
+   ✓ Bienes raíces > compra al contado: gastos de escritura, alquiler cobrado, gastos, impuesto trimestral y tasación a mercado 890ms
+   ✓ Bienes raíces > hipoteca: cuota francesa, intereses, amortización anticipada y venta que cancela la deuda 375ms
+ ✓ tests/ota.test.ts (8 tests) 160ms
+ ✓ tests/simulation.test.ts (11 tests) 3868ms
+   ✓ Simulación integrada > 5 años con empleo, ahorro, depósitos y estudios: la contabilidad cuadra cada mes 1653ms
+   ✓ Simulación integrada > es determinista: misma semilla y mismas acciones → mismo estado 512ms
+   ✓ Simulación integrada > los escenarios hipotéticos no modifican la partida real 315ms
+   ✓ Simulación integrada > la inflación REALIZADA del año (acumulada mes a mes) indexa los gastos y se declara el impuesto 451ms
+ ✓ tests/audit_business.test.ts (4 tests) 4603ms
+   ✓ Auditoría de empresas (bots aleatorios) > semilla p: 3 años con decisiones empresariales aleatorias sin estados imposibles 1600ms
+   ✓ Auditoría de empresas (bots aleatorios) > semilla q: 3 años con decisiones empresariales aleatorias sin estados imposibles 1124ms
+   ✓ Auditoría de empresas (bots aleatorios) > semilla r: 3 años con decisiones empresariales aleatorias sin estados imposibles 994ms
+   ✓ Auditoría de empresas (bots aleatorios) > semilla s: 3 años con decisiones empresariales aleatorias sin estados imposibles 883ms
+ ✓ tests/balance.test.ts (8 tests) 8786ms
+   ✓ Balance · bots por estilo de juego > ejecutivo · egresado · b1 1935ms
+   ✓ Balance · bots por estilo de juego > ejecutivo · herencia · b1 1198ms
+   ✓ Balance · bots por estilo de juego > inversionista · egresado · b1 870ms
+   ✓ Balance · bots por estilo de juego > inversionista · herencia · b1 981ms
+   ✓ Balance · bots por estilo de juego > inmobiliario · egresado · b1 921ms
+   ✓ Balance · bots por estilo de juego > inmobiliario · herencia · b1 1022ms
+   ✓ Balance · bots por estilo de juego > emprendedor · egresado · b1 1048ms
+   ✓ Balance · bots por estilo de juego > emprendedor · herencia · b1 810ms
+ ✓ tests/save_v2.test.ts (4 tests) 1274ms
+   ✓ Guardado v2 (empresas) y almacenamiento espejado > una partida con empresas se guarda y se recupera idéntica 700ms
+   ✓ Guardado v2 (empresas) y almacenamiento espejado > migra una partida v1 (Fase 1, sin empresas) a la versión actual y pasa todas las invariantes 342ms
+ ✓ tests/save.test.ts (6 tests) 872ms
+   ✓ Guardado y recuperación > guardar y cargar produce exactamente el mismo estado 548ms
  ✓ tests/tax.test.ts (5 tests) 4ms
- ✓ tests/card.test.ts (4 tests) 353ms
- ✓ tests/loans.test.ts (5 tests) 384ms
- ✓ tests/ledger.test.ts (5 tests) 88ms
- ✓ tests/content.test.ts (3 tests) 24ms
+ ✓ tests/card.test.ts (4 tests) 533ms
+ ✓ tests/loans.test.ts (5 tests) 596ms
+   ✓ Préstamos > cuotas, intereses y amortización anticipada cuadran con el libro 329ms
+ ✓ tests/ledger.test.ts (5 tests) 149ms
+ ✓ tests/content.test.ts (3 tests) 31ms
  ✓ tests/indicators.test.ts (2 tests) 5ms
- Test Files  18 passed (18)
-      Tests  143 passed (143)
-   Duration  56.07s (transform 977ms, setup 0ms, collect 4.76s, tests 47.69s, environment 3ms, prepare 839ms)
+ Test Files  21 passed (21)
+      Tests  180 passed (180)
+   Duration  83.58s (transform 1.14s, setup 0ms, collect 5.92s, tests 72.93s, environment 4ms, prepare 1.11s)
 
-$ npm run build && npm run build:single && npx cap sync android
-(ver abajo)
-
-Recorrido de interfaz automatizado (Chromium headless, 390×844 táctil, temas claro y oscuro):
-- Proyección de negocios al fundar (Software por suscripción, $12.000): predijo 1 de 10 futuros sobreviviendo; en la
-  partida real la empresa quedó insolvente al 3er mes; "Tu proyección vs. la realidad" mostró 2 de 2 meses dentro del rango.
-- Gestor: contratar, entregar $4.000–5.000, 3 meses de gestión (compró 4 acciones + fondos), retiro parcial desde
-  "Mis inversiones", compra y venta de acciones desde "Mis inversiones". Errores de consola: 0.
-- Auditoría de botones (inicio, gestor, mis inversiones, fundar, profesionales): todas las acciones tienen ⓘ;
-  sin ⓘ solo "Ver todo", "← Volver", "← Más" (navegación).
+$ URT_BOTS=1 npx vitest run tests/balance.test.ts
+48 pruebas pasan (4 estilos × 4 orígenes × 3 semillas × 15 años) · tabla en docs/BALANCE.md

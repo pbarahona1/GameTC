@@ -11,6 +11,8 @@ import { daysToBankruptcy } from '../../../engine/business/finance';
 import { capacity, countRole, hasManager, managerSkill, monthlyPayroll, equipDef } from '../../../engine/business/common';
 import { expectedDemand, refPrice, setPrice, setPlan, toggleProduct, buyEquipment, sellEquipment, setMaintenance } from '../../../engine/business/operations';
 import { itemPlan, placeOrder, supplierAccessible, supplierUnitCost, leadDays, deliveryFee } from '../../../engine/business/inventory';
+import { supplierShockMult } from '../../../engine/world/rivals';
+import { PoachCard } from '../more/Rivals';
 import { generateCandidates, hire, fire, train, setWage, marketWage, hiringFee, severance } from '../../../engine/business/staff';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
@@ -289,7 +291,7 @@ function Inventory({ co }: { co: Company }) {
                   <tr key={x.id} style={{ opacity: ok ? 1 : 0.5 }}>
                     <td><input type="radio" name="sup" aria-label={x.name} checked={sup?.id === x.id} disabled={!ok} onChange={() => { setSupplier(x.id); setQty(0); }} /></td>
                     <td>{x.name}{!ok && <div className="tiny loss">requiere red de contactos {x.networkRequired}</div>}{blocked && <div className="tiny loss">sin crédito (factura impaga)</div>}</td>
-                    <td className="r">{fmtMoney(supplierUnitCost(s, x))}</td>
+                    <td className="r">{fmtMoney(supplierUnitCost(s, x))}{supplierShockMult(s, x.id) > 1 && <div className="tiny loss">+{Math.round((supplierShockMult(s, x.id) - 1) * 100)} % exclusividad</div>}</td>
                     <td className="r">{x.quality}</td>
                     <td className="r">{leadDays(co, x)} d</td>
                     <td className="r">{Math.round(x.reliability * 100)} %</td>
@@ -479,6 +481,13 @@ export function CompanyView({ co, tab }: { co: Company; tab: string }) {
           </div>
         </div>
       </div>
+      {s.world.poach.filter((p) => p.status === 'abierta' && p.companyId === co.id).map((p) => <PoachCard key={p.id} p={p} />)}
+      {co.saleOffer && co.saleOffer.expires >= s.day && co.saleOffer.from && tab !== 'manage' && (
+        <button className="alert opportunity" style={{ textAlign: 'left' }} onClick={() => navStore.setSub('business', `co:${co.id}:manage`)}>
+          <span className="stripe" />
+          <div className="small" style={{ flex: 1 }}><strong>{co.saleOffer.from} ofrece {fmtMoney(co.saleOffer.price, { decimals: false })} por {co.name}.</strong> Tocá para ver la oferta en Gestión.</div>
+        </button>
+      )}
       <Tabs items={sec.model === 'holding' ? HOLDING_TABS : TABS} value={tab} onChange={(t) => { navStore.setSub('business', `co:${co.id}:${t}`); window.scrollTo({ top: 0 }); }} />
       {tab === 'summary' && <Summary co={co} />}
       {tab === 'ops' && <Ops co={co} />}

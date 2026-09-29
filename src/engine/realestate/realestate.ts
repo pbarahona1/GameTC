@@ -101,16 +101,17 @@ export function monthlyZones(state: GameState): void {
 }
 
 function newProperty(state: GameState, zoneId: string, type: PropertyType, small = false): Property {
-  const m2 = small ? randInt(state, 22, 38) : type === 'vivienda' ? randInt(state, 40, 160) : type === 'local' ? randInt(state, 30, 220) : type === 'oficina' ? randInt(state, 50, 400) : randInt(state, 200, 2500);
-  const grade = small ? randInt(state, 1, 2) : randInt(state, 1, 5);
+  const m2 = small ? randInt(state, 18, 34) : type === 'vivienda' ? randInt(state, 40, 160) : type === 'local' ? randInt(state, 30, 220) : type === 'oficina' ? randInt(state, 50, 400) : type === 'cochera' ? randInt(state, 11, 15) : randInt(state, 200, 2500);
+  const grade = small || type === 'cochera' ? randInt(state, 1, 3) : randInt(state, 1, 5);
   const condition = type === 'terreno' ? 100 : randInt(state, 40, 98);
   const z = zoneDef(zoneId);
   const names: Record<PropertyType, string[]> = {
     vivienda: ['Departamento', 'Casa', 'Dúplex', 'PH'], local: ['Local', 'Local a la calle', 'Esquina comercial'], oficina: ['Oficina', 'Piso de oficinas', 'Estudio profesional'], terreno: ['Terreno', 'Lote', 'Parcela'],
+    cochera: ['Cochera', 'Cochera cubierta', 'Box de garaje'],
   };
   const streets = ['Av. Libertad', 'Calle Olmos', 'Pasaje Sol', 'Av. del Puerto', 'Calle Colón', 'Bv. Norte', 'Calle Rivadavia', 'Av. Central', 'Calle Mar Azul'];
   const p: Property = {
-    id: state.meta.nextId++, name: `${small ? 'Monoambiente' : names[type][randInt(state, 0, names[type].length - 1)]} ${streets[randInt(state, 0, streets.length - 1)]} ${randInt(state, 100, 2999)}`,
+    id: state.meta.nextId++, name: `${small ? (m2 < 26 ? 'Estudio' : 'Monoambiente') : names[type][randInt(state, 0, names[type].length - 1)]} ${streets[randInt(state, 0, streets.length - 1)]} ${randInt(state, 100, 2999)}`,
     type, zoneId, jurisdiction: z.jurisdiction, m2, grade, condition, landShare: type === 'terreno' ? 1 : randRange(state, 0.2, 0.4),
     owner: { kind: 'personal' }, purchasePrice: 0, purchaseDay: state.day, closingCosts: 0, costBasis: 0, appraisal: 0, carrying: 0, accumDepreciation: 0,
     lease: null, askingRent: 0, listedForRent: false, vacantSince: null, management: 'propia', usedBy: null, forSale: null, renovation: null, mortgageId: null,
@@ -130,14 +131,15 @@ function newLease(state: GameState, p: Property, rent: Cents, start = state.day)
   return {
     tenant: TENANT_NAMES[randInt(state, 0, TENANT_NAMES.length - 1)],
     rent, startDay: start, endDay: addMonths(start, months),
-    reliability: clamp(randRange(state, 0.9, 0.995) - z.tenantRisk * randRange(state, 0, 0.12), 0.7, 0.995), unpaidMonths: 0,
+    // Las cocheras tienen inquilinos más cumplidores (el monto es chico y se corta el acceso si no pagan).
+    reliability: clamp(randRange(state, 0.9, 0.995) - z.tenantRisk * randRange(state, 0, p.type === 'cochera' ? 0.04 : 0.12), 0.7, 0.995), unpaidMonths: 0,
   };
 }
 
 export function refreshPropertyListings(state: GameState): void {
   const re = state.realEstate;
   re.listings = re.listings.filter((l) => l.expiresDay > state.day);
-  const types: PropertyType[] = ['vivienda', 'vivienda', 'vivienda', 'local', 'oficina', 'terreno'];
+  const types: PropertyType[] = ['vivienda', 'vivienda', 'vivienda', 'local', 'oficina', 'terreno', 'cochera'];
   let guard = 0;
   while (re.listings.length < 8 && guard++ < 20) {
     const z = ZONES[randInt(state, 0, ZONES.length - 1)];
@@ -146,12 +148,25 @@ export function refreshPropertyListings(state: GameState): void {
     const ask = roundCents(p.appraisal * randRange(state, 0.92, 1.15));
     re.listings.push({ id: state.meta.nextId++, property: p, askPrice: ask, expiresDay: state.day + randInt(state, 30, 90), negotiated: false, note: p.lease ? `Se vende con inquilino (${fmtMoney(p.lease.rent)}/mes hasta ${formatDate(p.lease.endDay)}).` : 'Se entrega desocupado.' });
   }
-  // Siempre hay al menos dos opciones de entrada (monoambientes en las zonas más baratas),
-  // para que invertir en inmuebles no requiera medio millón desde el primer día.
-  const cheap = [...ZONES].sort((a, b) => a.price.vivienda - b.price.vivienda).slice(0, 3);
-  const entry = usd(90000 * state.macro.priceIndex);
+  // Opciones de entrada (1.2): siempre hay al menos una cochera y un estudio baratos,
+  // para que invertir en inmuebles no requiera cientos de miles desde el primer día.
+  const pi = state.macro.priceIndex;
+  const cheap = [...ZONES].sort((a, b) => a.price.vivienda - b.price.vivienda).slice(0, 4);
+  const ensure = (type: 'cochera' | 'vivienda', max: number, note: string) => {
+    let g = 0;
+    while (!re.listings.some((l) => l.property.type === type && l.askPrice <= usd(max * pi) && (type === 'cochera' || l.property.m2 <= 34)) && g++ < 8) {
+      const z = type === 'cochera' ? ZONES[randInt(state, 0, ZONES.length - 1)] : cheap[randInt(state, 0, cheap.length - 1)];
+      const p = newProperty(state, z.id, type, type === 'vivienda');
+      const ask = roundCents(p.appraisal * randRange(state, 0.94, 1.06));
+      if (ask > usd(max * pi)) continue;
+      re.listings.push({ id: state.meta.nextId++, property: p, askPrice: ask, expiresDay: state.day + randInt(state, 45, 90), negotiated: false, note: `${note} ${p.lease ? `Se vende con inquilino (${fmtMoney(p.lease.rent)}/mes).` : 'Se entrega desocupado.'}` });
+    }
+  };
+  ensure('cochera', 26000, 'Opción de entrada: cochera (poco mantenimiento, inquilinos cumplidores).');
+  ensure('vivienda', 60000, 'Opción de entrada: estudio económico.');
+  const entry = usd(90000 * pi);
   guard = 0;
-  while (re.listings.filter((l) => l.askPrice <= entry).length < 2 && guard++ < 6) {
+  while (re.listings.filter((l) => l.askPrice <= entry).length < 3 && guard++ < 6) {
     const z = cheap[randInt(state, 0, cheap.length - 1)];
     const p = newProperty(state, z.id, 'vivienda', true);
     const ask = roundCents(p.appraisal * randRange(state, 0.94, 1.08));
@@ -450,6 +465,9 @@ export function quoteMortgage(state: GameState, bankId: string, owner: PropertyO
     }
   }
   if (amount > maxAmount) reasons.push(`Financian como máximo el ${Math.round(maxLtv * 100)} % del precio (${fmtMoney(maxAmount)}).`);
+  // 1.2: los bancos no dan hipotecas chicas (el costo de tramitarlas no lo justifica).
+  const minAmount = usd(15000 * state.macro.priceIndex);
+  if (amount > 0 && amount < minAmount) reasons.push(`El monto mínimo de una hipoteca es ${fmtMoney(minAmount, { decimals: false })}: para inmuebles chicos, pagá al contado o con un préstamo personal.`);
   if (years > bank.maxYears || years < 5) reasons.push(`Plazo entre 5 y ${bank.maxYears} años.`);
   const fee = roundCents(amount * bank.fee);
   let totalInterest = 0;

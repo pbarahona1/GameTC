@@ -336,3 +336,71 @@ Todas las alertas salen de datos reales de la partida: insolvencia personal (liq
 - **Bolsa de valores** (habilidad): reduce hasta 40 % el diferencial e impacto de mercado de tus órdenes (−0,4 % por nivel).
 - **Marketing** (habilidad): +0,4 % de conocimiento de marca por nivel en las campañas de tus empresas (máx. +40 %).
 - Mercado inmobiliario: siempre hay al menos dos publicaciones de hasta $90.000 (monoambientes de 22–38 m² en las zonas más baratas).
+
+## 31. Tiendas, bienes personales e imagen (versión 1.2)
+
+**Contabilidad.** La ropa es consumo: al comprarla se registra como gasto "Ropa y compras personales". Vehículos, tecnología, hogar y lujo son activos ("Bienes personales") al costo; cada mes se deprecian `valor × tasa anual ÷ 12` (nunca por debajo del 5 % del precio) contra "Depreciación de bienes personales" (gasto no monetario, flujo interno). Al vender: cobrás `valor contable × % de reventa` y la diferencia es pérdida (o ganancia, en "Otros ingresos"). Conciliación: Σ valor contable de los bienes = cuenta "Bienes personales".
+
+**Imagen personal (0–100)** = ropa puesta (torso, piernas, calzado, abrigo; hasta 50) + reloj y accesorio (hasta 22) + mejor vehículo (hasta 20) + reputación/12,5 (hasta 8). Una prenda con estado < 40 % rinde la mitad. La ropa puesta pierde 4 puntos de estado por mes (2 en tiendas premium y de lujo); la guardada, 1.
+
+**Efectos:**
+- Postulación: `+clamp(imagen − esperada, −24, 24) × 0,25` puntos porcentuales; imagen esperada por nivel del puesto: 5, 15, 25, 38, 50.
+- Negociación de sueldo: `+clamp(imagen − 30, −20, 30) × 0,1` puntos.
+- Reputación: el objetivo mensual suma `imagen ÷ 10`.
+- Tiendas: requisito por categoría (popular 0, media 10, premium 25, lujo 45). Imagen en tienda = imagen + bonificación de la tarjeta (Oro 3, Platino 8, Black 15). ≥ requisito + 20 → cliente preferente con descuento (3 %, 5 %, 7 %, 10 %). Debajo del requisito no se muestra la colección exclusiva.
+- Vehículo: el gasto "Transporte" del presupuesto pasa a ser `transporte × (1 − cobertura) + costo propio × índice de vida` (cobertura: bicicleta 50 %, resto 100 %). Solo cuenta el mejor vehículo para estrés y salud.
+- Tecnología y hogar: aprendizaje en cursos × (1 + mejor efecto), red de contactos por mes (hasta 60), salud y estrés mensuales, comida × (1 − mejor ahorro).
+
+## 32. Tarjetas por niveles, reintegros y cuotas (versión 1.2)
+
+| Nivel | Puntaje | Ingresos/mes o patrimonio | Historial | Reintegro | Costo anual | Límite | Cuotas sin interés | Rebaja de tasa |
+|---|---|---|---|---|---|---|---|---|
+| Clásica | — | — | — | 0 % | $0 | hasta 1× ingreso (tope $5.000) | 0 | 0 |
+| Oro | 680 | $2.500 o $40.000 | 6 meses | 1 % | $95 | 2× (tope $15.000) | 3 | 1 pp |
+| Platino | 730 | $6.000 o $150.000 | 12 meses | 1,5 % | $395 | 3× (tope $50.000) | 6 | 2 pp |
+| Black | 780 | $20.000 o $1.000.000 | 24 meses | 2 % | $1.200 | 5× (tope $250.000) | 12 | 3 pp |
+
+- Pedir un nivel superior registra una consulta de crédito; una solicitud cada 30 días. Si cumplís todo, la aprobación es `min(95 %, 55 % + (puntaje − mínimo)/60)`. Aprobada: se cobra el costo anual (a la tarjeta) y el límite pasa a `max(actual, ofrecido)`. Bajar de nivel es inmediato.
+- **Reintegro:** se acumula sobre todo consumo con tarjeta (compras, gastos del presupuesto pagados con tarjeta, cuotas) y se acredita en el corte del día 25: descuenta el saldo; si no hay saldo, entra a la cuenta corriente. Ingreso "Reintegros de tarjeta".
+- **Cuotas:** el total se registra en "Cuotas de tarjeta a vencer" (pasivo) y ocupa el límite desde el primer día. En cada corte pasa una cuota al saldo: capital + interés `saldo pendiente × i`, con `i = tasa efectiva × 0,9 ÷ 12` (cuota fija francesa); sin interés si `n ≤ mín(cuotas de la tienda, cuotas del nivel)`. Conciliación: Σ capital pendiente = cuenta de cuotas.
+- **Tasa efectiva** = tasa variable de la tarjeta − rebaja del nivel.
+
+## 33. Noticias calibradas (versión 1.2)
+
+Por cada hecho que podría anticiparse (evento económico programado, compra planeada por un rival, apertura de un competidor, exclusividad con un proveedor) se genera un candidato verdadero y uno falso equivalente. Con confiabilidad `r ~ U(0,30; 0,95)`, el verdadero se publica con probabilidad `r` y el falso con `1 − r`. Resultado: entre las noticias publicadas con confiabilidad `r`, una fracción `r` es cierta (probado con 12.000 candidatos: error < 4 puntos por tramo).
+
+- Fuente visible según `r`: rumores (~50 %), informe de analistas (~70 %), prensa (~85 %).
+- **Analizar:** estimación `r + N(0,1) × max(3 %, 30 % × (1 − nivel/110))` con la habilidad del tema (economía → Educación financiera; bolsa → Predicción bursátil; empresas y proveedores → Administración; inmuebles → Bienes raíces). Pista con probabilidad `0,25 + nivel/250`, correcta con probabilidad `min(93 %, 60 % + nivel/300)`. Se puede reanalizar al subir 10 niveles.
+- **Eventos económicos:** ahora se programan con 20–50 días de anticipación (el aviso en el registro llega el día que empiezan).
+- **Balances de empresas:** 14 días antes, con probabilidad 45 %, aparece una pista. El componente aleatorio del resultado se sortea en ese momento y se guarda; la pista acierta la dirección con probabilidad `r` y se confirma o desmiente al publicarse el balance.
+
+## 34. Grupos rivales (versión 1.2)
+
+Cuatro grupos con capital propio (crece 0,6–1,6 % mensual) y estilo (agresivo, paciente, oportunista). Cada mes, con intensidad según la dificultad:
+- 35 %: planear la compra de una empresa en venta (si cuesta ≤ 25 % de su capital); se ejecuta en 10–28 días si sigue en venta. La empresa comprada pasa a ser un competidor (máx. 6 activos por sector).
+- 30 %: planear la compra de un inmueble publicado por debajo de su tasación (7–21 días).
+- Por cada sector donde tenés empresa: 2,5 % abrir un competidor (en 30–50 días; precios 4–10 % más bajos, conocimiento inicial 35 que crece); 4 % exclusividad con un proveedor (en 14–30 días; su precio sube 15–35 % para vos durante 90–180 días).
+- Por cada empresa tuya: 5 % oferta de compra si tuvo ganancias en los últimos 3 meses (agresivo 1,05–1,35 × valoración; paciente 0,95–1,2; oportunista 0,85–1,1; vale 15 días); 8 % oferta a tu mejor empleado (habilidad ≥ 55) por 12–30 % más sueldo: 10 días para igualar o dejarlo ir; sin respuesta, se va si la oferta supera su sueldo en más de 15 % (si no, se queda con −8 de moral).
+
+El azar del mundo usa un generador propio derivado de la semilla, así no altera el resto de la economía.
+
+## 35. Inmuebles de entrada e hipoteca mínima (versión 1.2)
+
+- Tipo nuevo **cochera** (11–15 m², precio por m² entre $400 y $2.200 según zona, alquiler $3–11/m², inquilinos más cumplidores). No sirve como vivienda ni como local.
+- **Estudios/monoambientes** de 18–34 m².
+- Cada mes el mercado garantiza al menos una cochera ≤ $26.000, un estudio ≤ $60.000 y tres opciones ≤ $90.000 (ajustadas por inflación).
+- **Hipoteca mínima:** $15.000 (ajustada por inflación).
+
+## 36. Holdings (versión 1.2)
+
+Oficina y servicios de una holding = `$80 + $150 × subsidiarias` y `$20 + $30 × subsidiarias` por mes (más la administración de su forma legal). Sin subsidiarias: ~$135/mes (antes ~$750). El Asesor avisa si una holding pasa más de 30 días sin subsidiarias.
+
+## 37. Etapas (cambios de la versión 1.2)
+
+- Etapa 4: cuentan como inversión también los inmuebles propios y las cuentas con gestor.
+- Etapa 6: el ingreso pasivo incluye tu parte de las ganancias de tus empresas (promedio de los últimos 3 meses, si es positivo).
+- Etapa 10: "Empresas o inmuebles en 2 jurisdicciones" (antes era inalcanzable).
+
+## 38. Misiones (versión 1.2)
+
+26 misiones en 6 capítulos (Primeros pasos, Tu dinero trabaja, Inmuebles, Tu primera empresa, Crédito/impuestos/estilo, Grupo empresarial). Se completan por el estado real de la partida y dan entre 100 y 300 XP en la habilidad relacionada, una sola vez. La misión sugerida es la primera sin hacer de un capítulo acorde a tu etapa.

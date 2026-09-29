@@ -9,6 +9,11 @@ import { recordInquiry, recordLate, recordOnTime, refreshCreditScore } from './c
 import { canPayFromChecking } from './payments';
 import { practice } from '../skills/skills';
 import { monthlyGrossIncome } from '../career/career';
+import { accrueRewards, cardTier, cardUsed } from './cardRewards';
+import { CARD_TIER_BY_ID, CARD_TIER_ORDER, CardTier, CardTierDef } from '../../content/cards';
+import { computeMetrics } from '../reports/metrics';
+import { chance } from '../rng';
+import { formatDateShort } from '../time/calendar';
 
 /**
  * Tarjeta de crédito con ciclo real:
@@ -30,7 +35,12 @@ export function cardBalance(state: GameState): Cents {
 
 export function cardAvailable(state: GameState): Cents {
   const c = state.bank.card;
-  return c.active ? Math.max(0, c.limit - cardBalance(state)) : 0;
+  return c.active ? Math.max(0, c.limit - cardUsed(state)) : 0;
+}
+
+/** Tasa anual efectiva: la variable del mercado menos la rebaja del nivel de tarjeta. */
+export function effectiveApr(state: GameState): number {
+  return Math.max(0.01, state.bank.card.apr - cardTier(state).aprDiscount);
 }
 
 export function accrueCardDaily(state: GameState): void {
@@ -71,14 +81,64 @@ export function payCard(state: GameState, amount: Cents, silent = false): Action
   return OK('Pago realizado.');
 }
 
+/** Pasa al resumen la cuota del mes de cada compra en cuotas (capital + interés). */
+function billInstallments(state: GameState): void {
+  const c = state.bank.card;
+  for (const it of c.installments ?? []) {
+    if (it.paidCount >= it.n || it.remaining <= 0) continue;
+    const last = it.paidCount === it.n - 1;
+    const interest = it.rate > 0 ? roundCents(it.remaining * it.rate) : 0;
+    const principal = last ? it.remaining : Math.min(it.remaining, Math.max(0, it.payment - interest));
+    post(state.ledger, {
+      day: state.day,
+      memo: `Cuota ${it.paidCount + 1}/${it.n}: ${it.desc}`,
+      cf: 'internal',
+      tag: 'card:installment',
+      lines: [
+        { account: 'card_installments', debit: principal },
+        ...(interest > 0 ? [{ account: 'interest_expense' as const, debit: interest }] : []),
+        { account: 'credit_card', credit: principal + interest },
+      ],
+    });
+    it.remaining -= principal;
+    it.paidCount++;
+  }
+  c.installments = (c.installments ?? []).filter((it) => it.paidCount < it.n && it.remaining > 0);
+}
+
+/** Acredita el reintegro acumulado: descuenta del saldo de la tarjeta (o va a tu cuenta si no hay saldo). */
+function creditRewards(state: GameState): void {
+  const c = state.bank.card;
+  const r = c.rewardsPending ?? 0;
+  if (r <= 0) return;
+  const toCard = Math.min(r, cardBalance(state));
+  const toChecking = r - toCard;
+  post(state.ledger, {
+    day: state.day,
+    memo: `Reintegro de tarjeta ${cardTier(state).name}`,
+    cf: 'operating',
+    tag: 'card:rewards',
+    lines: [
+      ...(toCard > 0 ? [{ account: 'credit_card' as const, debit: toCard }] : []),
+      ...(toChecking > 0 ? [{ account: 'checking' as const, debit: toChecking }] : []),
+      { account: 'card_rewards', credit: r },
+    ],
+  });
+  c.rewardsTotal = (c.rewardsTotal ?? 0) + r;
+  c.rewardsPending = 0;
+  addLog(state, 'income', '🎁', `Reintegro de tu tarjeta ${cardTier(state).name}: ${fmtMoney(r)}.`, r);
+}
+
 function cutStatement(state: GameState): void {
   const c = state.bank.card;
+  billInstallments(state);
+  creditRewards(state);
   if (c.revolving && c.cycleBalanceDays > 0) {
-    const interest = roundCents((c.cycleBalanceDays * c.apr) / 365);
+    const interest = roundCents((c.cycleBalanceDays * effectiveApr(state)) / 365);
     if (interest > 0) {
       post(state.ledger, {
         day: state.day,
-        memo: `Intereses de tarjeta (${fmtPct(c.apr, 1)} anual)`,
+        memo: `Intereses de tarjeta (${fmtPct(effectiveApr(state), 1)} anual)`,
         cf: 'operating',
         tag: 'interest:card',
         lines: [
@@ -150,8 +210,125 @@ export function processCardDue(state: GameState): void {
 export function processCardEndOfDay(state: GameState): void {
   const c = state.bank.card;
   if (!c.active) return;
+  if (c.feeDay !== undefined && state.day >= c.feeDay) chargeAnnualFee(state);
   accrueCardDaily(state);
   if (dateOf(state.day).d === STATEMENT_DAY) cutStatement(state);
+}
+
+function chargeAnnualFee(state: GameState): void {
+  const c = state.bank.card;
+  const fee = usd(cardTier(state).annualFee * state.macro.priceIndex);
+  c.feeDay = state.day + 365;
+  if (fee <= 0) return;
+  post(state.ledger, { day: state.day, memo: `Costo anual de la tarjeta ${cardTier(state).name}`, cf: 'operating', tag: 'fee:card_annual', lines: [{ account: 'bank_fees', debit: fee }, { account: 'credit_card', credit: fee }] });
+  addLog(state, 'expense', '💳', `Costo anual de tu tarjeta ${cardTier(state).name}: ${fmtMoney(fee)} (se cargó a la tarjeta).`, fee);
+}
+
+// ------------------------------------------------------------------ niveles de tarjeta (1.2)
+
+export interface TierCheck {
+  tier: CardTierDef;
+  items: Array<{ label: string; met: boolean }>;
+  eligible: boolean;
+  /** Probabilidad de aprobación si cumplís todo (menor cerca del mínimo de puntaje). */
+  chance: number;
+  limit: Cents;
+}
+
+/** Límite que te daría el banco con ese nivel según tus ingresos. */
+export function tierLimit(state: GameState, t: CardTierDef): Cents {
+  const income = monthlyGrossIncome(state);
+  return Math.min(usd(t.limitCap), Math.max(usd(t.limitFloor), roundCents(income * t.limitMult)));
+}
+
+export function checkTier(state: GameState, id: CardTier): TierCheck {
+  const t = CARD_TIER_BY_ID[id];
+  const income = monthlyGrossIncome(state);
+  const nw = computeMetrics(state).netWorth;
+  const history = state.day - (state.credit.firstAccountDay ?? 0);
+  const recentLate = state.credit.latePayments.filter((d) => state.day - d < 365).length;
+  const items = [
+    { label: `Puntaje crediticio ≥ ${t.minScore} (tenés ${state.credit.score})`, met: state.credit.score >= t.minScore },
+    { label: `Ingresos ≥ ${fmtMoney(usd(t.minIncome), { decimals: false })}/mes o patrimonio ≥ ${fmtMoney(usd(t.minNetWorth), { decimals: false })}`, met: income >= usd(t.minIncome) || nw >= usd(t.minNetWorth) },
+    { label: `Historial crediticio ≥ ${Math.round(t.minHistoryDays / 30)} meses (tenés ${Math.max(0, Math.round(history / 30))})`, met: history >= t.minHistoryDays },
+    { label: 'Sin atrasos en los últimos 12 meses', met: recentLate === 0 && state.ledger.balances.arrears === 0 },
+  ];
+  const eligible = items.every((i) => i.met);
+  const margin = state.credit.score - t.minScore;
+  const chance = eligible ? Math.min(0.95, 0.55 + margin / 60) : 0;
+  return { tier: t, items, eligible, chance, limit: tierLimit(state, t) };
+}
+
+/** Pedir otra tarjeta (subir o bajar de nivel). Subir implica una consulta a tu crédito. */
+export function requestTier(state: GameState, id: CardTier): ActionResult {
+  const c = state.bank.card;
+  const cur = CARD_TIER_ORDER.indexOf(c.tier ?? 'clasica');
+  const next = CARD_TIER_ORDER.indexOf(id);
+  if (next < 0) return FAIL('Nivel inexistente.');
+  if (next === cur) return FAIL('Ya tenés esa tarjeta.');
+  if (next < cur) {
+    c.tier = id;
+    const t = CARD_TIER_BY_ID[id];
+    c.limit = Math.min(c.limit, Math.max(usd(t.limitFloor), Math.min(usd(t.limitCap), c.limit)));
+    addLog(state, 'info', '💳', `Cambiaste a la tarjeta ${t.name}. El próximo costo anual será de ${fmtMoney(usd(t.annualFee), { decimals: false })}.`);
+    return OK(`Ahora tenés la tarjeta ${t.name}.`);
+  }
+  if (state.day - (c.lastTierRequest ?? -999) < 30) return FAIL(`Pediste un cambio hace menos de 30 días. Podés volver a pedir el ${formatDateShort((c.lastTierRequest ?? 0) + 30)}.`);
+  c.lastTierRequest = state.day;
+  const chk = checkTier(state, id);
+  recordInquiry(state);
+  if (!chk.eligible) {
+    refreshCreditScore(state);
+    return FAIL(`Rechazada: ${chk.items.filter((i) => !i.met).map((i) => i.label).join('; ')}. La consulta quedó registrada en tu historial.`);
+  }
+  if (!chance(state, chk.chance)) {
+    refreshCreditScore(state);
+    return FAIL(`El banco rechazó la solicitud esta vez (aprobación estimada ${Math.round(chk.chance * 100)} %). Podés volver a intentar en 30 días.`);
+  }
+  const t = chk.tier;
+  c.tier = id;
+  c.limit = Math.max(c.limit, chk.limit);
+  c.feeDay = state.day;
+  chargeAnnualFee(state);
+  practice(state, 'card_upgrade', 'finEdu', 80);
+  addLog(state, 'success', '💳', `¡Aprobada! Tu nueva tarjeta ${t.name}: límite ${fmtMoney(c.limit, { decimals: false })}, ${fmtPct(t.cashback, 1)} de reintegro.`);
+  refreshCreditScore(state);
+  return OK(`Tarjeta ${t.name} aprobada. Límite: ${fmtMoney(c.limit, { decimals: false })}.`);
+}
+
+// ------------------------------------------------------------------ compras en cuotas
+
+export interface InstallmentQuote {
+  n: number;
+  rate: number;
+  payment: Cents;
+  total: Cents;
+  interest: Cents;
+  free: boolean;
+}
+
+/** Cuotas: sin interés si la tienda y tu nivel lo permiten; si no, con la tasa de la tarjeta. */
+export function quoteInstallments(state: GameState, amount: Cents, n: number, storeFree: number): InstallmentQuote {
+  const tierFree = cardTier(state).freeInstallments;
+  const free = n <= Math.min(storeFree, tierFree);
+  const rate = free || n <= 1 ? 0 : (effectiveApr(state) * 0.9) / 12;
+  const payment = rate > 0 ? roundCents((amount * rate) / (1 - Math.pow(1 + rate, -n))) : Math.ceil(amount / n);
+  const total = rate > 0 ? payment * n : amount;
+  return { n, rate, payment, total, interest: total - amount, free: rate === 0 };
+}
+
+/** Registra una compra en cuotas: el total se reserva del límite y cada mes pasa una cuota al resumen. */
+export function chargeInstallments(state: GameState, amount: Cents, n: number, storeFree: number, desc: string, debitAccount: 'personal_assets' | 'shopping'): ActionResult {
+  const c = state.bank.card;
+  if (!c.active) return FAIL('No tenés tarjeta activa.');
+  if (!(n >= 2 && n <= 24)) return FAIL('Cantidad de cuotas inválida.');
+  if (cardAvailable(state) < amount) return FAIL(`Tu tarjeta tiene ${fmtMoney(cardAvailable(state))} disponibles.`);
+  const q = quoteInstallments(state, amount, n, storeFree);
+  post(state.ledger, { day: state.day, memo: `${desc} en ${n} cuotas`, cf: 'operating', tag: 'card:installments', lines: [{ account: debitAccount, debit: amount }, { account: 'card_installments', credit: amount }] });
+  c.installments = c.installments ?? [];
+  c.installments.push({ id: state.meta.nextId++, desc, principal: amount, remaining: amount, n, paidCount: 0, payment: q.payment, rate: q.rate, startDay: state.day });
+  accrueRewards(state, amount);
+  return OK(`${n} cuotas de ${fmtMoney(q.payment)}${q.free ? ' sin interés' : ` (interés total ${fmtMoney(q.interest)})`}.`);
 }
 
 export function setAutopay(state: GameState, mode: 'none' | 'min' | 'full'): ActionResult {
@@ -166,8 +343,9 @@ export function requestLimitIncrease(state: GameState): ActionResult {
   recordInquiry(state);
   if (state.credit.score < 680) return FAIL(`Rechazado: el banco exige un puntaje de al menos 680 (tenés ${state.credit.score}). La consulta quedó registrada.`);
   if (income <= 0) return FAIL('Rechazado: se requiere un ingreso estable demostrable.');
-  const target = Math.min(roundCents(income * 1.5), usd(50000));
-  if (target <= c.limit) return FAIL('Rechazado: tu límite ya es acorde a tus ingresos.');
+  const t = cardTier(state);
+  const target = Math.min(roundCents(income * Math.max(1.5, t.limitMult)), usd(t.limitCap));
+  if (target <= c.limit) return FAIL(`Rechazado: tu límite ya es el máximo para una tarjeta ${t.name} con tus ingresos. Para más límite, pedí una tarjeta de nivel superior.`);
   const newLimit = Math.min(target, c.limit * 2);
   c.limit = newLimit;
   addLog(state, 'success', '💳', `Aprobado: tu nuevo límite es ${fmtMoney(newLimit)}.`);
