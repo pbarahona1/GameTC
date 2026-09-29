@@ -1,3 +1,4 @@
+import { forecastMonthEnd } from '../advisor/businessForecast';
 import { compactCompany, NPC_KEEP_MONTHS } from '../ledger/compaction';
 import type { GameState } from '../state';
 import type { Company, Listing } from './types';
@@ -110,6 +111,7 @@ export function snapshot(state: GameState, co: Company): void {
     inventory: inventoryValue(co), employees: co.employees.length, share: companyShareEstimate(co), quality: co.quality, reputation: co.reputation, awareness: co.awareness,
     subscribers: sectorOf(co).model === 'subscription' ? Math.round(co.subscribers) : undefined,
   });
+  forecastMonthEnd(state, co);
   if (co.history.length > 120) co.history.shift();
 }
 

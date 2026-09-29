@@ -3,14 +3,15 @@ import type { Professional, ProKind, ProHire, AuditReport } from './types';
 import { Cents, clamp, roundCents, usd } from '../money';
 import { chance, randInt, randNormal, randRange } from '../rng';
 import { ActionResult, FAIL, OK } from '../result';
-import { fmtMoney } from '../format';
+import { fmtMoney, fmtPct } from '../format';
 import { addLog } from '../log';
 import { payExpense } from '../finance/payments';
 import { coPay, isOpen, sectorOf } from '../business/common';
 import { coPost, CO_CHART } from '../business/companyLedger';
 import { gAudit } from '../ledger/core';
 import { investmentsValue, positions } from '../invest/portfolio';
-import { formatDate, addMonths } from '../time/calendar';
+import { formatDate, addMonths, dateOf } from '../time/calendar';
+import { closeMandatesOfHire } from '../invest/managed';
 import { hiredPro, hireOf } from './lookup';
 import { taxObligations } from '../tax/taxEngine';
 import { practice } from '../skills/skills';
@@ -30,6 +31,11 @@ import { practice } from '../skills/skills';
  * - Auditor: revisa los libros de una empresa, detecta irregularidades y emite
  *   un informe; una auditoría limpia mejora la valoración (+10 % al múltiplo).
  * - Gerente: administra una empresa (delegación) con su habilidad real.
+ * - Gestor de inversiones: administra una cuenta con tu dinero en el mercado real
+ *   (ver invest/managed.ts); cobra comisión de gestión y de éxito.
+ *
+ * Todos los profesionales contratados ganan experiencia cada año y se pueden
+ * capacitar (paga el jugador): su calidad real sube y sus efectos mejoran.
  */
 const FIRST = ['Mariana', 'Esteban', 'Rocío', 'Federico', 'Inés', 'Gonzalo', 'Valentina', 'Rodrigo', 'Florencia', 'Joaquín', 'Natalia', 'Sebastián', 'Carolina', 'Ignacio', 'Julieta', 'Emilio'];
 const LAST = ['Arriaga', 'Benítez', 'Cordero', 'Duarte', 'Escobar', 'Fuentes', 'Gallardo', 'Ibarra', 'Lozano', 'Montero', 'Núñez', 'Olivares', 'Pizarro', 'Robles', 'Serrano', 'Toledo'];
@@ -39,6 +45,7 @@ export const PRO_INFO: Record<ProKind, { name: string; icon: string; baseFee: nu
   asesor: { name: 'Asesor financiero', icon: '📈', baseFee: 300, feeUnit: 'por mes (mínimo) o 1 % anual de tu cartera', specialties: ['Bolsa', 'Renta fija', 'Carteras diversificadas'], what: 'Analiza inversiones, compara riesgos y elabora proyecciones. Mejora la precisión de las estimaciones, pero nunca garantiza resultados.' },
   abogado: { name: 'Abogado', icon: '⚖️', baseFee: 420, feeUnit: 'por mes (anticipo) + honorarios por caso', specialties: ['Inmobiliario', 'Mercantil', 'Laboral', 'Penal'], what: 'Revisa contratos, asesora en disputas y te representa en procesos. Contratarlo no garantiza ganar un juicio.' },
   auditor: { name: 'Auditor', icon: '🔍', baseFee: 2800, feeUnit: 'por auditoría', specialties: ['Estados financieros', 'Forense', 'Cumplimiento'], what: 'Revisa los libros de una empresa, detecta irregularidades y emite un informe independiente.' },
+  gestor: { name: 'Gestor de inversiones', icon: '🧑‍💼', baseFee: 0, feeUnit: 'comisiones sobre tu cuenta', specialties: ['Acciones de valor', 'Carteras balanceadas', 'Crecimiento'], what: 'Le das dinero y lo invierte por vos en acciones y fondos del mercado. Cuanto mejor capacitado y más experiencia tenga, mejor elige; nunca garantiza ganancias. Cobra una comisión anual sobre el valor y otra sobre las ganancias.' },
   gerente: { name: 'Gerente profesional', icon: '👔', baseFee: 2600, feeUnit: 'de sueldo mensual', specialties: ['Gastronomía', 'Comercio', 'Manufactura', 'Tecnología', 'Servicios'], what: 'Administra una empresa: supervisa empleados, repone inventario y fija precios con su propia habilidad.' },
 };
 
@@ -50,14 +57,20 @@ function makePro(state: GameState, kind: ProKind): Professional {
   const quality = clamp(Math.round(35 + experience * 1.2 + randNormal(state) * 14), 10, 98);
   const reputation = clamp(Math.round(quality + randNormal(state) * 12 + (experience > 15 ? 5 : 0)), 5, 99);
   const fee = usd(info.baseFee * (0.6 + experience / 30 + reputation / 150) * state.macro.priceIndex);
-  return {
+  const pro: Professional = {
     id: state.meta.nextId++, name: `${FIRST[randInt(state, 0, FIRST.length - 1)]} ${LAST[randInt(state, 0, LAST.length - 1)]}`,
     kind, specialty: info.specialties[randInt(state, 0, info.specialties.length - 1)], experience, fee: Math.round(fee / 1000) * 1000, reputation, quality,
   };
+  if (kind === 'gestor') {
+    // Los más reconocidos cobran más (y no siempre son los mejores: la reputación estima la calidad con error).
+    pro.mgmtFee = Math.round((0.006 + (reputation / 100) * 0.014) * 10000) / 10000;
+    pro.perfFee = Math.round((0.08 + (reputation / 100) * 0.12) * 100) / 100;
+  }
+  return pro;
 }
 
 export function refreshProMarket(state: GameState): void {
-  const kinds: ProKind[] = ['contador', 'asesor', 'abogado', 'auditor', 'gerente'];
+  const kinds: ProKind[] = ['contador', 'asesor', 'abogado', 'auditor', 'gerente', 'gestor'];
   state.pros.market = [];
   for (const k of kinds) for (let i = 0; i < (k === 'gerente' ? 4 : 3); i++) state.pros.market.push(makePro(state, k));
   state.pros.lastRefresh = state.day;
@@ -70,7 +83,7 @@ export function initPros(state: GameState): void {
 /** Honorario mensual efectivo (el asesor cobra el mayor entre su anticipo y 1 % anual de la cartera). */
 export function monthlyFee(state: GameState, h: ProHire): Cents {
   if (h.pro.kind === 'asesor') return Math.max(h.pro.fee, roundCents((investmentsValue(state) * 0.01) / 12));
-  if (h.pro.kind === 'auditor' || h.pro.kind === 'gerente') return 0;
+  if (h.pro.kind === 'auditor' || h.pro.kind === 'gerente' || h.pro.kind === 'gestor') return 0;
   return h.pro.fee;
 }
 
@@ -82,13 +95,14 @@ export function hirePro(state: GameState, proId: number, scope: 'personal' | num
     if (scope === 'personal') return FAIL('Elegí la empresa que va a administrar.');
     return assignManager(state, pro, scope);
   }
-  if (pro.kind === 'asesor' && scope !== 'personal') return FAIL('El asesor financiero trabaja sobre tus inversiones personales.');
+  if ((pro.kind === 'asesor' || pro.kind === 'gestor') && scope !== 'personal') return FAIL(`El ${PRO_INFO[pro.kind].name.toLowerCase()} trabaja con tu dinero personal.`);
   if (scope !== 'personal' && !state.companies.some((c) => c.id === scope && isOpen(c))) return FAIL('Empresa inexistente.');
   if (hiredPro(state, pro.kind, scope)) return FAIL(`Ya tenés un ${PRO_INFO[pro.kind].name.toLowerCase()} para ese ámbito. Despedilo primero si querés cambiarlo.`);
   state.pros.hires.push({ id: state.meta.nextId++, pro, scope, since: state.day });
   state.pros.market = state.pros.market.filter((p) => p.id !== proId);
   practice(state, 'hire_pro', 'management', 30);
   const where = scope === 'personal' ? 'tus finanzas personales' : state.companies.find((c) => c.id === scope)!.name;
+  if (pro.kind === 'gestor') return OK(`Contrataste a ${pro.name} como gestor de inversiones. Ahora entregale dinero desde Invertir → Gestor (${feeLabel(pro)}).`);
   return OK(`Contrataste a ${pro.name} (${PRO_INFO[pro.kind].name.toLowerCase()}) para ${where}. Honorario: ${fmtMoney(pro.fee)} ${PRO_INFO[pro.kind].feeUnit}.`);
 }
 
@@ -112,8 +126,37 @@ export function firePro(state: GameState, hireId: number): ActionResult {
   if (!h) return FAIL('Contratación inexistente.');
   const c = state.legal?.cases.find((x) => x.lawyerHireId === hireId && x.stage !== 'cerrado');
   if (c) c.lawyerHireId = null;
+  const returned = h.pro.kind === 'gestor' ? closeMandatesOfHire(state, hireId, 'fin del contrato') : 0;
   state.pros.hires = state.pros.hires.filter((x) => x.id !== hireId);
-  return OK(`Terminaste la relación con ${h.pro.name}.`);
+  return OK(`Terminaste la relación con ${h.pro.name}.${returned > 0 ? ` Liquidó tu cuenta y te devolvió ${fmtMoney(returned)}.` : ''}`);
+}
+
+/** Costo de la próxima capacitación de un profesional contratado. */
+export function trainingCost(state: GameState, h: ProHire): Cents {
+  return usd(Math.round(700 * (1 + (h.trainings ?? 0) * 0.5) * state.macro.priceIndex));
+}
+
+export const TRAINING_COOLDOWN_DAYS = 90;
+
+/**
+ * Capacitar a un profesional contratado: paga el jugador; su calidad real sube
+ * con rendimientos decrecientes (cuanto mejor es, menos mejora). Una vez cada 90 días.
+ */
+export function trainPro(state: GameState, hireId: number): ActionResult {
+  const h = state.pros.hires.find((x) => x.id === hireId);
+  if (!h) return FAIL('Contratación inexistente.');
+  if (h.pro.kind === 'auditor' || h.pro.kind === 'gerente') return FAIL('Este profesional no se capacita desde aquí.');
+  if (h.lastTraining !== undefined && state.day - h.lastTraining < TRAINING_COOLDOWN_DAYS) return FAIL(`Ya se capacitó hace poco: podés volver a capacitarlo el ${formatDate(h.lastTraining + TRAINING_COOLDOWN_DAYS)}.`);
+  if (h.pro.quality >= 98) return FAIL(`${h.pro.name} ya está en la cima de su profesión.`);
+  const cost = trainingCost(state, h);
+  const r = payExpense(state, 'professional_fees', cost, { memo: `Capacitación de ${h.pro.name}`, tag: 'pros:training', method: 'checking' });
+  if (!r.ok) return FAIL(`La capacitación cuesta ${fmtMoney(cost)}.`);
+  const gain = Math.max(1, Math.round((100 - h.pro.quality) * 0.12));
+  h.pro.quality = Math.min(98, h.pro.quality + gain);
+  h.trainings = (h.trainings ?? 0) + 1;
+  h.lastTraining = state.day;
+  practice(state, 'train_pro', 'management', 40);
+  return OK(`${h.pro.name} terminó una capacitación: su calidad real subió ${gain} puntos. ${h.pro.kind === 'gestor' ? 'Estimará mejor el valor de las acciones.' : ''}`);
 }
 
 /** Honorarios mensuales (último día del mes). */
@@ -133,6 +176,13 @@ export function prosMonthEnd(state: GameState): void {
     }
   }
   if (state.day - state.pros.lastRefresh >= 60) refreshProMarket(state);
+  // Experiencia: cada fin de año los profesionales contratados aprenden en el trabajo.
+  if (dateOf(state.day).m === 12) {
+    for (const h of state.pros.hires) {
+      h.pro.experience += 1;
+      h.pro.quality = Math.min(98, h.pro.quality + Math.max(0, Math.round((100 - h.pro.quality) * 0.03)));
+    }
+  }
 }
 
 // ------------------------------------------------------------ Contador: informe
@@ -200,6 +250,14 @@ export function projectPortfolio(state: GameState, months = 12): PortfolioProjec
     const w = p.value / total;
     mu += w * (0.07 + (m * 252 - 0.07) * 0.2);
     varSum += (w * Math.sqrt(v * 252)) ** 2 + w * w * 0.02;
+  }
+  // Cuentas con gestor: según la mezcla de su perfil (acciones ~16 % de volatilidad, bonos ~6 %).
+  for (const p of positions(state, 'managed')) {
+    const md = state.managed.mandates.find((x) => x.id === p.id);
+    const stocksW = md?.profile === 'agresivo' ? 0.9 : md?.profile === 'conservador' ? 0.25 : 0.6;
+    const w = p.value / total;
+    mu += w * (0.03 + stocksW * 0.045);
+    varSum += (w * (0.03 + stocksW * 0.15)) ** 2;
   }
   const byClass: Array<['bonds' | 'funds' | 'mogul', number, number]> = [['bonds', 0.045, 0.06], ['funds', 0.06, 0.14], ['mogul', 0.07, 0.18]];
   for (const [cls, m, v] of byClass) for (const p of positions(state, cls)) {
@@ -327,6 +385,7 @@ export function describeQuality(p: Professional): string {
 }
 
 export function feeLabel(p: Professional): string {
+  if (p.kind === 'gestor') return `${fmtPct(p.mgmtFee ?? 0.015, 1)} anual de gestión + ${fmtPct(p.perfFee ?? 0.15, 0)} de las ganancias`;
   return `${fmtMoney(p.fee)} ${PRO_INFO[p.kind].feeUnit}`;
 }
 

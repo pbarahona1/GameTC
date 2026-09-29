@@ -374,6 +374,7 @@ class GameStore {
   }
 
   toast(text: string, tone: Toast['tone'] = 'info') {
+    if (this.ui.toasts.some((t) => t.text === text)) return;
     const id = this.toastId++;
     this.ui.toasts = [...this.ui.toasts.slice(-1), { id, text, tone }];
     this.emit();

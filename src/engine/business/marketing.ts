@@ -117,7 +117,8 @@ export function dailyMarketing(state: GameState, co: Company): void {
     c.reach += Math.round(realDollars * ch.reachPerDollar);
     let noise = 1 + randRange(state, -ch.volatility, ch.volatility);
     if (c.channel === 'redes' && co.quality < 40) noise -= 0.5;
-    const gain = Math.max(0, ch.efficiency * audienceFit(co, c.audience) * specialist * Math.pow(realDollars / 100, 0.6) * (1 - co.awareness / 100) * noise);
+    const skillBoost = co.npc ? 1 : 1 + Math.min(100, state.skills.marketing?.level ?? 1) * 0.004;
+    const gain = Math.max(0, ch.efficiency * audienceFit(co, c.audience) * specialist * skillBoost * Math.pow(realDollars / 100, 0.6) * (1 - co.awareness / 100) * noise);
     co.awareness += gain;
     c.awarenessGained += gain;
     if (ch.reputationPerDay) co.reputation = clamp(co.reputation + ch.reputationPerDay, 0, 100);

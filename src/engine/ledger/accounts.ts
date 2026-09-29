@@ -37,6 +37,7 @@ export const ACCOUNTS = {
   bonds: { name: 'Bonos (valor de mercado)', type: 'asset', noNegative: true, term: 'bono' },
   funds: { name: 'Fondos de inversión', type: 'asset', noNegative: true, term: 'fondo_inversion' },
   mogul: { name: 'Participaciones Mogul Exchange', type: 'asset', noNegative: true, term: 'mogul_exchange' },
+  managed: { name: 'Cartera con gestor', type: 'asset', noNegative: true, term: 'gestor_inversiones' },
   real_estate: { name: 'Inmuebles (tasación)', type: 'asset', noNegative: true, term: 'inmueble' },
   undeclared_cash: { name: 'Efectivo no declarado', type: 'asset', noNegative: true, term: 'efectivo_no_declarado' },
   // PASIVOS

@@ -100,9 +100,9 @@ export function monthlyZones(state: GameState): void {
   }
 }
 
-function newProperty(state: GameState, zoneId: string, type: PropertyType): Property {
-  const m2 = type === 'vivienda' ? randInt(state, 40, 160) : type === 'local' ? randInt(state, 30, 220) : type === 'oficina' ? randInt(state, 50, 400) : randInt(state, 200, 2500);
-  const grade = randInt(state, 1, 5);
+function newProperty(state: GameState, zoneId: string, type: PropertyType, small = false): Property {
+  const m2 = small ? randInt(state, 22, 38) : type === 'vivienda' ? randInt(state, 40, 160) : type === 'local' ? randInt(state, 30, 220) : type === 'oficina' ? randInt(state, 50, 400) : randInt(state, 200, 2500);
+  const grade = small ? randInt(state, 1, 2) : randInt(state, 1, 5);
   const condition = type === 'terreno' ? 100 : randInt(state, 40, 98);
   const z = zoneDef(zoneId);
   const names: Record<PropertyType, string[]> = {
@@ -110,7 +110,7 @@ function newProperty(state: GameState, zoneId: string, type: PropertyType): Prop
   };
   const streets = ['Av. Libertad', 'Calle Olmos', 'Pasaje Sol', 'Av. del Puerto', 'Calle Colón', 'Bv. Norte', 'Calle Rivadavia', 'Av. Central', 'Calle Mar Azul'];
   const p: Property = {
-    id: state.meta.nextId++, name: `${names[type][randInt(state, 0, names[type].length - 1)]} ${streets[randInt(state, 0, streets.length - 1)]} ${randInt(state, 100, 2999)}`,
+    id: state.meta.nextId++, name: `${small ? 'Monoambiente' : names[type][randInt(state, 0, names[type].length - 1)]} ${streets[randInt(state, 0, streets.length - 1)]} ${randInt(state, 100, 2999)}`,
     type, zoneId, jurisdiction: z.jurisdiction, m2, grade, condition, landShare: type === 'terreno' ? 1 : randRange(state, 0.2, 0.4),
     owner: { kind: 'personal' }, purchasePrice: 0, purchaseDay: state.day, closingCosts: 0, costBasis: 0, appraisal: 0, carrying: 0, accumDepreciation: 0,
     lease: null, askingRent: 0, listedForRent: false, vacantSince: null, management: 'propia', usedBy: null, forSale: null, renovation: null, mortgageId: null,
@@ -145,6 +145,17 @@ export function refreshPropertyListings(state: GameState): void {
     const p = newProperty(state, z.id, type);
     const ask = roundCents(p.appraisal * randRange(state, 0.92, 1.15));
     re.listings.push({ id: state.meta.nextId++, property: p, askPrice: ask, expiresDay: state.day + randInt(state, 30, 90), negotiated: false, note: p.lease ? `Se vende con inquilino (${fmtMoney(p.lease.rent)}/mes hasta ${formatDate(p.lease.endDay)}).` : 'Se entrega desocupado.' });
+  }
+  // Siempre hay al menos dos opciones de entrada (monoambientes en las zonas más baratas),
+  // para que invertir en inmuebles no requiera medio millón desde el primer día.
+  const cheap = [...ZONES].sort((a, b) => a.price.vivienda - b.price.vivienda).slice(0, 3);
+  const entry = usd(90000 * state.macro.priceIndex);
+  guard = 0;
+  while (re.listings.filter((l) => l.askPrice <= entry).length < 2 && guard++ < 6) {
+    const z = cheap[randInt(state, 0, cheap.length - 1)];
+    const p = newProperty(state, z.id, 'vivienda', true);
+    const ask = roundCents(p.appraisal * randRange(state, 0.94, 1.08));
+    re.listings.push({ id: state.meta.nextId++, property: p, askPrice: ask, expiresDay: state.day + randInt(state, 45, 90), negotiated: false, note: `Opción de entrada: monoambiente económico. ${p.lease ? `Se vende con inquilino (${fmtMoney(p.lease.rent)}/mes).` : 'Se entrega desocupado.'}` });
   }
 }
 

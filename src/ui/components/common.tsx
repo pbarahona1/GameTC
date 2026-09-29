@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Cents } from '../../engine/money';
 import { fmtMoney, fmtCompact } from '../../engine/format';
 import { GLOSSARY_BY_ID } from '../../content/glossary';
@@ -179,12 +179,16 @@ export interface Series {
   dashed?: boolean;
 }
 
-/** Gráfico de líneas SVG propio (liviano, sin dependencias). */
-export function LineChart({ series, labels, height = 150, format = (v: number) => fmtCompact(v) }: { series: Series[]; labels?: string[]; height?: number; format?: (v: number) => string }) {
+/**
+ * Gráfico de líneas SVG propio (liviano, sin dependencias). Al tocar o pasar
+ * el dedo muestra una línea guía con el valor de cada serie en ese punto.
+ */
+export function LineChart({ series, labels, pointLabels, height = 150, format = (v: number) => fmtCompact(v) }: { series: Series[]; labels?: string[]; pointLabels?: string[]; height?: number; format?: (v: number) => string }) {
   const W = 340;
   const H = height;
   const padL = 46, padR = 8, padT = 10, padB = labels ? 20 : 8;
   const all = series.flatMap((s) => s.values);
+  const [hover, setHover] = useState<number | null>(null);
   const { min, max, ticks } = useMemo(() => {
     let lo = Math.min(0, ...all);
     let hi = Math.max(...all, 1);
@@ -200,8 +204,17 @@ export function LineChart({ series, labels, height = 150, format = (v: number) =
   if (n < 2) return <Empty icon="📈">El gráfico aparece después del primer cierre de mes.</Empty>;
   const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR);
   const y = (v: number) => padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
+  const pick = (e: RPointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    setHover(Math.max(0, Math.min(n - 1, Math.round(((px - padL) / (W - padL - padR)) * (n - 1)))));
+  };
+  const tipW = 150;
+  const tipX = hover !== null ? Math.min(W - tipW - 2, Math.max(padL, x(hover) - tipW / 2)) : 0;
+  const rows = hover !== null ? series.filter((s) => s.values[hover] !== undefined) : [];
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={series.map((s) => s.name).join(', ')}>
+    <svg className="chart touch" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={series.map((s) => s.name).join(', ')}
+      onPointerMove={pick} onPointerDown={pick} onPointerLeave={() => setHover(null)}>
       {ticks.map((t, i) => (
         <g key={i}>
           <line className="grid" x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} />
@@ -227,6 +240,17 @@ export function LineChart({ series, labels, height = 150, format = (v: number) =
           <text x={padL} y={H - 4}>{labels[0]}</text>
           <text x={W - padR} y={H - 4} textAnchor="end">{labels[labels.length - 1]}</text>
         </>
+      )}
+      {hover !== null && (
+        <g className="tip" pointerEvents="none">
+          <line x1={x(hover)} x2={x(hover)} y1={padT} y2={H - padB} style={{ stroke: 'var(--muted)' }} strokeDasharray="2 3" />
+          {rows.map((s) => <circle key={s.name} cx={x(hover)} cy={y(s.values[hover])} r={4} style={{ fill: s.color, stroke: 'var(--surface)' }} strokeWidth={1.5} />)}
+          <rect x={tipX} y={padT} width={tipW} height={16 + rows.length * 13} rx={6} className="tip-box" />
+          <text x={tipX + 8} y={padT + 12} className="tip-title">{pointLabels?.[hover] ?? `Punto ${hover + 1} de ${n}`}</text>
+          {rows.map((s, i) => (
+            <text key={s.name} x={tipX + 8} y={padT + 25 + i * 13} className="tip-row" style={{ fill: s.color }}>{s.name.slice(0, 16)}: {format(s.values[hover])}</text>
+          ))}
+        </g>
       )}
     </svg>
   );
@@ -292,5 +316,20 @@ export function NumInput({ id, value, onChange, min = 0, step = 1, suffix }: { i
       />
       {suffix && <span className="tiny muted">{suffix}</span>}
     </span>
+  );
+}
+
+/** Encabezado de sección en lenguaje simple: qué es y para qué sirve (se oculta al desactivar el modo aprendizaje). */
+export function ScreenIntro({ icon, title, text, term }: { icon: string; title: string; text: string; term?: string }) {
+  const ui = useUI();
+  return (
+    <div className="screen-intro">
+      <span className="si-icon" aria-hidden>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h1>{title}</h1>
+        {ui.settings.learningMode && <p className="small muted">{text}</p>}
+      </div>
+      {term && <InfoButton term={term} />}
+    </div>
   );
 }

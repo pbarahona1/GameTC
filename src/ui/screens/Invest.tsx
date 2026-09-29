@@ -1,6 +1,6 @@
 import { useNav, navStore } from '../nav';
 import { useUI } from '../store';
-import { Tabs } from '../components/common';
+import { Tabs, ScreenIntro } from '../components/common';
 import { Portfolio } from './invest/Portfolio';
 import { StocksLite } from './invest/StocksLite';
 import { TradingPro } from './invest/TradingPro';
@@ -8,8 +8,9 @@ import { BondsScreen } from './invest/Bonds';
 import { FundsScreen } from './invest/Funds';
 import { MogulScreen } from './invest/Mogul';
 import { RealEstateScreen } from './invest/RealEstate';
+import { GestorScreen } from './invest/Gestor';
 
-type Sub = 'portfolio' | 'lite' | 'pro' | 'bonds' | 'funds' | 'mogul' | 'realestate';
+type Sub = 'portfolio' | 'lite' | 'pro' | 'bonds' | 'funds' | 'gestor' | 'mogul' | 'realestate';
 
 /**
  * Inversiones: cartera, bolsa (Lite y Pro sobre el MISMO mercado y la MISMA
@@ -24,15 +25,17 @@ export function Invest() {
   const param = rest.join(':');
   return (
     <>
+      <ScreenIntro icon="📈" title="Invertir" text="Hacé crecer tu dinero: acciones, fondos, bonos, inmuebles o un gestor que invierta por vos. Ninguna ganancia está garantizada." term="diversificacion" />
       <Tabs<Sub>
         items={[
-          { id: 'portfolio', label: 'Cartera' },
-          { id: 'lite', label: 'Bolsa Lite' },
-          { id: 'pro', label: 'Trading Pro' },
-          { id: 'bonds', label: 'Bonos' },
-          { id: 'funds', label: 'Fondos' },
-          { id: 'mogul', label: 'Mogul' },
-          { id: 'realestate', label: 'Inmuebles' },
+          { id: 'portfolio', label: '💼 Mis inversiones' },
+          { id: 'lite', label: '📈 Bolsa' },
+          { id: 'pro', label: '📊 Trading Pro' },
+          { id: 'funds', label: '🧺 Fondos' },
+          { id: 'gestor', label: '🧑‍💼 Gestor' },
+          { id: 'bonds', label: '🏛️ Bonos' },
+          { id: 'realestate', label: '🏠 Inmuebles' },
+          { id: 'mogul', label: '🧩 Mogul' },
         ]}
         value={sub}
         onChange={(v) => {
@@ -45,6 +48,7 @@ export function Invest() {
       {sub === 'pro' && <TradingPro selected={param || null} />}
       {sub === 'bonds' && <BondsScreen />}
       {sub === 'funds' && <FundsScreen />}
+      {sub === 'gestor' && <GestorScreen />}
       {sub === 'mogul' && <MogulScreen />}
       {sub === 'realestate' && <RealEstateScreen param={param} />}
     </>

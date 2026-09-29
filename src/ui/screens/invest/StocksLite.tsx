@@ -97,7 +97,10 @@ export function StocksLite({ selected }: { selected: string | null }) {
   const [q, setQ] = useState('');
   const [sector, setSector] = useState<string>('todos');
   const st = selected ? stockById(s, selected) : null;
-  const list = s.stocks.stocks.filter((x) => (sector === 'todos' || x.sector === sector) && (!q || (x.id + x.name).toLowerCase().includes(q.toLowerCase())));
+  const mine = (id: string) => !!s.stocks.holdings[id];
+  const list = s.stocks.stocks
+    .filter((x) => (sector === 'todos' || (sector === 'mias' ? mine(x.id) : x.sector === sector)) && (!q || (x.id + x.name).toLowerCase().includes(q.toLowerCase())))
+    .sort((a, b) => Number(mine(b.id)) - Number(mine(a.id)));
   return (
     <>
       <div className="card">
@@ -112,8 +115,8 @@ export function StocksLite({ selected }: { selected: string | null }) {
       {st && <StockDetail st={st} />}
       <input className="input" placeholder="Buscar por nombre o código" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar acción" />
       <div className="chips">
-        {['todos', ...Object.keys(SECTOR_NAMES)].map((k) => (
-          <button key={k} onClick={() => setSector(k)} style={sector === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{k === 'todos' ? 'Todos' : SECTOR_NAMES[k as keyof typeof SECTOR_NAMES]}</button>
+        {['todos', 'mias', ...Object.keys(SECTOR_NAMES)].map((k) => (
+          <button key={k} onClick={() => setSector(k)} style={sector === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{k === 'todos' ? 'Todas' : k === 'mias' ? `⭐ Las mías (${Object.keys(s.stocks.holdings).length})` : SECTOR_NAMES[k as keyof typeof SECTOR_NAMES]}</button>
         ))}
       </div>
       <div className="card" style={{ paddingBlock: 4 }}>
@@ -121,7 +124,7 @@ export function StocksLite({ selected }: { selected: string | null }) {
           {list.map((x) => (
             <button key={x.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { navStore.setSub('invest', `lite:${x.id}`); window.scrollTo({ top: 0 }); }}>
               <div className="grow">
-                <div className="title small">{x.id} <span className="faint">· {x.name}</span></div>
+                <div className="title small">{mine(x.id) && '⭐ '}{x.id} <span className="faint">· {x.name}</span></div>
                 <div className="meta">{SECTOR_NAMES[x.sector]}{s.stocks.holdings[x.id] ? ` · tenés ${s.stocks.holdings[x.id].qty}` : ''}{x.status !== 'activa' ? ' · en quiebra' : ''}</div>
               </div>
               <Sparkline values={x.history.slice(-40).map((c) => c.c)} />

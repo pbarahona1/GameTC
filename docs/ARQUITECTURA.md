@@ -93,6 +93,8 @@ El motor de partida doble es genérico sobre un plan de cuentas (`Chart<A>`): `g
 | `advisor/advisorWorld.ts` | Reglas del asesor para inversiones, inmuebles, legal, impuestos y economía (con datos reales). |
 | `ledger/compaction.ts` | Compactación de libros en baldes mensuales (Fase 5). |
 | `snapshot.ts`, `clone.ts` | Deshacer liviano y copia profunda compatible con WebView antiguos. |
+| `advisor/businessForecast.ts` (1.1) | Proyección de negocios: futuros simulados sobre copias de la partida, resumen por percentiles, sesgo según la habilidad, comparación con la realidad. |
+| `invest/managed.ts` (1.1) | Gestor de inversiones: cuentas gestionadas como clase de inversión `managed` (misma contabilidad común), selección de acciones por habilidad, rebalanceo, comisiones y ganchos de dividendos, splits y repartos. |
 
 **Una sola contabilidad.** Todos los movimientos pasan por `post()` (personal) o `coPost()` (empresa). Los subregistros (tenencias y lotes, bonos, fondos, Mogul, inmuebles, hipotecas, multas, subsidiarias, préstamos intragrupo) se concilian con su cuenta en `invariants.ts → checkPhase34`. La auditoría integral con bots aleatorios exige cada mes: invariantes, Δ patrimonio = resultado del mes y conciliación del flujo de caja.
 
@@ -114,10 +116,10 @@ El motor de partida doble es genérico sobre un plan de cuentas (`Chart<A>`): `g
 - Almacenamiento lleno: se liberan primero las copias de seguridad más viejas (nunca la principal) y se reintenta; si aun así no entra, se informa el error y la partida anterior queda intacta.
 - Nunca se guarda un estado que viole los invariantes (imposible "duplicar dinero" editando saldos).
 - Plataforma (`platformStorage.ts`):
-  - Android/iOS: `MirroredKV` escribe cada clave en **dos almacenes nativos** — `@capacitor/preferences` y un archivo `saves/<clave>.json` en `Directory.Data` (`@capacitor/filesystem`). Lee del primero que tenga datos; si uno lanza error, usa el otro. Solo falla si fallan ambos.
+  - Android/iOS (1.1): `NativeKV` escribe todas las claves como archivos `saves/<clave>.json` en `Directory.Data` (`@capacitor/filesystem`) y una segunda copia SOLO de la partida principal en `@capacitor/preferences` (Android carga las preferencias enteras en memoria al abrir la app, así que no conviene llenarlas). Lee de archivos primero y luego de preferencias (compatible con instalaciones 1.0).
   - Navegador: `localStorage`; memoria como último recurso (se avisa).
 - Exportar a archivo (`exportToFile`): en Android se escribe en la caché y se abre el menú Compartir; en navegador se descarga. Importar desde archivo o texto pegado, con la misma verificación (checksum, migración, invariantes).
-- `SAVE_VERSION = 3`. La migración 1→2 agrega las cuentas personales de empresas; la 2→3 crea bolsa, bonos, inmuebles, fondos, Mogul, profesionales, legal, jurisdicciones y macro v2 (`initWorldV3`). El campo `ledger.archive` (Fase 5) es opcional: partidas sin compactar se leen igual.
+- `SAVE_VERSION = 4` (1.1: habilidad Proyección de negocios, cuentas con gestor, proyecciones guardadas en empresas). Antes, `SAVE_VERSION = 3`. La migración 1→2 agrega las cuentas personales de empresas; la 2→3 crea bolsa, bonos, inmuebles, fondos, Mogul, profesionales, legal, jurisdicciones y macro v2 (`initWorldV3`). El campo `ledger.archive` (Fase 5) es opcional: partidas sin compactar se leen igual.
 
 ## Progreso sin conexión
 

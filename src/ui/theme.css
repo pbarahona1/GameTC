@@ -345,3 +345,51 @@ body { zoom: var(--ui-zoom, 1); }
 :root[data-density='compact'] .screen { gap: 9px; }
 :root[data-density='compact'] .stat { padding: 9px 10px; }
 :root[data-density='compact'] .row { padding-block: 6px; }
+
+/* ---------- Gráficos táctiles ---------- */
+.chart.touch { touch-action: pan-y; cursor: crosshair; }
+.chart .tip-box { fill: var(--surface-2); stroke: var(--line); }
+.chart .tip-title { fill: var(--text) !important; font-weight: 700; font-family: var(--font-ui) !important; font-size: 10.5px !important; }
+.chart .tip-row { font-size: 10px; font-weight: 600; }
+
+/* ---------- Proyección de negocios ---------- */
+.forecast { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.fc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fc-tile { background: var(--surface-2); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+.fc-tile strong { font-size: 18px; font-family: var(--font-num); }
+.fc-tile.wide { grid-column: 1 / -1; }
+.fc-range { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-family: var(--font-num); font-size: 13px; }
+.fc-range strong { font-size: 18px; }
+.fc-insights { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------- Mis inversiones ---------- */
+.holding { border-bottom: 1px solid var(--line); }
+.holding:last-child { border-bottom: 0; }
+.holding .holding-row { border: 0; background: none; text-align: left; width: 100%; border-bottom: 0; }
+button.holding-row { border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; width: 100%; font: inherit; color: inherit; }
+.holding.open { background: var(--surface-2); border-radius: 12px; margin: 4px -8px; padding: 0 8px; border-bottom: 0; }
+.h-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--surface-2); font-size: 15px; flex: none; }
+.holding.open .h-icon { background: var(--surface); }
+.quick-trade { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 12px; }
+.chip-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+.start-option { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 1px solid var(--line); background: var(--surface-2); border-radius: 12px; padding: 12px; font: inherit; color: inherit; }
+.start-option:active { transform: scale(0.99); }
+
+/* ---------- Inicio ---------- */
+.month-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ms-cell { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font: inherit; color: inherit; min-width: 0; }
+.ms-cell strong { font-size: 15px; }
+.ms-cell .tiny { line-height: 1.25; }
+.next-step { border-color: var(--accent); background: linear-gradient(180deg, var(--accent-soft), var(--surface) 70%); }
+.area-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.area { display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; font: inherit; color: inherit; min-width: 0; }
+.area:active, .ms-cell:active { transform: scale(0.99); }
+.area-top { display: flex; align-items: center; gap: 6px; }
+.area-top .tiny { flex: 1; font-weight: 700; }
+.area-icon { width: 28px; height: 28px; border-radius: 8px; background: var(--surface-2); display: grid; place-items: center; font-size: 15px; }
+.area-value { font-family: var(--font-ui); font-weight: 800; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 360px) { .month-strip { grid-template-columns: 1fr 1fr; } }
+.screen-intro { display: flex; gap: 12px; align-items: flex-start; padding: 2px 2px 0; }
+.screen-intro h1 { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; }
+.screen-intro p { margin-top: 2px; }
+.si-icon { width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; font-size: 20px; flex: none; }

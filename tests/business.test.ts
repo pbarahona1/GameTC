@@ -268,8 +268,8 @@ describe('Empresas: compraventa, inversionistas y personal', () => {
 
   it('vender una empresa realiza la ganancia o pérdida y cobra impuesto a la ganancia de capital', () => {
     const s = makeGame('herencia', 'sale');
-    fund(s, 20000);
-    foundCompany(s, { sector: 'minimarket', name: 'Súper', legalForm: 'srl', capital: usd(20000) });
+    fund(s, 35000);
+    foundCompany(s, { sector: 'minimarket', name: 'Súper', legalForm: 'srl', capital: usd(35000) });
     const co = s.companies[0];
     simulateDays(s, 200);
     expect(requestSaleOffer(s, co).ok).toBe(true);

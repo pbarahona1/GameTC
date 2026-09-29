@@ -8,7 +8,8 @@ export interface TutorialStep {
   id: string;
   title: string;
   body: string;
-  tab: 'home' | 'career' | 'finance' | 'business' | 'reports';
+  tab: 'home' | 'career' | 'finance' | 'business' | 'reports' | 'invest' | 'more';
+  sub?: string;
   done: (s: GameState) => boolean;
   future?: string;
 }
@@ -23,5 +24,10 @@ export const TUTORIAL: TutorialStep[] = [
   { id: 'inventory', title: 'Comprá inventario', body: 'En tu empresa → Inventario, hacé un pedido a un proveedor o ajustá las reglas de reposición. Mirá los días de cobertura y el riesgo de faltante.', tab: 'business', done: (s) => s.meta.practice.purchase_order !== undefined },
   { id: 'staff', title: 'Administrá empleados', body: 'En tu empresa → Personal, contratá, capacitá o ajustá salarios. La moral depende del salario frente al mercado.', tab: 'business', done: (s) => s.meta.practice.hire !== undefined || s.meta.practice.train !== undefined },
   { id: 'profit', title: 'Calculá tus beneficios', body: 'Abrí Informes → Resultados. Verás la diferencia entre ingresos brutos, resultado antes de impuestos y resultado neto.', tab: 'reports', done: (s) => s.meta.seenTerms.includes('estado_resultados') },
+  { id: 'fund', title: 'Invertí en un fondo índice', body: 'En Invertir → Fondos, poné desde $50 en el Fondo Índice: compra toda la bolsa de una vez. Es la forma más simple de empezar a invertir.', tab: 'invest', sub: 'funds', done: (s) => Object.keys(s.funds.holdings).length > 0 || s.stocks.trades.some((t) => t.market === 'fondos') },
+  { id: 'stock', title: 'Comprá tu primera acción', body: 'En Invertir → Bolsa elegí una empresa, mirá su análisis y comprá unas pocas acciones. Después la vas a ver en "Mis inversiones" para vender con un toque.', tab: 'invest', sub: 'lite', done: (s) => s.stocks.trades.some((t) => t.market === 'bolsa') },
+  { id: 'forecast', title: 'Proyectá un negocio antes de abrirlo', body: 'En Negocios → Fundar empresa elegí un sector y tocá "Proyectar": el juego simula varios futuros posibles. Con práctica, tus proyecciones se vuelven más precisas.', tab: 'business', sub: 'found', done: (s) => Object.keys(s.meta.practice).some((k) => k.startsWith('forecast:')) },
+  { id: 'gestor', title: 'Conocé a los gestores de inversiones', body: 'En Invertir → Gestor podés contratar a un profesional que invierta por vos. Compará su experiencia, reputación y comisiones.', tab: 'invest', sub: 'gestor', done: (s) => s.pros.hires.some((h) => h.pro.kind === 'gestor') || s.meta.seenTerms.includes('gestor_inversiones') },
+  { id: 'economy', title: 'Mirá cómo está la economía', body: 'En Más → Economía ves la fase del ciclo, la inflación y las tasas. Todo eso mueve tus ventas, tu empleo, la bolsa y los inmuebles.', tab: 'more', sub: 'economy', done: (s) => s.meta.seenTerms.includes('ciclo_economico') },
   { id: 'liquidity', title: 'Evitá problemas de liquidez', body: 'Abrí el Asesor IA (🧭 arriba). Calcula con tus datos cuántos meses de efectivo te quedan y qué opciones tenés.', tab: 'home', done: (s) => s.meta.seenTerms.includes('asesor') },
 ];

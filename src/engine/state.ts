@@ -19,13 +19,13 @@ import type { JurisdictionId } from '../content/jurisdictions';
 import type { CyclePhase, EconEvent, MacroMonth } from './economy/economy';
 import { newMacroV2 } from './economy/economy';
 import type { Difficulty } from './economy/difficulty';
-import type { StockMarketState, BondsState, FundsState, MogulState } from './invest/types';
+import type { StockMarketState, BondsState, FundsState, MogulState, ManagedState } from './invest/types';
 import type { RealEstateState } from './realestate/types';
 import type { ProsState } from './pros/types';
 import type { LegalState } from './legal/types';
 import { initWorldV3 } from './worldInit';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export type PaymentMethod = 'checking' | 'card' | 'cash';
 
@@ -321,6 +321,7 @@ export interface GameState {
   bonds: BondsState;
   funds: FundsState;
   mogul: MogulState;
+  managed: ManagedState;
   realEstate: RealEstateState;
   pros: ProsState;
   legal: LegalState;
@@ -405,6 +406,7 @@ export function newGame(opts: NewGameOptions): GameState {
     bonds: { issues: [], holdings: {}, couponsReceived: 0 },
     funds: { funds: [], holdings: {}, distributionsReceived: 0 },
     mogul: { assets: [], holdings: {}, distributionsReceived: 0 },
+    managed: { mandates: [], holdings: {} },
     realEstate: { zones: [], properties: [], mortgages: [], listings: [] },
     pros: { market: [], hires: [], audits: [], lastRefresh: -1 },
     legal: { heat: 0, acts: [], cases: [], fines: [], prison: null, criminalRecord: 0, ventures: [], log: [], lastTaxAudit: 0, contracts: [], inspections: [] },

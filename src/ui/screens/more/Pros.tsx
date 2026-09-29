@@ -1,21 +1,22 @@
 import { useState } from 'react';
 import { useGame, useUI, store } from '../../store';
-import { CardHead, InfoButton, Learn, Pill, Act, ConfirmButton, Seg, Empty } from '../../components/common';
-import { PRO_INFO, hirePro, firePro, commissionAudit, prosSummary, proMarketByKind, nextRefresh, describeQuality, feeLabel, projectPortfolio } from '../../../engine/pros/pros';
+import { CardHead, InfoButton, Learn, Pill, Act, ConfirmButton, Empty } from '../../components/common';
+import { PRO_INFO, hirePro, firePro, commissionAudit, prosSummary, proMarketByKind, nextRefresh, describeQuality, feeLabel, projectPortfolio, trainPro, trainingCost, TRAINING_COOLDOWN_DAYS } from '../../../engine/pros/pros';
+import { navStore } from '../../nav';
 import { isOpen } from '../../../engine/business/common';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { ProKind, Professional } from '../../../engine/pros/types';
 
-const KINDS: ProKind[] = ['contador', 'asesor', 'abogado', 'auditor', 'gerente'];
-const TERM: Record<ProKind, string> = { contador: 'contador', asesor: 'asesor_financiero', abogado: 'abogado', auditor: 'auditor', gerente: 'gerente_profesional' };
+const KINDS: ProKind[] = ['contador', 'asesor', 'gestor', 'abogado', 'auditor', 'gerente'];
+const TERM: Record<ProKind, string> = { contador: 'contador', asesor: 'asesor_financiero', abogado: 'abogado', auditor: 'auditor', gerente: 'gerente_profesional', gestor: 'gestor_inversiones' };
 
 function ProRow({ p }: { p: Professional }) {
   const s = useGame();
   const companies = s.companies.filter((c) => isOpen(c));
   const scopes: Array<{ id: string; label: string }> = [
     ...(p.kind === 'gerente' || p.kind === 'auditor' ? [] : [{ id: 'personal', label: 'Personal' }]),
-    ...(p.kind === 'asesor' ? [] : companies.map((c) => ({ id: String(c.id), label: c.name }))),
+    ...(p.kind === 'asesor' || p.kind === 'gestor' ? [] : companies.map((c) => ({ id: String(c.id), label: c.name }))),
   ];
   const [scope, setScope] = useState(scopes[0]?.id ?? '');
   const scopeVal: 'personal' | number = scope === 'personal' ? 'personal' : Number(scope);
@@ -72,9 +73,16 @@ export function ProsScreen() {
               <span aria-hidden>{PRO_INFO[hire.pro.kind].icon}</span>
               <div className="grow">
                 <div className="title small">{hire.pro.name} · {PRO_INFO[hire.pro.kind].name}</div>
-                <div className="meta">{where} · desde {formatDate(hire.since)} · {monthly ? `${fmtMoney(monthly)}/mes` : 'por encargo'}</div>
+                <div className="meta">{where} · desde {formatDate(hire.since)} · {hire.pro.kind === 'gestor' ? feeLabel(hire.pro) : monthly ? `${fmtMoney(monthly)}/mes` : 'por encargo'}</div>
+                <div className="tiny faint">{hire.pro.experience} años de experiencia · {hire.trainings ?? 0} capacitación(es)</div>
               </div>
-              <ConfirmButton label="Despedir" help="accion_despedir_pro" className="btn sm ghost" detail={`Dejás de pagar sus honorarios. ${hire.pro.kind === 'abogado' ? 'Si tenía un caso asignado, te representará un defensor público.' : ''}`} onConfirm={() => store.run((x) => firePro(x, hire.id))} />
+              <div className="stack" style={{ gap: 4, alignItems: 'flex-end' }}>
+                {hire.pro.kind === 'gestor' && <button className="btn sm" onClick={() => navStore.go('invest', 'gestor')}>Ver cuenta</button>}
+                {hire.pro.kind !== 'gerente' && hire.pro.kind !== 'auditor' && (
+                  <Act label={`Capacitar (${fmtMoney(trainingCost(s, hire), { decimals: false })})`} help="accion_capacitar_pro" className="btn sm" disabled={hire.lastTraining !== undefined && s.day - hire.lastTraining < TRAINING_COOLDOWN_DAYS} onClick={() => store.run((x) => trainPro(x, hire.id))} />
+                )}
+                <ConfirmButton label="Despedir" help="accion_despedir_pro" className="btn sm ghost" detail={`Dejás de pagar sus honorarios. ${hire.pro.kind === 'abogado' ? 'Si tenía un caso asignado, te representará un defensor público.' : hire.pro.kind === 'gestor' ? 'Vende lo que administra y te devuelve el dinero.' : ''}`} onConfirm={() => store.run((x) => firePro(x, hire.id))} />
+              </div>
             </div>
           ))}
         </div>
@@ -93,7 +101,7 @@ export function ProsScreen() {
       )}
       <div className="card">
         <CardHead title="Mercado de profesionales" term={TERM[kind]} right={<span className="tiny muted">Se renueva el {formatDate(nextRefresh(s))}</span>} />
-        <Seg items={KINDS.map((k) => ({ id: k, label: PRO_INFO[k].name.split(' ')[0] }))} value={kind} onChange={setKind} />
+        <div className="chips">{KINDS.map((k) => <button key={k} onClick={() => setKind(k)} style={kind === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{PRO_INFO[k].icon} {PRO_INFO[k].name.split(' ')[0]}</button>)}</div>
         <p className="small">{PRO_INFO[kind].icon} {PRO_INFO[kind].what} <InfoButton term={TERM[kind]} /></p>
         {market.length === 0 && <p className="small muted">No quedan candidatos de este tipo hasta la próxima renovación.</p>}
         {market.map((p) => <ProRow key={p.id} p={p} />)}

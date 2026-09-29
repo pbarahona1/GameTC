@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Candle } from '../../engine/invest/types';
 import { fmtCompact, fmtMoney } from '../../engine/format';
 import { formatDate } from '../../engine/time/calendar';
@@ -25,6 +25,7 @@ function scale(min: number, max: number, top: number, bottom: number) {
 /** Velas + volumen + superposiciones (medias, Bollinger). Precios en centavos. */
 export function CandleChart({ candles, overlays = [], height = 220, markers = [] }: { candles: Candle[]; overlays?: Overlay[]; height?: number; markers?: Array<{ price: number; label: string; color: string }> }) {
   const n = candles.length;
+  const [hover, setHover] = useState<number | null>(null);
   const { lo, hi, vmax } = useMemo(() => {
     let lo = Infinity;
     let hi = -Infinity;
@@ -56,8 +57,16 @@ export function CandleChart({ candles, overlays = [], height = 220, markers = []
   const x = (i: number) => padL + step * (i + 0.5);
   const bw = Math.max(1, step * 0.62);
   const ticks = [lo, (lo + hi) / 2, hi];
+  const pick = (e: RPointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    setHover(Math.max(0, Math.min(n - 1, Math.floor((px - padL) / step))));
+  };
+  const hc = hover !== null ? candles[hover] : null;
+  const tipW = 170;
+  const tipX = hover !== null ? Math.min(W - tipW - 2, Math.max(padL, x(hover) - tipW / 2)) : 0;
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${height}`} role="img" aria-label="Gráfico de velas con volumen">
+    <svg className="chart touch" viewBox={`0 0 ${W} ${height}`} role="img" aria-label="Gráfico de velas con volumen" onPointerMove={pick} onPointerDown={pick} onPointerLeave={() => setHover(null)}>
       {ticks.map((t, i) => (
         <g key={i}>
           <line className="grid" x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} />
@@ -89,6 +98,15 @@ export function CandleChart({ candles, overlays = [], height = 220, markers = []
       ))}
       <text x={padL} y={height - 3}>{formatDate(candles[0].d)}</text>
       <text x={W - padR} y={height - 3} textAnchor="end">{formatDate(candles[n - 1].d)}</text>
+      {hc && hover !== null && (
+        <g pointerEvents="none">
+          <line x1={x(hover)} x2={x(hover)} y1={8} y2={volBottom} style={{ stroke: 'var(--muted)' }} strokeDasharray="2 3" />
+          <rect x={tipX} y={8} width={tipW} height={43} rx={6} className="tip-box" />
+          <text x={tipX + 8} y={20} className="tip-title">{formatDate(hc.d)} · {hc.c >= hc.o ? '▲' : '▼'} {(((hc.c / hc.o) - 1) * 100).toFixed(1)} %</text>
+          <text x={tipX + 8} y={33} className="tip-row" style={{ fill: 'var(--text)' }}>Apertura {fmtMoney(hc.o)} · Cierre {fmtMoney(hc.c)}</text>
+          <text x={tipX + 8} y={46} className="tip-row" style={{ fill: 'var(--muted)' }}>Máx {fmtMoney(hc.h)} · Mín {fmtMoney(hc.l)}</text>
+        </g>
+      )}
     </svg>
   );
 }
@@ -173,3 +191,69 @@ export function Donut({ parts, size = 132 }: { parts: Array<{ label: string; val
 }
 
 export const CHART_COLORS = ['var(--accent)', 'var(--info)', 'var(--gain)', 'var(--warn)', 'var(--loss)', '#9a7fd1', '#5aa9a3'];
+
+export interface BandPoint {
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
+/**
+ * Abanico de escenarios: área entre el escenario malo (10 %) y el bueno (90 %)
+ * con la línea central (50 %). Tocar muestra los tres valores de ese mes.
+ */
+export function BandChart({ bands, height = 150, color = 'var(--accent)', label, pointLabel = (i: number) => `Mes ${i + 1}`, actual }: { bands: BandPoint[]; height?: number; color?: string; label: string; pointLabel?: (i: number) => string; actual?: number[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const n = bands.length;
+  if (n < 2) return <p className="small muted">Sin datos suficientes.</p>;
+  const padL = 46;
+  const padR = 8;
+  const padT = 10;
+  const padB = 18;
+  let lo = Math.min(0, ...bands.map((b) => b.p10), ...(actual ?? []));
+  let hi = Math.max(1, ...bands.map((b) => b.p90), ...(actual ?? []));
+  const span = hi - lo || 1;
+  lo -= span * 0.05;
+  hi += span * 0.08;
+  const y = scale(lo, hi, padT, height - padB);
+  const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR);
+  const upper = bands.map((b, i) => `${x(i)},${y(b.p90)}`).join(' ');
+  const lower = bands.map((b, i) => `${x(i)},${y(b.p10)}`).reverse().join(' ');
+  const mid = bands.map((b, i) => `${x(i)},${y(b.p50)}`).join(' ');
+  const pick = (e: RPointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    setHover(Math.max(0, Math.min(n - 1, Math.round(((px - padL) / (W - padL - padR)) * (n - 1)))));
+  };
+  const ticks = [lo, (lo + hi) / 2, hi];
+  const tipW = 156;
+  const tipX = hover !== null ? Math.min(W - tipW - 2, Math.max(padL, x(hover) - tipW / 2)) : 0;
+  return (
+    <svg className="chart touch" viewBox={`0 0 ${W} ${height}`} role="img" aria-label={label} onPointerMove={pick} onPointerDown={pick} onPointerLeave={() => setHover(null)}>
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line className="grid" x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} />
+          <text x={padL - 4} y={y(t) + 3} textAnchor="end">{fmtCompact(t)}</text>
+        </g>
+      ))}
+      {lo < 0 && hi > 0 && <line x1={padL} x2={W - padR} y1={y(0)} y2={y(0)} style={{ stroke: 'var(--muted)' }} strokeDasharray="3 3" />}
+      <polygon points={`${upper} ${lower}`} style={{ fill: color }} opacity={0.18} />
+      <polyline points={mid} fill="none" style={{ stroke: color }} strokeWidth={2.2} strokeLinejoin="round" />
+      {actual && actual.length > 1 && <polyline points={actual.map((v, i) => `${x(i)},${y(v)}`).join(' ')} fill="none" style={{ stroke: 'var(--text)' }} strokeWidth={2} strokeDasharray="4 3" />}
+      <text x={padL} y={height - 3}>{pointLabel(0)}</text>
+      <text x={W - padR} y={height - 3} textAnchor="end">{pointLabel(n - 1)}</text>
+      {hover !== null && (
+        <g pointerEvents="none">
+          <line x1={x(hover)} x2={x(hover)} y1={padT} y2={height - padB} style={{ stroke: 'var(--muted)' }} strokeDasharray="2 3" />
+          <circle cx={x(hover)} cy={y(bands[hover].p50)} r={4} style={{ fill: color }} />
+          <rect x={tipX} y={padT} width={tipW} height={actual?.[hover] !== undefined ? 68 : 55} rx={6} className="tip-box" />
+          <text x={tipX + 8} y={padT + 12} className="tip-title">{pointLabel(hover)}</text>
+          <text x={tipX + 8} y={padT + 25} className="tip-row" style={{ fill: 'var(--gain)' }}>Bueno (90 %): {fmtMoney(bands[hover].p90, { decimals: false })}</text>
+          <text x={tipX + 8} y={padT + 38} className="tip-row" style={{ fill: color }}>Central (50 %): {fmtMoney(bands[hover].p50, { decimals: false })}</text>
+          <text x={tipX + 8} y={padT + 51} className="tip-row" style={{ fill: 'var(--loss)' }}>Malo (10 %): {fmtMoney(bands[hover].p10, { decimals: false })}</text>
+          {actual?.[hover] !== undefined && <text x={tipX + 8} y={padT + 64} className="tip-row" style={{ fill: 'var(--text)' }}>Real: {fmtMoney(actual[hover], { decimals: false })}</text>}
+        </g>
+      )}
+    </svg>
+  );
+}

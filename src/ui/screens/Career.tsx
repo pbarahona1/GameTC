@@ -12,7 +12,7 @@ import { payroll } from '../../engine/tax/incomeTax';
 import { residence } from '../../engine/tax/taxEngine';
 import { formatDate } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
-import { Money, InfoButton, Tabs, Bar, Pill, Empty, ConfirmButton, Learn } from '../components/common';
+import { Money, InfoButton, Tabs, Bar, Pill, Empty, ConfirmButton, Learn, ScreenIntro } from '../components/common';
 import { professionalLevel } from '../../engine/progression/progression';
 
 type Sub = 'job' | 'board' | 'study' | 'skills';
@@ -344,6 +344,7 @@ export function Career() {
   const offers = useMemo(() => s.career.applications.filter((a) => a.status === 'offer').length, [s.career.applications.length, s.day]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
+      <ScreenIntro icon="💼" title="Carrera" text="Tu trabajo y tu formación: postulate a empleos, estudiá para subir tus habilidades y negociá tu sueldo." term="nivel_profesional" />
       <Tabs<Sub>
         items={[
           { id: 'job', label: offers ? `Empleo · ${offers} oferta${offers > 1 ? 's' : ''}` : 'Empleo' },

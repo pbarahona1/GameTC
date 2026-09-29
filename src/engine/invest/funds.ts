@@ -1,3 +1,4 @@
+import { mandatesOnDistribution } from './managed';
 import type { GameState } from '../state';
 import type { FundState } from './types';
 import { FUND_DEFS, FUND_BY_ID, FundDef } from '../../content/funds';
@@ -127,6 +128,7 @@ function distribute(state: GameState, f: FundState, d: FundDef): void {
   if (perUnit <= 0) return;
   f.nav -= perUnit;
   f.lastDistribution = state.day;
+  mandatesOnDistribution(state, f.id, perUnit);
   const h = state.funds.holdings[f.id];
   if (!h || h.qty <= 0) return;
   const gross = roundCents(h.qty * perUnit);

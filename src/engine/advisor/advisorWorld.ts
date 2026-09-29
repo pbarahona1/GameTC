@@ -12,6 +12,7 @@ import { PHASES, SECTOR_CYCLICALITY } from '../economy/economy';
 import { isOpen } from '../business/common';
 import { SECTOR_NAMES } from '../../content/stocks';
 import { roundCents } from '../money';
+import { activeMandates, mandateSummary } from '../invest/managed';
 
 const H = (label: string, value: string): DataPoint => ({ label, value, kind: 'hecho' });
 const E = (label: string, value: string): DataPoint => ({ label, value, kind: 'estimación' });
@@ -68,6 +69,31 @@ export function analyzeWorld(state: GameState): Insight[] {
       ],
       ifNothing: 'Quedás expuesto a subas de tasas y caídas de precios.',
     });
+  }
+
+  // ------------------------------------------------ Gestor de inversiones: resultados frente al índice
+  for (const md of activeMandates(state)) {
+    const sm = mandateSummary(state, md);
+    const years = (state.day - md.startDay) / 365;
+    if (years < 1) continue;
+    const gap = sm.totalReturn - sm.benchReturn;
+    if (gap < -0.03 * years) {
+      out.push({
+        id: `mandate-under-${md.id}`, severity: 'warning', category: 'inversiones', term: 'gestor_inversiones',
+        title: `${md.managerName} rinde menos que el índice`,
+        what: `En ${years.toFixed(1)} años tu cuenta rindió ${fmtPct(sm.totalReturn, 1)} contra ${fmtPct(sm.benchReturn, 1)} del Fondo Índice (sin gestor).`,
+        why: 'Sus comisiones y sus elecciones no están agregando valor frente a comprar todo el mercado.',
+        data: [H('Rendimiento de la cuenta', fmtPct(sm.totalReturn, 1)), H('Fondo Índice en el mismo período', fmtPct(sm.benchReturn, 1)), H('Comisiones pagadas', fmtMoney(Math.round(md.mgmtFeesPaid + md.perfFeesPaid))), H('Años de experiencia del gestor', String(sm.hire?.pro.experience ?? '—'))],
+        consequence: 'Si sigue así, pierde frente a la alternativa más simple y barata.',
+        timeframe: 'Revisalo este año.',
+        options: [
+          { label: 'Capacitar al gestor', pros: 'Mejora su calidad real.', cons: 'Cuesta dinero y no garantiza mejores resultados.', tab: 'invest', sub: 'gestor' },
+          { label: 'Cambiar de gestor o pasar al Fondo Índice', pros: 'Comisión mucho menor.', cons: 'Vender realiza ganancias o pérdidas (impuestos).', tab: 'invest', sub: 'funds' },
+        ],
+        ifNothing: 'La diferencia puede seguir acumulándose… o revertirse: un año malo no prueba que sea malo.',
+        uncertainty: 'Uno o dos años es poco tiempo para juzgar a un gestor: la suerte pesa mucho en plazos cortos.',
+      });
+    }
   }
 
   // ------------------------------------------------ Concentración de la cartera

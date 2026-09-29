@@ -291,7 +291,7 @@ function SettingsView() {
       <div className="card">
         <div className="card-head"><h2>Guardado</h2></div>
         <p className="small muted">
-          Guardado automático cada 30 días de juego y al salir. Almacenamiento: {ui.storageKind === 'native' ? 'nativo de Android (preferencias del sistema + archivo privado de la app, dos copias independientes)' : ui.storageKind === 'local' ? 'almacenamiento del navegador (exportá un archivo como respaldo)' : 'solo memoria: exportá para no perder la partida'}.
+          Guardado automático cada 30 días de juego y al salir. Almacenamiento: {ui.storageKind === 'native' ? 'nativo de Android (archivos privados de la app + segunda copia de la partida principal en las preferencias del sistema)' : ui.storageKind === 'local' ? 'almacenamiento del navegador (exportá un archivo como respaldo)' : 'solo memoria: exportá para no perder la partida'}.
           {ui.lastSaved && ` Último guardado: ${new Date(ui.lastSaved).toLocaleTimeString()}.`}
           {ui.saveBytes && ` Tamaño: ${(ui.saveBytes / 1024).toFixed(0)} KB (comprimido).`}
           {ui.state?.ledger.archive && ` Libro mayor: ${ui.state.ledger.entries.length} asientos detallados + ${ui.state.ledger.archive.entries} resumidos en ${ui.state.ledger.archive.buckets.length} meses.`}
@@ -331,7 +331,7 @@ function SettingsView() {
         <span className="act"><button className="btn sm" onClick={() => { store.run((s) => { s.tutorial.dismissed = false; }, { toast: false }); navStore.open({ kind: 'tutorial' }); }}>Ver la guía de inicio</button><InfoButton term="guia_inicio" /></span>
         <ConfirmButton label="Empezar una partida nueva" className="btn sm danger" confirmLabel="Borrar y empezar de nuevo" detail="Se eliminarán la partida y sus copias de este dispositivo. Exportala antes si querés conservarla." onConfirm={() => { navStore.closeAll(); void store.abandonGame(); }} />
       </div>
-      <p className="tiny faint">Ultimate Realistic Tycoon · versión 1.0 · sin anuncios ni compras.</p>
+      <p className="tiny faint">Ultimate Realistic Tycoon · versión 1.1 · sin anuncios ni compras.</p>
     </Sheet>
   );
 }
@@ -426,7 +426,7 @@ function TutorialView() {
               {done ? <Pill tone="gain">Hecho</Pill> : t.future ? <Pill tone="neutral">{t.future}</Pill> : null}
             </div>
             <p className="small muted">{t.body}</p>
-            {!t.future && !done && <button className="btn sm" onClick={() => navStore.go(t.tab)}>Ir</button>}
+            {!t.future && !done && <button className="btn sm" onClick={() => navStore.go(t.tab, t.sub)}>Ir</button>}
           </div>
         );
       })}

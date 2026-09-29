@@ -17,6 +17,8 @@ import { formatDate } from '../../../engine/time/calendar';
 import { Cents, usd } from '../../../engine/money';
 import { Money, InfoButton, Tabs, Pill, Bar, Empty, AmountInput, ConfirmButton, CardHead, Act, Stat, LineChart, Legend, NumInput, Seg } from '../../components/common';
 import { MarketingTab, FinanceTab, MarketTab, ManageTab } from './CompanyTabs';
+import { ForecastPanel } from '../../components/ForecastPanel';
+import { BandChart } from '../../components/charts';
 import { GroupTab } from './GroupTab';
 
 export function runCo(id: number, fn: (s: GameState, co: Company) => ActionResult | void): ActionResult {
@@ -78,6 +80,8 @@ function Summary({ co }: { co: Company }) {
           <Legend series={[{ name: 'Ventas', values: [], color: 'var(--accent)' }, { name: 'Resultado neto', values: [], color: 'var(--info)' }, { name: 'Caja', values: [], color: 'var(--gain)' }]} />
         </div>
       )}
+      {co.forecast && <ForecastVsReality co={co} />}
+      {sectorModel(co) !== 'holding' && co.status !== 'sold' && <ForecastPanel target={{ kind: 'empresa', companyId: co.id }} title="¿Cómo le irá? Próximos 12 meses" />}
       <div className="section-title"><h2>Asesor empresarial</h2><InfoButton term="asesor" /></div>
       {insights.length === 0 && <Empty icon="✅">Sin alertas para esta empresa{m.daysOpen < 30 ? ' (algunas se activan tras 30 días de operación)' : ''}.</Empty>}
       {insights.map((i) => (
@@ -431,6 +435,27 @@ function Staff({ co }: { co: Company }) {
         <p className="tiny muted">Empleados de apoyo en la empresa: {['contador', 'vendedor', 'marketing', 'rrhh', 'soporte', 'logistica', 'investigador'].map((r) => `${roleDef(sec, r).name} ${countRole(co, r)}`).join(' · ')}.</p>
       </div>
     </>
+  );
+}
+
+function sectorModel(co: Company): string {
+  return SECTOR_BY_ID[co.sector].model;
+}
+
+/** Compara la proyección hecha antes de fundar/comprar con lo que realmente pasó. */
+function ForecastVsReality({ co }: { co: Company }) {
+  const f = co.forecast!;
+  const real = co.history.filter((h) => h.day > f.day).slice(0, f.months);
+  const bands = f.revenue.map(([p10, p50, p90]) => ({ p10, p50, p90 }));
+  const done = real.length;
+  const inRange = real.filter((h, i) => h.revenue >= f.revenue[i][0] && h.revenue <= f.revenue[i][2]).length;
+  return (
+    <div className="card">
+      <CardHead title="Tu proyección vs. la realidad" term="proyeccion_negocios" />
+      <p className="small muted">Antes de {co.npc ? 'comprarla' : 'empezar'} proyectaste las ventas (área: rango, línea: escenario central). La línea punteada es lo que realmente vendió.</p>
+      <BandChart bands={bands} actual={real.map((h) => h.revenue)} label="Ventas proyectadas y reales" color="var(--gain)" />
+      <p className="small">{done === 0 ? 'Todavía no cerró ningún mes desde la proyección.' : `${inRange} de ${done} meses quedaron dentro del rango proyectado. Comparar tus proyecciones con la realidad te da experiencia en Proyección de negocios.`}</p>
+    </div>
   );
 }
 

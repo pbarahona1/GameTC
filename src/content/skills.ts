@@ -18,7 +18,8 @@ export type SkillId =
   | 'luck'
   | 'social'
   | 'discipline'
-  | 'risk';
+  | 'risk'
+  | 'forecasting';
 
 export interface SkillDef {
   id: SkillId;
@@ -50,16 +51,14 @@ export const SKILLS: SkillDef[] = [
   {
     id: 'stocks', name: 'Bolsa de valores', icon: '📈', trainable: true,
     description: 'Interpretar información bursátil: precios, valoraciones, dividendos.',
-    effects: ['Requisito de certificaciones de análisis financiero.'],
-    futureEffects: ['Fase 3: comisiones más bajas y análisis más detallado en Trading Pro.'],
-    methods: ['Libros y cursos de inversión', 'Operar en bolsa (Fase 3)'],
+    effects: ['Requisito de certificaciones de análisis financiero.', 'Mejor ejecución de órdenes: reduce hasta 40 % el costo de diferencial e impacto de mercado (−0,4 % por nivel).'],
+    methods: ['Libros y cursos de inversión', 'Comprar, vender y dar órdenes en la bolsa'],
   },
   {
     id: 'prediction', name: 'Predicción bursátil', icon: '🔭', trainable: true,
     description: 'Precisión de tus estimaciones sobre movimientos del mercado. Nunca llega al 100 %.',
-    effects: [],
-    futureEffects: ['Fase 3: estimaciones con margen de error que se reduce con el nivel, sin revelar el futuro.'],
-    methods: ['Curso de trading', 'Analizar acciones (Fase 3)'],
+    effects: ['Margen de error de tu estimación del valor de una acción: ±35 % × (1 − nivel/120), mínimo ±6 %. Nunca adivina el futuro: el precio también depende de noticias y del ánimo del mercado.'],
+    methods: ['Curso de trading', 'Analizar acciones en Bolsa Lite o Trading Pro'],
   },
   {
     id: 'negotiation', name: 'Negociación', icon: '🤝', trainable: true,
@@ -80,36 +79,31 @@ export const SKILLS: SkillDef[] = [
   {
     id: 'management', name: 'Administración empresarial', icon: '🏢', trainable: true,
     description: 'Gestionar personas, inventarios, productividad y operaciones.',
-    effects: ['Requisito de puestos de jefatura y gerencia.'],
-    futureEffects: ['Fase 2: mejora la eficiencia de tus empresas.'],
+    effects: ['Requisito de puestos de jefatura y gerencia.', 'Suma a la Proyección de negocios (15 % de tu nivel).'],
     methods: ['Trabajar en puestos de coordinación', 'Libros de liderazgo, certificación de proyectos, MBA'],
   },
   {
     id: 'marketing', name: 'Marketing', icon: '📣', trainable: true,
     description: 'Diseñar campañas y comprender la demanda.',
-    effects: ['Requisito de empleos de marketing.'],
-    futureEffects: ['Fase 2: mejor conversión de las campañas de tus empresas.'],
+    effects: ['Requisito de empleos de marketing.', 'Tus campañas ganan +0,4 % de conocimiento de marca por nivel (hasta +40 %).'],
     methods: ['Cursos de marketing', 'Trabajar en marketing'],
   },
   {
     id: 'realEstate', name: 'Bienes raíces', icon: '🏠', trainable: true,
     description: 'Analizar propiedades, alquileres, precios y rentabilidad inmobiliaria.',
-    effects: [],
-    futureEffects: ['Fase 3: estimaciones de valor y vacancia más precisas.'],
-    methods: ['Curso de bienes raíces', 'Analizar propiedades (Fase 3)'],
+    effects: ['Aumenta la probabilidad de que acepten tus contraofertas por inmuebles (+0,2 % por nivel).'],
+    methods: ['Curso de bienes raíces', 'Inspeccionar, comprar, renovar y vender inmuebles'],
   },
   {
     id: 'law', name: 'Derecho', icon: '⚖️', trainable: true,
     description: 'Comprender contratos, obligaciones legales y riesgos jurídicos.',
-    effects: ['Requisito de puestos directivos de tecnología.'],
-    futureEffects: ['Fase 4: detectar cláusulas de riesgo y reducir costos legales.'],
+    effects: ['Requisito de puestos directivos de tecnología.', 'Suma a tu defensa en un juicio (+0,1 punto por nivel).'],
     methods: ['Curso de derecho empresarial'],
   },
   {
     id: 'cybersecurity', name: 'Ciberseguridad y tecnología', icon: '🛡️', trainable: true,
     description: 'Conocimientos técnicos de informática, software y seguridad.',
     effects: ['Requisito y habilidad clave de empleos de tecnología.'],
-    futureEffects: ['Fase 2: base para empresas de software y ciberseguridad.'],
     methods: ['Cursos de programación y ciberseguridad', 'Carrera técnica o licenciatura en informática'],
   },
   {
@@ -134,8 +128,17 @@ export const SKILLS: SkillDef[] = [
     id: 'risk', name: 'Gestión del riesgo', icon: '🎯', trainable: true,
     description: 'Interpretar riesgos financieros y empresariales.',
     effects: ['Desde nivel 10 el asesor añade el escenario pesimista a sus proyecciones.'],
-    futureEffects: ['Fase 3: medición del riesgo de cartera.'],
     methods: ['Curso de gestión de riesgos', 'Libro de inversión'],
+  },
+  {
+    id: 'forecasting', name: 'Proyección de negocios', icon: '🔮', trainable: true,
+    description: 'Estimar cómo le irá a un negocio antes de crearlo o comprarlo: ventas, ganancias, caja y probabilidad de sobrevivir. Nunca llega al 100 %: el futuro tiene azar.',
+    effects: [
+      'Cada proyección simula muchos futuros posibles de tu negocio con las reglas reales del juego.',
+      'Con más nivel se simulan más futuros (5 + nivel/10, hasta 15) y tu lectura de los resultados tiene menos sesgo: ±45 % × (1 − nivel/110), mínimo ±5 %.',
+      'Administración empresarial (15 %) y Contabilidad (10 %) también suman a tu nivel efectivo.',
+    ],
+    methods: ['Proyectar negocios antes de fundarlos o comprarlos', 'Dirigir empresas (cada mes enseña algo)', 'Comparar tus proyecciones con lo que pasó', 'Libro, curso y certificación de planes de negocio'],
   },
 ];
 

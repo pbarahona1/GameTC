@@ -16,10 +16,11 @@ import { residence } from '../tax/taxEngine';
  *   la ganancia REALIZADA = precio bruto − costo FIFO (tributa en la declaración).
  * - Las comisiones van a "Comisiones de inversión" y reducen la base imponible.
  */
-export type InvestClass = 'stocks' | 'bonds' | 'funds' | 'mogul';
+export type InvestClass = 'stocks' | 'bonds' | 'funds' | 'mogul' | 'managed';
+export const INVEST_CLASSES: InvestClass[] = ['stocks', 'bonds', 'funds', 'mogul', 'managed'];
 
-export const CLASS_ACCOUNT: Record<InvestClass, AccountId> = { stocks: 'stocks', bonds: 'bonds', funds: 'funds', mogul: 'mogul' };
-export const CLASS_MARKET: Record<InvestClass, Trade['market']> = { stocks: 'bolsa', bonds: 'bonos', funds: 'fondos', mogul: 'mogul' };
+export const CLASS_ACCOUNT: Record<InvestClass, AccountId> = { stocks: 'stocks', bonds: 'bonds', funds: 'funds', mogul: 'mogul', managed: 'managed' };
+export const CLASS_MARKET: Record<InvestClass, Trade['market']> = { stocks: 'bolsa', bonds: 'bonos', funds: 'fondos', mogul: 'mogul', managed: 'gestor' };
 const EPS = 1e-9;
 
 export function holdingsOf(state: GameState, cls: InvestClass): Record<string, Holding> {
@@ -28,6 +29,7 @@ export function holdingsOf(state: GameState, cls: InvestClass): Record<string, H
     case 'bonds': return state.bonds.holdings;
     case 'funds': return state.funds.holdings;
     case 'mogul': return state.mogul.holdings;
+    case 'managed': return (state.managed ??= { mandates: [], holdings: {} }).holdings;
   }
 }
 
@@ -38,6 +40,7 @@ export function markPrice(state: GameState, cls: InvestClass, id: string): numbe
     case 'bonds': return state.bonds.issues.find((b) => b.id === id)?.price ?? 0;
     case 'funds': return state.funds.funds.find((f) => f.id === id)?.nav ?? 0;
     case 'mogul': return state.mogul.assets.find((a) => a.id === id)?.nav ?? 0;
+    case 'managed': return state.managed?.mandates.find((m) => m.id === id)?.nav ?? 0;
   }
 }
 
@@ -143,7 +146,7 @@ export function bookSell(state: GameState, cls: InvestClass, id: string, qty: nu
  * Lleva todas las tenencias a valor de mercado en UN asiento (si hay cambios).
  * Se ejecuta cada día y antes de cada operación.
  */
-export function revalueInvestments(state: GameState, classes: InvestClass[] = ['stocks', 'bonds', 'funds', 'mogul']): Cents {
+export function revalueInvestments(state: GameState, classes: InvestClass[] = INVEST_CLASSES): Cents {
   const lines: Array<{ account: AccountId; debit?: Cents; credit?: Cents }> = [];
   let total = 0;
   for (const cls of classes) {
@@ -192,7 +195,7 @@ export function positions(state: GameState, cls: InvestClass): PositionSummary[]
 /** Valor total de mercado de las inversiones financieras personales. */
 export function investmentsValue(state: GameState): Cents {
   let v = 0;
-  for (const cls of ['stocks', 'bonds', 'funds', 'mogul'] as InvestClass[]) for (const p of positions(state, cls)) v += p.value;
+  for (const cls of INVEST_CLASSES) for (const p of positions(state, cls)) v += p.value;
   return v;
 }
 

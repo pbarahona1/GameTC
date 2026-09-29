@@ -307,3 +307,32 @@ Todas las alertas salen de datos reales de la partida: insolvencia personal (liq
 - **Compactación del libro mayor**: los asientos antiguos se resumen en baldes mensuales con el movimiento exacto de cada cuenta y el flujo de efectivo por clase y concepto. Retención de detalle: personal = año en curso + anterior; empresas del jugador = 13 meses; empresas simuladas de terceros = 2 meses. Los saldos nunca cambian; los informes de meses completos son exactos (probado); un mes antiguo cortado por la consulta se prorratea por días.
 - **Guardado comprimido** (gzip nativo + base64) con checksum sobre el contenido original; lectura de partidas sin comprimir y exportaciones en texto plano.
 - **Deshacer liviano**: `store.run` separa las listas que solo crecen (asientos, historiales) antes de copiar el estado; la copia es ~8 veces más rápida que copiar todo.
+
+## 27. Proyección de negocios (versión 1.1)
+
+- Habilidad nueva **Proyección de negocios** (🔮). Nivel efectivo = Proyección + 15 % de Administración + 10 % de Contabilidad (máx. 100).
+- Proyectar un negocio (nuevo, en venta o propio) simula **5 + nivel/10 futuros** (máx. 15) de 12 meses sobre copias de la partida con distinto azar y las reglas reales. Se resumen por mes los percentiles 10 / 50 / 90 de ventas, ganancia y caja, la probabilidad de seguir abierta sin atrasos y el resultado del año.
+- **Sesgo de lectura** (determinista por semana): error ±45 % × (1 − nivel/110), mínimo ±5 %. Se aplica como sesgo de demanda de hasta ±75 % de ese error; la ganancia se mueve con un margen de contribución del 30 % y la caja acumula esa diferencia. Los rangos se ensanchan en ±error/2 del escenario central. La probabilidad de sobrevivir cuenta como fracaso un futuro cuya caja, leída con tu sesgo, se vuelve negativa.
+- **Experiencia**: cada proyección da 60 XP (con rendimientos decrecientes en el día); cada mes dirigiendo una empresa da 12 XP; al guardar la proyección al fundar o comprar, a los 3, 6 y 12 meses se compara con la realidad (80–200 XP según cuánto enseñó el error) y se informa si quedó dentro del rango.
+- Cursos: libro (1.300 XP), curso (3.200 XP) y certificación (6.500 XP, requiere nivel 15).
+
+## 28. Gestor de inversiones (versión 1.1)
+
+- Profesional contratable (sin honorario fijo): comisión de gestión anual **0,6 %–2,0 %** (según reputación) cobrada mensualmente sobre el valor, y comisión de éxito **8 %–20 %** de la ganancia por encima del máximo histórico por unidad, cobrada cada 31/12 y al cerrar.
+- La cuenta funciona como un fondo privado: unidades con valor inicial $100; aportes emiten unidades al valor del día; retiros venden a prorrata (el que retira paga los costos) y registran la ganancia de capital con lotes FIFO. Mínimo de apertura $2.500.
+- **Decisiones reales** en el mercado del juego (rebalanceo mensual o al aportar): perfil conservador (25 % acciones / 55 % fondo de bonos / 20 % monetario), moderado (60/30/10) o agresivo (90/5/5). Elige 4, 6 u 8 acciones (según el tamaño de la cuenta) por retorno esperado = 0,1 × ln(valor justo estimado / precio) + deriva del mercado; el valor justo lo estima con error ±60 % × (1 − habilidad/110), mínimo ±6 %; descarta empresas con salud estimada < 25. Si no encuentra suficientes acciones atractivas, completa con el Fondo Índice.
+- **Habilidad** = calidad × 0,85 + mín(30, experiencia) × 0,5. Con habilidad ≥ 60 reduce acciones 15 pp en desaceleración o recesión; con habilidad < 35 compra de más en el auge (+10 pp) y vende en el pánico (−20 pp en recesión).
+- Costos de operar: medio diferencial de cada acción + 0,1 %. Dividendos, splits y repartos de fondos se reflejan en la cuenta; acciones que dejan de cotizar se pierden.
+- En pruebas con 6 mercados distintos durante 2 años, un gestor de calidad 95 superó en promedio a uno de calidad 15, pero no en todos los casos.
+
+## 29. Capacitación y experiencia de profesionales (versión 1.1)
+
+- **Capacitar** (contador, asesor, abogado, gestor): cuesta $700 × (1 + 0,5 × capacitaciones previas); sube la calidad real en (100 − calidad) × 12 % (mín. 1, máx. 98); una vez cada 90 días.
+- Cada diciembre, todo profesional contratado suma 1 año de experiencia y (100 − calidad) × 3 % de calidad.
+
+## 30. Ajustes de mercado y habilidades (versión 1.1)
+
+- Reversión de las acciones a su valor justo: 0,15 % diario de la brecha logarítmica (antes 0,4 %). Los precios siguen tendiendo a sus fundamentos, pero más lentamente, lo que hace el mercado más realista y la ventaja de estimar bien más modesta. La estimación del analista a 3 meses usa 10 % de la brecha.
+- **Bolsa de valores** (habilidad): reduce hasta 40 % el diferencial e impacto de mercado de tus órdenes (−0,4 % por nivel).
+- **Marketing** (habilidad): +0,4 % de conocimiento de marca por nivel en las campañas de tus empresas (máx. +40 %).
+- Mercado inmobiliario: siempre hay al menos dos publicaciones de hasta $90.000 (monoambientes de 22–38 m² en las zonas más baratas).

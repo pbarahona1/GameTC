@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { useGame, useUI, store } from '../store';
 import { navStore } from '../nav';
 import { computeMetrics } from '../../engine/reports/metrics';
@@ -7,7 +7,7 @@ import { cashFlowStatement, incomeStatement } from '../../engine/reports/stateme
 import { startOfMonth, formatMonth, formatDate } from '../../engine/time/calendar';
 import { STAGES, professionalLevel } from '../../engine/progression/progression';
 import { TUTORIAL } from '../../engine/progression/tutorial';
-import { Money, Stat, InfoButton, Learn, LineChart, Bar } from '../components/common';
+import { Money, InfoButton, Learn, LineChart, Bar } from '../components/common';
 import { JOB_BY_ID } from '../../content/jobs';
 import { fmtMoney } from '../../engine/format';
 import type { LogItem } from '../../engine/state';
@@ -52,6 +52,17 @@ export function Home() {
   const nextStep = TUTORIAL.find((t) => !t.future && !t.done(s));
 
   const ph = phaseInfo(s);
+  const nwLabels = [...hist.map((h) => formatMonth(h.day)), 'Hoy'];
+  const openCos = s.companies.filter((c) => c.status === 'active' || c.status === 'insolvent');
+  const invValue = m.securities + (s.ledger.balances.term_deposits ?? 0);
+  const areas: Array<{ icon: string; title: string; value: ReactNode; sub: string; go: () => void; term: string }> = [
+    { icon: '💼', title: 'Trabajo', value: job ? <Money c={m.monthlyGross} /> : 'Sin empleo', sub: job ? `${job.title} · nivel ${prof.level}` : 'Buscá empleo en Carrera', go: () => navStore.go('career'), term: 'salario_bruto' },
+    { icon: '📈', title: 'Inversiones', value: <Money c={invValue} />, sub: invValue > 0 ? 'Tocá para ver y operar todo' : 'Empezá con un fondo índice', go: () => navStore.go('invest', 'portfolio'), term: 'mis_inversiones' },
+    { icon: '🏠', title: 'Inmuebles', value: <Money c={m.realEstate - m.mortgages} />, sub: m.realEstate ? `Alquileres ${fmtMoney(m.rentIncome, { decimals: false })}/mes` : 'Comprá, alquilá o viví en uno', go: () => navStore.go('invest', 'realestate'), term: 'inmueble' },
+    { icon: '🏭', title: 'Negocios', value: openCos.length ? `${openCos.length} empresa${openCos.length > 1 ? 's' : ''}` : 'Ninguno', sub: openCos.length ? `Tu parte ${fmtMoney(s.ledger.balances.business_equity, { decimals: false })}` : 'Proyectá y fundá tu primera', go: () => navStore.go('business'), term: 'metodo_participacion' },
+    { icon: '💳', title: 'Crédito', value: String(s.credit.score), sub: m.debt ? `Deudas ${fmtMoney(m.debt, { decimals: false })}` : 'Sin deudas', go: () => navStore.go('finance', 'credit'), term: 'puntaje_crediticio' },
+    { icon: '🏆', title: 'Progreso', value: `Etapa ${s.progression.stage}/12`, sub: stage.name, go: () => navStore.open({ kind: 'progress' }), term: 'nivel_magnate' },
+  ];
   return (
     <>
       {s.legal.prison && (
@@ -64,30 +75,49 @@ export function Home() {
         <span aria-hidden>{ph.icon}</span> {ph.name} · inflación {fmtPct(s.macro.inflation, 1)} · tasa {fmtPct(s.macro.policyRate, 2)} · desempleo {fmtPct(s.macro.unemployment, 1)}
         {s.macro.events.some((e) => e.startDay <= s.day && e.endDay >= s.day) && <> · {s.macro.events.filter((e) => e.startDay <= s.day && e.endDay >= s.day).map((e) => e.icon).join('')}</>}
       </button>
+
       <section className="hero" aria-label="Patrimonio neto">
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="eyebrow">Patrimonio neto</span>
           <InfoButton term="patrimonio_neto" />
           <span style={{ flex: 1 }} />
-          {prev && <span className="small" title={`Comparado con el cierre de ${formatMonth(prev.day)}`}><Money c={change} colored sign /> <span className="faint">este mes</span></span>}
+          {prev && <span className="small"><Money c={change} colored sign /> <span className="faint">este mes</span></span>}
         </div>
         <div className="big">{fmtMoney(m.netWorth)}</div>
         <Learn term="patrimonio_neto" />
-        <LineChart series={[{ name: 'Patrimonio neto', values: nwSeries, color: 'var(--accent)' }]} height={110} />
-        <div className="tiny faint">Activos {fmtMoney(m.totalAssets)} − Pasivos {fmtMoney(m.totalLiabilities)}</div>
+        <LineChart series={[{ name: 'Patrimonio neto', values: nwSeries, color: 'var(--accent)' }]} pointLabels={nwLabels} height={100} />
+        <div className="tiny faint">Lo que tenés {fmtMoney(m.totalAssets, { decimals: false })} − lo que debés {fmtMoney(m.totalLiabilities, { decimals: false })}</div>
       </section>
 
+      <div className="month-strip" role="group" aria-label="Tu mes">
+        <button className="ms-cell" onClick={() => navStore.go('finance', 'accounts')}>
+          <span className="tiny muted">Disponible <InfoButton term="liquidez" /></span>
+          <strong className="num">{fmtMoney(m.liquid, { decimals: false })}</strong>
+          <span className="tiny faint">{m.runwayMonths !== null ? `alcanza ~${m.runwayMonths.toFixed(1)} meses` : 'te sobra cada mes'}</span>
+        </button>
+        <button className="ms-cell" onClick={() => navStore.go('reports', 'cf')}>
+          <span className="tiny muted">Entró este mes</span>
+          <strong className="num gain">{fmtMoney(month.cf.cashIn, { decimals: false })}</strong>
+          <span className="tiny faint">salió {fmtMoney(month.cf.cashOut, { decimals: false })}</span>
+        </button>
+        <button className="ms-cell" onClick={() => navStore.go('reports', 'cf')}>
+          <span className="tiny muted">Balance del mes <InfoButton term="flujo_caja" /></span>
+          <strong className={`num ${month.cf.cashIn - month.cf.cashOut >= 0 ? 'gain' : 'loss'}`}>{fmtMoney(month.cf.cashIn - month.cf.cashOut, { decimals: false, sign: true })}</strong>
+          <span className="tiny faint">gastos fijos {fmtMoney(m.recurringMonthly, { decimals: false })}/mes</span>
+        </button>
+      </div>
+
       {tutorialOpen && nextStep && (
-        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+        <div className="card next-step">
           <div className="card-head">
-            <span className="eyebrow" style={{ flex: 1 }}>Guía de inicio · {tutDone}/{tutTotal} <InfoButton term="guia_inicio" /></span>
-            <button className="btn sm ghost" onClick={() => navStore.open({ kind: 'tutorial' })}>Ver todo</button>
-            <button className="btn sm ghost" onClick={() => store.run((st) => { st.tutorial.dismissed = true; }, { toast: false })}>Omitir</button>
+            <span className="eyebrow" style={{ flex: 1 }}>Tu próximo paso · {tutDone}/{tutTotal} <InfoButton term="guia_inicio" /></span>
+            <button className="btn sm ghost" onClick={() => navStore.open({ kind: 'tutorial' })}>Ver todos</button>
+            <button className="btn sm ghost" onClick={() => store.run((st) => { st.tutorial.dismissed = true; }, { toast: false })}>Ocultar</button>
           </div>
           <Bar value={tutDone / tutTotal} />
           <strong>{nextStep.title}</strong>
           <p className="small muted">{nextStep.body}</p>
-          <button className="btn sm dark" onClick={() => navStore.go(nextStep.tab)}>Ir</button>
+          <button className="btn sm dark" onClick={() => navStore.go(nextStep.tab, nextStep.sub)}>Hacerlo ahora</button>
         </div>
       )}
 
@@ -106,40 +136,15 @@ export function Home() {
         </div>
       )}
 
-      <div className="grid2">
-        <Stat label="Liquidez disponible" term="liquidez" value={<Money c={m.liquid} />} sub={m.runwayMonths !== null ? `Alcanza ~${m.runwayMonths.toFixed(1)} meses` : 'Superávit mensual'} learn />
-        <Stat label="Flujo de caja del mes" term="flujo_caja" value={<Money c={month.cf.netChange} colored sign />} sub={`Entradas ${fmtMoney(month.cf.cashIn, { decimals: false })} · Salidas ${fmtMoney(month.cf.cashOut, { decimals: false })}`} learn />
-        <Stat label="Ingresos del mes" term="salario_bruto" value={<Money c={month.is.grossIncome} />} sub={m.monthlyGross ? `Sueldo bruto ${fmtMoney(m.monthlyGross, { decimals: false })}/mes` : 'Sin empleo'} />
-        <Stat label="Gastos del mes" term="presupuesto" value={<Money c={month.is.totalExpensesBeforeTax + month.is.totalTaxes} />} sub={`Fijos presupuestados ${fmtMoney(m.recurringMonthly, { decimals: false })}/mes`} />
-      </div>
-
-      <div className="grid2">
-        <button className="stat" style={{ textAlign: 'left' }} onClick={() => navStore.open({ kind: 'progress' })}>
-          <div className="label">Nivel de magnate <InfoButton term="nivel_magnate" /></div>
-          <div className="value">{s.progression.stage}/12</div>
-          <div className="sub">{stage.name}</div>
-        </button>
-        <button className="stat" style={{ textAlign: 'left' }} onClick={() => navStore.go('career')}>
-          <div className="label">Nivel profesional <InfoButton term="nivel_profesional" /></div>
-          <div className="value">{prof.level}</div>
-          <Bar value={prof.progress} />
-          <div className="sub">{job ? `${job.title}` : 'Sin empleo'}</div>
-        </button>
-        <button className="stat" style={{ textAlign: 'left' }} onClick={() => navStore.go('invest', 'portfolio')}>
-          <div className="label">Inversiones financieras <InfoButton term="diversificacion" /></div>
-          <div className="value"><Money c={m.securities} /></div>
-          <div className="sub">Acciones, bonos, fondos y Mogul · depósitos {fmtMoney(s.ledger.balances.term_deposits, { decimals: false })}</div>
-        </button>
-        <button className="stat" style={{ textAlign: 'left' }} onClick={() => navStore.go('invest', 'realestate')}>
-          <div className="label">Inmuebles <InfoButton term="inmueble" /></div>
-          <div className="value"><Money c={m.realEstate - m.mortgages} /></div>
-          <div className="sub">Tasación {fmtMoney(m.realEstate, { decimals: false })} · hipotecas {fmtMoney(m.mortgages, { decimals: false })}</div>
-        </button>
-        <button className="stat" style={{ textAlign: 'left' }} onClick={() => navStore.go('business')}>
-          <div className="label">Negocios activos <InfoButton term="metodo_participacion" /></div>
-          <div className="value">{s.companies.filter((c) => c.status === 'active' || c.status === 'insolvent').length}</div>
-          <div className="sub">{s.companies.length ? `Participaciones ${fmtMoney(s.ledger.balances.business_equity, { decimals: false })}` : 'Fundá o comprá una empresa'}</div>
-        </button>
+      <div className="section-title"><h2>Tu mundo</h2></div>
+      <div className="area-grid">
+        {areas.map((a) => (
+          <button key={a.title} className="area" onClick={a.go}>
+            <span className="area-top"><span className="area-icon" aria-hidden>{a.icon}</span><span className="tiny muted">{a.title}</span><InfoButton term={a.term} /></span>
+            <strong className="area-value">{a.value}</strong>
+            <span className="tiny faint">{a.sub}</span>
+          </button>
+        ))}
       </div>
 
       <div className="section-title">

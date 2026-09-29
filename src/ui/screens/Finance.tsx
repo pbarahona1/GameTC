@@ -15,7 +15,7 @@ import { addMonths, formatDate, startOfMonth, formatMonth } from '../../engine/t
 import { fmtMoney, fmtPct } from '../../engine/format';
 import { usd } from '../../engine/money';
 import type { PaymentMethod } from '../../engine/state';
-import { Money, InfoButton, Tabs, Seg, AmountInput, ConfirmButton, Pill, Bar, LineChart, Learn } from '../components/common';
+import { Money, InfoButton, Tabs, Seg, AmountInput, ConfirmButton, Pill, Bar, LineChart, Learn, ScreenIntro } from '../components/common';
 
 type Sub = 'accounts' | 'card' | 'loans' | 'invest' | 'budget' | 'credit';
 
@@ -426,6 +426,7 @@ export function Finance() {
   const sub = (nav.sub.finance as Sub) ?? 'accounts';
   return (
     <>
+      <ScreenIntro icon="🏦" title="Finanzas" text="Tu dinero del día a día: cuentas, presupuesto, tarjeta, préstamos, depósitos y puntaje de crédito." term="presupuesto" />
       <Tabs<Sub>
         items={[
           { id: 'accounts', label: 'Cuentas' },

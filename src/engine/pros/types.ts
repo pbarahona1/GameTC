@@ -1,6 +1,6 @@
 import type { Cents } from '../money';
 
-export type ProKind = 'contador' | 'asesor' | 'abogado' | 'auditor' | 'gerente';
+export type ProKind = 'contador' | 'asesor' | 'abogado' | 'auditor' | 'gerente' | 'gestor';
 
 export interface Professional {
   id: number;
@@ -15,6 +15,9 @@ export interface Professional {
   reputation: number;
   /** Calidad real de servicio 0–100 (oculta; la reputación la estima con error). */
   quality: number;
+  /** Gestor de inversiones: comisión anual de gestión y comisión de éxito (fracciones). */
+  mgmtFee?: number;
+  perfFee?: number;
 }
 
 export interface ProHire {
@@ -25,6 +28,9 @@ export interface ProHire {
   since: number;
   /** Caso judicial asignado (abogados). */
   caseId?: number;
+  /** Capacitaciones pagadas por el jugador y día de la última. */
+  trainings?: number;
+  lastTraining?: number;
 }
 
 export interface AuditReport {

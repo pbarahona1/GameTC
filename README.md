@@ -2,7 +2,7 @@
 
 Simulador móvil de finanzas personales, carrera, empresas, inversiones, bienes raíces, impuestos internacionales, grupos empresariales y un sistema legal ficticio. Cada movimiento de dinero pasa por un **libro mayor de partida doble**: nada aparece ni desaparece sin un asiento contable que lo explique.
 
-**Estado:** versión 1.0 — Fases 1 a 5 implementadas: finanzas personales y carrera; empresas; bolsa (Lite y Pro), bonos, fondos, Mogul Exchange y bienes raíces con hipotecas; economía dinámica, 4 jurisdicciones fiscales, profesionales, holdings y consolidación, sistema legal ficticio y asesor IA avanzado; optimización, personalización y guardado robusto. Ver [`docs/ESTADO.md`](docs/ESTADO.md) para lo implementado, los resultados reales de las pruebas y las limitaciones.
+**Estado:** versión 1.1 — Fases 1 a 5 más: habilidad **Proyección de negocios** (simula varios futuros de un negocio antes de crearlo o comprarlo), **gestor de inversiones** contratable y capacitable, apartado único **Mis inversiones** (comprar/vender tocando cada inversión), gráficos táctiles e inicio rediseñado. Incluye de la 1.0: finanzas personales y carrera; empresas; bolsa (Lite y Pro), bonos, fondos, Mogul Exchange y bienes raíces con hipotecas; economía dinámica, 4 jurisdicciones fiscales, profesionales, holdings y consolidación, sistema legal ficticio y asesor IA avanzado; optimización, personalización y guardado robusto. Ver [`docs/ESTADO.md`](docs/ESTADO.md) para lo implementado, los resultados reales de las pruebas y las limitaciones.
 
 ## Requisitos
 
@@ -21,7 +21,7 @@ Abrilo con las herramientas de desarrollo en modo móvil (≈ 390 × 844) para l
 ## Pruebas
 
 ```bash
-npm test             # 130 pruebas en 17 archivos: contabilidad, impuestos, crédito, simulación, empresas,
+npm test             # 143 pruebas en 18 archivos: contabilidad, impuestos, crédito, simulación, empresas,
                      # inversiones, inmuebles, economía, grupos, legal, auditorías con bots aleatorios,
                      # compactación, guardado seguro, insolvencia y rendimiento
 npm run typecheck    # TypeScript estricto
@@ -36,7 +36,7 @@ npm run build:single   # un único index.html autocontenido en dist-single/ (vis
 
 ## Generar la APK de Android
 
-> **Importante:** la APK de esta versión **no fue compilada ni probada** en el entorno donde se desarrolló (no tenía SDK de Android ni acceso para descargarlo). Se verificó la configuración de Capacitor (`capacitor.config.ts`, `webDir: dist`), el proyecto `android/` sincronizado con `npx cap sync android` (4 plugins: app, filesystem, preferences, share; `versionCode 3`, `versionName 1.0.0`, minSdk 22, target/compile 34) y el flujo `.github/workflows/android.yml`. Seguí cualquiera de estas opciones para generarla.
+> La APK se compila en GitHub Actions (la versión 1.0 se compiló allí correctamente). No se probó en un teléfono físico desde el entorno de desarrollo. Se verificó la configuración de Capacitor (`capacitor.config.ts`, `webDir: dist`), el proyecto `android/` sincronizado con `npx cap sync android` (4 plugins: app, filesystem, preferences, share; `versionCode 4`, `versionName 1.1.0`, minSdk 22, target/compile 34) y el flujo `.github/workflows/android.yml`. Seguí cualquiera de estas opciones para generarla.
 
 ### Opción A — en tu computadora
 
@@ -60,8 +60,8 @@ npm run build:single   # un único index.html autocontenido en dist-single/ (vis
 
 1. Subí el proyecto a un repositorio de GitHub.
 2. Pestaña **Actions → APK Android → Run workflow**.
-3. El flujo instala Node 20, JDK 17 y el SDK de Android, ejecuta `npm ci`, **las 130 pruebas**, `npm run build`, `npx cap sync android` y `./gradlew assembleDebug`.
-4. Al terminar (≈ 6–10 min), descargá `ultimate-realistic-tycoon-debug-apk` desde los artefactos de la ejecución, descomprimí el ZIP e instalá `app-debug.apk`.
+3. El flujo usa Node 22, JDK 17 y el SDK de Android que ya trae la máquina de GitHub (ubuntu-24.04); ejecuta `npm ci`, **las 143 pruebas**, `npm run build`, `npx cap sync android` y `./gradlew assembleDebug`.
+4. Al terminar (≈ 3–5 min), descargá `ultimate-realistic-tycoon-debug-apk` desde los artefactos de la ejecución, descomprimí el ZIP e instalá `app-debug.apk`.
 
 ### Problemas frecuentes
 
@@ -112,7 +112,7 @@ android/             Proyecto nativo generado por Capacitor
 
 ## Dónde se guarda la partida
 
-- **Android (APK):** en dos almacenes nativos a la vez: preferencias de la app (SharedPreferences) y un archivo JSON en el directorio privado de la app. Si uno falla o se borra, se lee del otro. No depende del navegador.
+- **Android (APK):** en archivos privados de la app (principal, temporal y copias) y una segunda copia de la partida principal en las preferencias del sistema. Si uno falla o se borra, se lee del otro. No depende del navegador.
 - **Navegador:** `localStorage`.
 - **En ambos:** guardado comprimido con checksum, 3 copias rotativas (una copia dañada nunca borra a las otras; se carga la más reciente válida; con el almacenamiento lleno se liberan primero las copias más viejas), y *Ajustes → Exportar a archivo* (en Android abre el menú Compartir: Archivos, Drive, correo…) e *Importar desde archivo*.
 

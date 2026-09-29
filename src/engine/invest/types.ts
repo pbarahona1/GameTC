@@ -105,7 +105,7 @@ export interface Holding {
 export interface Trade {
   id: number;
   day: number;
-  market: 'bolsa' | 'bonos' | 'fondos' | 'mogul';
+  market: 'bolsa' | 'bonos' | 'fondos' | 'mogul' | 'gestor';
   assetId: string;
   side: OrderSide;
   qty: number;
@@ -207,4 +207,56 @@ export interface MogulState {
   assets: MogulAsset[];
   holdings: Record<string, Holding>;
   distributionsReceived: Cents;
+}
+
+// --------------------------------------------------------------- Gestor de inversiones (mandatos)
+
+export type MandateProfile = 'conservador' | 'moderado' | 'agresivo';
+
+export interface MandatePosition {
+  kind: 'stock' | 'fund';
+  id: string;
+  /** Cantidad (acciones enteras o participaciones con decimales). */
+  units: number;
+}
+
+/**
+ * Cuenta gestionada: el jugador entrega dinero a un gestor contratado, que lo
+ * invierte en los MISMOS instrumentos del mercado (acciones y fondos) según su
+ * criterio. Para el jugador funciona como un fondo privado: tiene "unidades"
+ * con un valor por unidad (NAV). Las comisiones del gestor se descuentan del
+ * valor, como en cualquier fondo.
+ */
+export interface Mandate {
+  id: string;
+  hireId: number;
+  managerName: string;
+  profile: MandateProfile;
+  status: 'activo' | 'cerrado';
+  /** Caja del mandato (centavos, puede tener decimales internos). */
+  cash: number;
+  positions: MandatePosition[];
+  /** Unidades emitidas al jugador y valor por unidad (centavos). */
+  units: number;
+  nav: number;
+  /** Máximo histórico del valor por unidad (la comisión de éxito solo se cobra por encima). */
+  hwm: number;
+  startDay: number;
+  lastRebalance: number;
+  /** Aportes y retiros netos del jugador (centavos). */
+  contributed: number;
+  withdrawn: number;
+  mgmtFeesPaid: number;
+  perfFeesPaid: number;
+  tradingCosts: number;
+  /** Índice de referencia (Fondo Índice) para comparar: valor del índice al inicio. */
+  benchStart: number;
+  navStart: number;
+  history: Array<{ d: number; nav: number; bench: number }>;
+  notes: Array<{ d: number; text: string }>;
+}
+
+export interface ManagedState {
+  mandates: Mandate[];
+  holdings: Record<string, Holding>;
 }

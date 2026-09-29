@@ -1,5 +1,5 @@
-import { Fragment } from 'react';
-import { useGame, useUI } from '../../store';
+import { Fragment, useEffect } from 'react';
+import { useGame, useUI, store } from '../../store';
 import { CardHead, InfoButton, Learn, LineChart, Legend, Pill, Stat } from '../../components/common';
 import { PHASES, phaseInfo, consumerDemand, creditSpread, stockMarketDrift, housingDrift } from '../../../engine/economy/economy';
 import { difficultyOf } from '../../../engine/economy/difficulty';
@@ -11,6 +11,7 @@ import { SECTORS } from '../../../content/sectors';
 export function EconomyScreen() {
   const s = useGame();
   useUI();
+  useEffect(() => store.markSeen('ciclo_economico'), []);
   const m = s.macro;
   const ph = phaseInfo(s);
   const months = m.monthly.slice(-36);

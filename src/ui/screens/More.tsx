@@ -1,5 +1,6 @@
 import { useNav, navStore } from '../nav';
 import { useGame, useUI } from '../store';
+import { ScreenIntro } from '../components/common';
 import { EconomyScreen } from './more/Economy';
 import { TaxesScreen } from './more/Taxes';
 import { ProsScreen } from './more/Pros';
@@ -47,6 +48,8 @@ export function More() {
     { icon: '⚙️', title: 'Ajustes y guardado', sub: 'Dificultad, accesibilidad, notificaciones, copias de seguridad', onClick: () => navStore.open({ kind: 'settings' }) },
   ];
   return (
+    <>
+    <ScreenIntro icon="☰" title="Más" text="Informes, economía, impuestos, profesionales, temas legales, progreso y ajustes." />
     <div className="card" style={{ paddingBlock: 4 }}>
       <div className="rows">
         {tiles.map((t) => (
@@ -61,5 +64,6 @@ export function More() {
         ))}
       </div>
     </div>
+    </>
   );
 }

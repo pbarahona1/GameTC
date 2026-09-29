@@ -347,7 +347,7 @@ function Market({ selected }: { selected: number | null }) {
   useUI();
   const [type, setType] = useState<'todos' | PropertyType>('todos');
   const [zone, setZone] = useState('todas');
-  const list = s.realEstate.listings.filter((l) => (type === 'todos' || l.property.type === type) && (zone === 'todas' || l.property.zoneId === zone));
+  const list = s.realEstate.listings.filter((l) => (type === 'todos' || l.property.type === type) && (zone === 'todas' || l.property.zoneId === zone)).sort((a, b) => a.askPrice - b.askPrice);
   const sel = selected !== null ? s.realEstate.listings.find((l) => l.id === selected) : null;
   return (
     <>

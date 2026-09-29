@@ -1,3 +1,4 @@
+import { mandatesOnDividend, mandatesOnSplit } from './managed';
 import type { GameState } from '../state';
 import type { Stock, Candle, Order, OrderType, OrderSide } from './types';
 import { STOCK_DEFS, IPO_POOL, SECTOR_PE, StockDef, SECTOR_NAMES } from '../../content/stocks';
@@ -154,7 +155,7 @@ function stepStock(state: GameState, s: Stock, rm: number, volMult: number): voi
     r = dv * 2 * randNormal(state) - 0.01;
   } else {
     const fv = fairValue(state, s);
-    const rev = 0.004 * Math.log(fv / Math.max(1, s.price));
+    const rev = 0.0015 * Math.log(fv / Math.max(1, s.price));
     const sec = stockSectorDrift(state, s.sector) / TRADING_DAYS;
     r = s.beta * rm + sec + rev + 0.06 * s.momentum + dv * randNormal(state);
   }
@@ -245,6 +246,7 @@ function split(state: GameState, s: Stock, ratio: number): void {
     if (o.stop) o.stop = Math.round(o.stop / ratio);
     if (o.trailRef) o.trailRef = Math.round(o.trailRef / ratio);
   }
+  mandatesOnSplit(state, s.id, ratio);
   s.splits.push({ day: state.day, ratio });
   news(s, state.day, `Split ${ratio}×1: cada acción se dividió en ${ratio}. El valor de tu inversión no cambia.`, 0);
   if (h) addLog(state, 'info', '✂️', `${s.name} hizo un split ${ratio}×1: ahora tenés ${h.qty} acciones (mismo valor total).`);
@@ -278,6 +280,7 @@ function processDividends(state: GameState): void {
         addLog(state, 'income', '💸', `Cobraste dividendos de ${s.name}: ${fmtMoney(gross)}${tax ? ` (retención ${fmtPct(j.dividendRate, 0)}: ${fmtMoney(tax)})` : ''}.`, gross - tax);
       }
     }
+    mandatesOnDividend(state, s.id, s.dividend);
     adjustClose(s, s.price - s.dividend);
   }
 }
@@ -346,9 +349,15 @@ export function impactOf(s: Stock, qty: number): number {
   return clamp(0.5 * dv * Math.sqrt(qty / Math.max(1, s.avgVolume)), 0, 0.2);
 }
 
+/** Mejor ejecución con experiencia en bolsa: −0,4 % del costo por nivel, hasta −40 %. */
+export function executionSkillFactor(state: GameState): number {
+  return Math.max(0.6, 1 - (state.skills.stocks?.level ?? 1) * 0.004);
+}
+
 export function quoteMarket(state: GameState, s: Stock, side: OrderSide, qty: number, ref = s.price): MarketQuote {
-  const spread = spreadOf(s);
-  const impact = impactOf(s, qty);
+  const k = executionSkillFactor(state);
+  const spread = spreadOf(s) * k;
+  const impact = impactOf(s, qty) * k;
   const dir = side === 'compra' ? 1 : -1;
   const price = Math.max(1, Math.round(ref * (1 + dir * (spread / 2 + impact))));
   const gross = roundCents(price * qty);
@@ -583,10 +592,10 @@ export function analystView(state: GameState, s: Stock): AnalystView {
   const fairEstimate = Math.max(1, Math.round(fv * (1 + z * errorPct)));
   const low = Math.max(1, Math.round(fairEstimate * (1 - errorPct * 1.3)));
   const high = Math.round(fairEstimate * (1 + errorPct * 1.3));
-  // A 3 meses el precio recorre ~30 % de la distancia al valor justo, más la deriva del mercado.
+  // A 3 meses el precio recorre ~10 % de la distancia al valor justo, más la deriva del mercado.
   const drift = stockMarketDrift(state).drift * s.beta * 0.25;
-  const expected3m = clamp(Math.log(fairEstimate / Math.max(1, s.price)) * 0.3 + drift, -0.6, 0.6);
-  const rating = expected3m > 0.05 ? 'compra' : expected3m < -0.05 ? 'venta' : 'mantener';
+  const expected3m = clamp(Math.log(fairEstimate / Math.max(1, s.price)) * 0.1 + drift, -0.6, 0.6);
+  const rating = expected3m > 0.03 ? 'compra' : expected3m < -0.03 ? 'venta' : 'mantener';
   const confidence = errorPct < 0.12 ? 'alta' : errorPct < 0.22 ? 'media' : 'baja';
   const pe = s.eps > 0 ? s.price / s.eps : null;
   const dividendYield = s.price > 0 ? (s.dividend * 4) / s.price : 0;

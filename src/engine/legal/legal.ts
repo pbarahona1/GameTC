@@ -1,3 +1,4 @@
+import { activeMandates, withdrawMandate, mandateValue } from '../invest/managed';
 import type { GameState } from '../state';
 import type { IllegalAct, IllegalKind, LegalCase, Fine } from './types';
 import { Cents, clamp, roundCents, usd } from '../money';
@@ -593,6 +594,13 @@ function garnish(state: GameState, f: Fine): void {
       bookSell(state, cls, id, qtyNeeded, gross, 0, `Venta judicial por embargo (${f.label})`);
       take('checking', gross);
     }
+  }
+  // Cuentas con gestor: se ordena al gestor liquidar lo necesario.
+  for (const m of activeMandates(state)) {
+    if (f.balance <= 0) break;
+    const before = state.ledger.balances.checking;
+    withdrawMandate(state, m.id, Math.min(f.balance, Math.round(mandateValue(state, m))), 'embargo judicial');
+    take('checking', Math.min(f.balance, state.ledger.balances.checking - before));
   }
   if (f.balance > 0) addLog(state, 'danger', '🔨', `El embargo no alcanzó a cubrir "${f.label}": quedan ${fmtMoney(f.balance)}. Se seguirá embargando cada mes.`);
 }

@@ -58,9 +58,18 @@ export function checkInvariants(state: GameState): string[] {
 export function checkPhase34(state: GameState): string[] {
   const errors: string[] = [];
   const L = state.ledger.balances;
-  const classes: Array<['stocks' | 'bonds' | 'funds' | 'mogul', Record<string, { qty: number; cost: number; carrying: number; lots: Array<{ qty: number; cost: number }> }>]> = [
-    ['stocks', state.stocks.holdings], ['bonds', state.bonds.holdings], ['funds', state.funds.holdings], ['mogul', state.mogul.holdings],
+  const classes: Array<['stocks' | 'bonds' | 'funds' | 'mogul' | 'managed', Record<string, { qty: number; cost: number; carrying: number; lots: Array<{ qty: number; cost: number }> }>]> = [
+    ['stocks', state.stocks.holdings], ['bonds', state.bonds.holdings], ['funds', state.funds.holdings], ['mogul', state.mogul.holdings], ['managed', state.managed?.holdings ?? {}],
   ];
+  for (const m of state.managed?.mandates ?? []) {
+    const h = state.managed.holdings[m.id];
+    if (m.status === 'activo') {
+      if (!h) errors.push(`Cuenta gestionada ${m.id}: sin tenencia registrada.`);
+      else if (Math.abs(h.qty - m.units) > 1e-6 * Math.max(1, m.units)) errors.push(`Cuenta gestionada ${m.id}: unidades (${m.units}) ≠ tenencia (${h.qty}).`);
+      if (m.cash < -1) errors.push(`Cuenta gestionada ${m.id}: caja negativa.`);
+      if (m.positions.some((p) => p.units < 0)) errors.push(`Cuenta gestionada ${m.id}: posición negativa.`);
+    } else if (h) errors.push(`Cuenta gestionada ${m.id} cerrada con tenencia.`);
+  }
   for (const [acc, hs] of classes) {
     let carrying = 0;
     for (const [id, h] of Object.entries(hs)) {

@@ -1,4 +1,19 @@
-# Estado del proyecto — versión 1.0 (Fases 1 a 5)
+# Estado del proyecto — versión 1.1
+
+## Novedades de la versión 1.1
+
+- **Habilidad nueva: Proyección de negocios (🔮).** Antes de fundar o comprar una empresa (y también para las tuyas) el juego simula entre 5 y 15 futuros posibles con las reglas reales y muestra: probabilidad de seguir abierta, mes en que empieza a ganar, resultado del año (escenario malo, central y bueno) y un abanico mensual de ganancia, caja y ventas. La precisión mejora con la habilidad (más futuros, menos sesgo de lectura) pero nunca es total. La proyección se guarda al fundar/comprar y se compara después con la realidad ("Tu proyección vs. la realidad"), lo que también da experiencia. Libro, curso y certificación nuevos.
+- **Mis inversiones:** todas tus inversiones (acciones, bonos, fondos, Mogul, cuentas con gestor e inmuebles) en una sola lista; tocás cualquiera y comprás más o vendés ahí mismo. En Bolsa, tus acciones aparecen primero (⭐) y hay un filtro "Las mías".
+- **Gestor de inversiones:** profesional contratable al que le das dinero; lo invierte en acciones y fondos del mercado del juego según tu perfil (conservador, moderado, agresivo). Su calidad y experiencia cambian de verdad sus decisiones; cobra comisión de gestión y de éxito; podés aportar, retirar, cambiar el perfil, capacitarlo o despedirlo. Su resultado se compara siempre con el Fondo Índice.
+- **Capacitación de profesionales** (contador, asesor, abogado, gestor) y experiencia que crece cada año.
+- **Diseño y claridad:** inicio rediseñado ("Tu mes", "Tu próximo paso", "Tu mundo"), encabezados en lenguaje simple en cada sección, pestañas con íconos, gráficos táctiles (tocá para ver el valor de cada punto, también en las velas), 5 misiones nuevas en la guía (fondo, acción, proyección, gestor, economía), avisos duplicados eliminados.
+- **Realismo y balance:** la bolsa vuelve a su valor justo más despacio (ventajas más realistas para quien analiza bien); las habilidades Bolsa y Marketing ahora tienen efecto real; siempre hay inmuebles de entrada (desde ~$25.000); textos de habilidades actualizados a sus efectos reales.
+- **Android:** el guardado va a archivos privados de la app (con segunda copia de la principal en preferencias), para que el arranque no se vuelva lento con partidas largas.
+- **Verificación 1.1:** 143 pruebas en 18 archivos, todas pasan (13 nuevas en `tests/v11.test.ts`, y los bots de la auditoría integral ahora también usan el gestor). La APK se compila en GitHub Actions.
+
+---
+
+# Estado de la versión 1.0 (Fases 1 a 5)
 
 ## Verificación realizada (resultados reales en este entorno)
 

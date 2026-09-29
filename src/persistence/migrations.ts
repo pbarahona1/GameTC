@@ -72,6 +72,15 @@ export const MIGRATIONS: Record<number, (s: AnyState) => AnyState> = {
     s.version = 3;
     return s;
   },
+  3: (s) => {
+    // v4 (1.1): habilidad Proyección de negocios, gestor de inversiones, pronósticos guardados.
+    if (s.ledger.balances.managed === undefined) s.ledger.balances.managed = 0;
+    s.skills.forecasting = s.skills.forecasting ?? { level: 1, xp: 0 };
+    s.managed = s.managed ?? { mandates: [], holdings: {} };
+    for (const co of s.companies ?? []) co.forecast = co.forecast ?? null;
+    s.version = 4;
+    return s;
+  },
 };
 
 export function migrate(raw: AnyState): { state: GameState; migratedFrom: number | null } {
@@ -92,6 +101,7 @@ export function validateShape(s: AnyState): string[] {
   const errs: string[] = [];
   const need = ['player', 'ledger', 'bank', 'budget', 'career', 'skills', 'education', 'tax', 'macro', 'credit', 'progression', 'history', 'log', 'meta', 'tutorial'];
   if (typeof s.version === 'number' && s.version >= 3) need.push('stocks', 'bonds', 'funds', 'mogul', 'realEstate', 'pros', 'legal', 'options');
+  if (typeof s.version === 'number' && s.version >= 4) need.push('managed');
   for (const k of need) if (s[k] === undefined || s[k] === null) errs.push(`Falta la sección "${k}".`);
   if (!Array.isArray(s.ledger?.entries)) errs.push('Libro mayor inválido.');
   if (typeof s.day !== 'number') errs.push('Día inválido.');

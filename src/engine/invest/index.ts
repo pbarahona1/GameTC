@@ -4,6 +4,7 @@ import { bondsDay } from './bonds';
 import { fundsDay } from './funds';
 import { mogulDay } from './mogul';
 import { revalueInvestments } from './portfolio';
+import { managedDay } from './managed';
 
 /**
  * Día de los mercados financieros. Orden: acciones → bonos → fondos (que
@@ -15,5 +16,6 @@ export function investmentsDay(state: GameState): void {
   bondsDay(state);
   fundsDay(state);
   mogulDay(state);
+  managedDay(state);
   revalueInvestments(state);
 }

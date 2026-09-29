@@ -1,5 +1,5 @@
 import type { KV } from './save';
-import { MemoryKV } from './save';
+import { MemoryKV, KEYS } from './save';
 
 /**
  * Almacenamiento según la plataforma.
@@ -109,6 +109,67 @@ export class MirroredKV implements KV {
   }
 }
 
+/**
+ * Almacenamiento nativo (Android) desde la versión 1.1: TODAS las partidas y
+ * copias van a archivos privados de la app; en las preferencias del sistema
+ * (SharedPreferences, que Android carga enteras en memoria al abrir la app) se
+ * guarda solo una segunda copia de la partida PRINCIPAL. Así el arranque no se
+ * vuelve lento en partidas largas y sigue habiendo dos copias independientes.
+ * Lee de archivos primero y, si falta, de las preferencias (compatible con
+ * instalaciones anteriores que guardaban todo en preferencias).
+ */
+export class NativeKV implements KV {
+  constructor(private files: KV, private prefs: KV, private mirrorKeys: string[]) {}
+  async get(key: string) {
+    try {
+      const v = await this.files.get(key);
+      if (v) return v;
+    } catch {
+      /* se intenta el otro */
+    }
+    try {
+      return await this.prefs.get(key);
+    } catch {
+      return null;
+    }
+  }
+  async set(key: string, value: string) {
+    let ok = 0;
+    let lastErr: unknown = null;
+    try {
+      await this.files.set(key, value);
+      ok++;
+    } catch (e) {
+      lastErr = e;
+    }
+    if (this.mirrorKeys.includes(key)) {
+      try {
+        await this.prefs.set(key, value);
+        ok++;
+      } catch (e) {
+        lastErr = e;
+      }
+    } else {
+      // Limpia copias viejas que versiones anteriores dejaban en las preferencias.
+      try {
+        await this.prefs.remove(key);
+      } catch {
+        /* ignorar */
+      }
+    }
+    if (!ok) throw lastErr instanceof Error ? lastErr : new Error('No se pudo escribir en ningún almacenamiento.');
+  }
+  async remove(key: string) {
+    for (const kv of [this.files, this.prefs]) {
+      try {
+        await kv.remove(key);
+      } catch {
+        /* ignorar */
+      }
+    }
+  }
+}
+
 export interface StorageInfo {
   kv: KV;
   kind: 'native' | 'local' | 'memory';
@@ -127,7 +188,7 @@ export async function createStorage(): Promise<StorageInfo> {
   if (await isNative()) {
     const { Preferences } = await import('@capacitor/preferences');
     const fs = await import('@capacitor/filesystem');
-    return { kv: new MirroredKV(new PreferencesKV(Preferences), new FilesystemKV(fs)), kind: 'native' };
+    return { kv: new NativeKV(new FilesystemKV(fs), new PreferencesKV(Preferences), [KEYS.primary]), kind: 'native' };
   }
   try {
     const probe = '__urt_probe__';

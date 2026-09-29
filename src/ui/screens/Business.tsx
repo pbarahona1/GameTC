@@ -7,12 +7,13 @@ import { isHolding } from '../../engine/business/groups';
 import { JURISDICTIONS, JURISDICTION_BY_ID, type JurisdictionId } from '../../content/jurisdictions';
 import { consolidated, valuation, coMetrics, coIncomeStatement } from '../../engine/business/reports';
 import { daysToBankruptcy } from '../../engine/business/finance';
-import { runScenario, ScenarioResult } from '../../engine/advisor/scenarios';
+import { ForecastPanel } from '../components/ForecastPanel';
+import { attachForecast, type BusinessForecast } from '../../engine/advisor/businessForecast';
 import { isOpen } from '../../engine/business/common';
 import { formatDate } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
 import { usd, Cents } from '../../engine/money';
-import { Money, InfoButton, Pill, Empty, AmountInput, ConfirmButton, LineChart, Legend, CardHead, Act, Stat, Learn, Seg } from '../components/common';
+import { Money, InfoButton, Pill, Empty, AmountInput, ConfirmButton, LineChart, CardHead, Act, Stat, Learn, Seg, ScreenIntro } from '../components/common';
 import { CompanyView } from './business/CompanyView';
 import type { Company } from '../../engine/business/types';
 
@@ -57,6 +58,7 @@ function Portfolio() {
   const c = useMemo(() => consolidated(s, s.day - 29, s.day), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
+      <ScreenIntro icon="🏭" title="Negocios" text="Fundá, comprá y dirigí empresas. Antes de invertir podés proyectar cómo le iría a cada negocio." term="proyeccion_negocios" />
       <div className="card">
         <CardHead title="Tus empresas" term="metodo_participacion" />
         {open.length === 0 ? (
@@ -107,7 +109,7 @@ function Found({ parentId }: { parentId: number | null }) {
   const lf = LEGAL_FORM_BY_ID[form];
   const costs = setupCosts(s, sector, form);
   const [capital, setCapital] = useState<Cents>(usd(sec.recommendedCapital * s.macro.priceIndex));
-  const [sim, setSim] = useState<ScenarioResult | null>(null);
+  const [fc, setFc] = useState<{ key: string; f: BusinessForecast } | null>(null);
   const req = sectorRequirement(s, sec);
   const partner = lf.partnerShare > 0 ? Math.round((capital * lf.partnerShare) / (1 - lf.partnerShare)) : 0;
   const total = capital + partner;
@@ -124,7 +126,7 @@ function Found({ parentId }: { parentId: number | null }) {
           {SECTORS.map((x) => {
             const r = sectorRequirement(s, x);
             return (
-              <button key={x.id} className={`choice ${sector === x.id ? 'on' : ''}`} onClick={() => { setSector(x.id); setCapital(usd(x.recommendedCapital * s.macro.priceIndex)); setSim(null); }} aria-pressed={sector === x.id}>
+              <button key={x.id} className={`choice ${sector === x.id ? 'on' : ''}`} onClick={() => { setSector(x.id); setCapital(usd(x.recommendedCapital * s.macro.priceIndex)); }} aria-pressed={sector === x.id}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 20 }} aria-hidden>{x.icon}</span>
                   <strong style={{ flex: 1 }}>{x.name}</strong>
@@ -142,14 +144,14 @@ function Found({ parentId }: { parentId: number | null }) {
         <CardHead title="2. Forma legal" term="forma_legal" />
         <div className="choice-grid">
           {LEGAL_FORMS.filter((l) => !parent || l.limitedLiability).map((l) => (
-            <button key={l.id} className={`choice ${form === l.id ? 'on' : ''}`} onClick={() => { setForm(l.id); setSim(null); }} aria-pressed={form === l.id}>
+            <button key={l.id} className={`choice ${form === l.id ? 'on' : ''}`} onClick={() => setForm(l.id)} aria-pressed={form === l.id}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <strong>{l.name}</strong>
                 <span className="tiny num">{fmtMoney(usd(l.setupCost * s.macro.priceIndex), { decimals: false })}{l.monthlyAdmin ? ` + ${fmtMoney(usd(l.monthlyAdmin * s.macro.priceIndex), { decimals: false })}/mes` : ''}</span>
               </div>
               <span className="tiny gain">+ {l.pros}</span>
               <span className="tiny loss">− {l.cons}</span>
-              <span className="tiny muted">{l.limitedLiability ? 'Responsabilidad limitada' : 'Responsabilidad ilimitada'} · {l.passThrough ? 'Tributa en tu declaración' : `Impuesto ${fmtPct(l.corporateTaxRate, 0)} + ${fmtPct(l.dividendTaxRate, 0)} dividendos`}</span>
+              <span className="tiny muted">{l.limitedLiability ? 'Responsabilidad limitada' : 'Responsabilidad ilimitada'} · {l.passThrough ? 'Tributa en tu declaración' : `Impuesto de sociedades ${fmtPct(JURISDICTION_BY_ID[jur].corporateRate, 0)} + ${fmtPct(JURISDICTION_BY_ID[jur].dividendRate, 0)} sobre dividendos (${JURISDICTION_BY_ID[jur].name})`}</span>
             </button>
           ))}
         </div>
@@ -171,7 +173,7 @@ function Found({ parentId }: { parentId: number | null }) {
       </div>
       <div className="card">
         <CardHead title="5. Capital" term="capital_aportado" />
-        <AmountInput id="co-capital" value={capital} onChange={(v) => { setCapital(v); setSim(null); }} max={personalLiquid} />
+        <AmountInput id="co-capital" value={capital} onChange={setCapital} max={personalLiquid} />
         <div className="rows">
           <div className="row sub"><div className="grow small">Trámites de constitución</div><span className="amt small">{fmtMoney(costs.legal)}</span></div>
           <div className="row sub"><div className="grow small">Licencia y permisos</div><span className="amt small">{fmtMoney(costs.license)}</span></div>
@@ -186,16 +188,7 @@ function Found({ parentId }: { parentId: number | null }) {
           Costos fijos del primer mes ≈ <strong>{fmtMoney(monthly)}</strong> (alquiler, servicios, administración y sueldos). {working > 0 ? <>El capital de trabajo cubre ≈ <strong>{(working / monthly).toFixed(1)} meses</strong> sin ventas.</> : <span className="loss">No alcanza para instalarse.</span>} Capital recomendado para este sector: {fmtMoney(costs.recommended, { decimals: false })}.
         </p>
         {total < costs.recommended && total >= costs.total && <p className="small warn">Por debajo de lo recomendado: la empresa puede quedarse sin caja antes de ganar clientes.</p>}
-        <button className="btn sm" onClick={() => setSim(runScenario(s, { kind: 'found_company', sector, legalForm: form, capital }, 12))}>Simular 12 meses antes de decidir</button>
-        {sim?.error && <p className="small loss">{sim.error}</p>}
-        {sim && !sim.error && (
-          <div className="stack">
-            <LineChart series={[{ name: 'Tu liquidez sin empresa', values: sim.baseline.map((p) => p.liquid), color: 'var(--faint)', dashed: true }, { name: 'Tu liquidez con empresa', values: sim.scenario.map((p) => p.liquid), color: 'var(--info)' }, { name: 'Tu patrimonio con empresa', values: sim.scenario.map((p) => p.netWorth), color: 'var(--accent)' }]} labels={['hoy', '+12 m']} />
-            <Legend series={[{ name: 'Liquidez sin empresa', values: [], color: 'var(--faint)' }, { name: 'Liquidez con empresa', values: [], color: 'var(--info)' }, { name: 'Patrimonio con empresa', values: [], color: 'var(--accent)' }]} />
-            <p className="tiny muted">{sim.note}</p>
-            <p className="small">Patrimonio en 12 meses: {fmtMoney(sim.scenario[sim.scenario.length - 1].netWorth)} vs {fmtMoney(sim.baseline[sim.baseline.length - 1].netWorth)} sin la empresa.</p>
-          </div>
-        )}
+        <ForecastPanel target={{ kind: 'nueva', sector, legalForm: form, capital, jurisdiction: jur }} title="¿Cómo le iría? Proyección a 12 meses" onResult={(f) => setFc({ key: `${sector}|${form}|${capital}|${jur}`, f })} />
         <ConfirmButton
           label="Fundar empresa"
           className="btn primary block"
@@ -204,7 +197,11 @@ function Found({ parentId }: { parentId: number | null }) {
           help="accion_fundar"
           detail={<>Se transferirán {fmtMoney(capital)} {parent ? `de la caja de ${parent.name}` : 'de tu cuenta corriente'} a {name || sec.name} (registrada en {JURISDICTION_BY_ID[jur].name}). Abrirá al público en 7 días.</>}
           onConfirm={() => {
-            const r = store.run((st) => foundCompany(st, { sector, name: name || `${sec.name} ${st.player.name.split(' ')[0]}`, legalForm: form, capital, color, jurisdiction: jur, parentId: parent?.id ?? null }));
+            const r = store.run((st) => {
+              const res = foundCompany(st, { sector, name: name || `${sec.name} ${st.player.name.split(' ')[0]}`, legalForm: form, capital, color, jurisdiction: jur, parentId: parent?.id ?? null });
+              if (res.ok && fc && fc.key === `${sector}|${form}|${capital}|${jur}`) attachForecast(st, st.companies[st.companies.length - 1].id, fc.f);
+              return res;
+            });
             if (r.ok) {
               const co = store.ui.state!.companies[store.ui.state!.companies.length - 1];
               navStore.setSub('business', `co:${co.id}:summary`);
@@ -219,6 +216,7 @@ function Found({ parentId }: { parentId: number | null }) {
 function Market({ buyerId }: { buyerId: number | null }) {
   const s = useGame();
   const [offers, setOffers] = useState<Record<number, Cents>>({});
+  const [fcs, setFcs] = useState<Record<number, BusinessForecast>>({});
   const holdings = s.companies.filter((c) => isOpen(c) && isHolding(c));
   const [buyer, setBuyer] = useState<number | null>(buyerId);
   return (
@@ -268,6 +266,10 @@ function Market({ buyerId }: { buyerId: number | null }) {
               <dt>Empleados · reputación</dt><dd>{co.employees.length} · {Math.round(co.reputation)}/100</dd>
             </div>
             {co.history.length > 1 && <LineChart series={[{ name: 'Ventas mensuales', values: co.history.map((h) => h.revenue), color: 'var(--accent)' }, { name: 'Resultado', values: co.history.map((h) => h.netIncome), color: 'var(--info)' }]} height={110} />}
+            <details>
+              <summary className="small"><strong>🔮 Proyectar esta empresa antes de comprarla</strong></summary>
+              <ForecastPanel compact target={{ kind: 'compra', listingId: l.id }} title="Si la comprás: próximos 12 meses" onResult={(f) => setFcs((m) => ({ ...m, [l.id]: f }))} />
+            </details>
             <div className="field">
               <label htmlFor={`offer-${l.id}`}>Tu oferta {l.negotiated && <span className="tiny loss">(ya contraofertaste: solo acepta el precio pedido)</span>}</label>
               <AmountInput id={`offer-${l.id}`} value={offer} onChange={(c) => setOffers({ ...offers, [l.id]: c })} />
@@ -279,7 +281,11 @@ function Market({ buyerId }: { buyerId: number | null }) {
               confirmLabel="Confirmar"
               detail={<>Pagarías {fmtMoney(offer)} + {fmtMoney(fee)} de costos legales (3 %). {offer < l.askPrice ? 'El vendedor puede rechazar la contraoferta (una sola vez).' : ''}</>}
               onConfirm={() => {
-                const r = store.run((st) => buyListing(st, l.id, offer, buyer));
+                const r = store.run((st) => {
+                  const res = buyListing(st, l.id, offer, buyer);
+                  if (res.ok && fcs[l.id]) attachForecast(st, co.id, fcs[l.id]);
+                  return res;
+                });
                 if (r.ok) navStore.setSub('business', `co:${co.id}:summary`);
               }}
             />

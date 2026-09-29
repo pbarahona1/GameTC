@@ -127,6 +127,18 @@ export interface DayStats {
   lostReason: string;
 }
 
+export interface CoForecast {
+  day: number;
+  months: number;
+  skill: number;
+  survival: number;
+  /** Por mes: [p10, p50, p90] en centavos. */
+  revenue: Array<[number, number, number]>;
+  net: Array<[number, number, number]>;
+  /** Meses ya comparados. */
+  checked: number;
+}
+
 export interface CoSnapshot {
   day: number;
   revenue: Cents;
@@ -227,6 +239,8 @@ export interface Company {
   openDay: number;
   /** Empresa simulada para el mercado de compraventa (sin notificaciones). */
   npc: boolean;
+  /** Proyección hecha antes de fundarla o comprarla (para comparar con la realidad). */
+  forecast?: CoForecast | null;
   /** Dinero aportado y recibido por el jugador (para medir su resultado). */
   investedByOwner: Cents;
   receivedByOwner: Cents;

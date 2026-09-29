@@ -15,7 +15,8 @@ import { buyMogul, sellMogul } from '../src/engine/invest/mogul';
 import { buyProperty, sellProperty, setRent, renovate, setUse, marketRent, prepayMortgage, setManagement, inspectListing } from '../src/engine/realestate/realestate';
 import { foundCompany, foundHolding, transferToGroup, spinOff, liquidate, distribute, maxDistribution } from '../src/engine/business/ownership';
 import { grantIcLoan, setGroupPolicy } from '../src/engine/business/groups';
-import { hirePro, firePro, commissionAudit } from '../src/engine/pros/pros';
+import { hirePro, firePro, commissionAudit, trainPro } from '../src/engine/pros/pros';
+import { activeMandates, openMandate, depositMandate, withdrawMandate, setMandateProfile } from '../src/engine/invest/managed';
 import { setUnderreport, startVenture, depositUndeclared, launderThroughCompany, bribe, skimCash, voluntaryDisclosure, payFine, finePlan, prepareDefense, assignLawyer, acceptPlea, setCompanyIrregular, resolveInspection } from '../src/engine/legal/legal';
 import { requestResidence } from '../src/engine/tax/taxEngine';
 import { openDeposit } from '../src/engine/finance/banking';
@@ -147,6 +148,22 @@ function worldAction(s: GameState, bot: RngHolder): void {
     requestResidence(s, ['valdoria', 'norvalia', 'meridia', 'isla_coral'][randInt(bot, 0, 3)] as 'valdoria');
   } else if (r < 0.8) {
     openDeposit(s, usd(randInt(bot, 200, 3000)), 6);
+  } else if (r < 0.84) {
+    // Gestor de inversiones (v1.1): contratar, abrir, aportar, retirar, cambiar perfil, capacitar o despedir.
+    const g = s.pros.hires.find((h) => h.pro.kind === 'gestor');
+    if (!g) {
+      const p = s.pros.market.find((x) => x.kind === 'gestor');
+      if (p) hirePro(s, p.id, 'personal');
+    } else {
+      const m = activeMandates(s).find((x) => x.hireId === g.id);
+      const k = nextRandom(bot);
+      if (!m) openMandate(s, g.id, usd(randInt(bot, 2500, 20000)), (['conservador', 'moderado', 'agresivo'] as const)[randInt(bot, 0, 2)]);
+      else if (k < 0.35) depositMandate(s, m.id, usd(randInt(bot, 200, 5000)));
+      else if (k < 0.6) withdrawMandate(s, m.id, usd(randInt(bot, 200, 4000)));
+      else if (k < 0.75) setMandateProfile(s, m.id, (['conservador', 'moderado', 'agresivo'] as const)[randInt(bot, 0, 2)]);
+      else if (k < 0.9) trainPro(s, g.id);
+      else firePro(s, g.id);
+    }
   }
 }
 
