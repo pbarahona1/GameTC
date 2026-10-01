@@ -17,6 +17,7 @@ import { formatDate } from '../engine/time/calendar';
 import { Sheet, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton, Switch } from './components/common';
 import { Icon, IconName } from './icons';
 import { Avatar, avatarOf } from './components/Avatar';
+import { SlotList, SavedAgo, agoText } from './components/Slots';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
 import { otaStore, applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
@@ -293,10 +294,42 @@ function UpdatesPanel() {
   );
 }
 
+/** Importar desde archivo o texto, con confirmación antes de cambiar de partida. */
+function ImportControls({ disabled }: { disabled: boolean }) {
+  const [pending, setPending] = useState<{ text: string; label: string } | null>(null);
+  const [pasted, setPasted] = useState('');
+  const run = async (text: string) => {
+    const r = await store.importText(text);
+    if (r.ok) {
+      setPending(null);
+      setPasted('');
+      navStore.closeAll();
+    }
+  };
+  if (pending) {
+    return (
+      <div className="card flat" style={{ padding: 12, gap: 8 }}>
+        <div className="small">Vas a importar {pending.label}. Se verifica la contabilidad y se abre como una partida nueva; la que tenés abierta queda guardada.</div>
+        <div className="btn-row">
+          <button className="btn sm ghost" onClick={() => setPending(null)}>Cancelar</button>
+          <button className="btn sm dark" onClick={() => void run(pending.text)}>Importar</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <label className="small" htmlFor="import-file">Desde un archivo .json</label>
+      <input id="import-file" type="file" disabled={disabled} accept=".json,application/json,text/plain" className="small" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setPending({ text: await f.text(), label: `«${f.name}»` }); }} />
+      <textarea className="input" aria-label="Texto de una partida exportada" disabled={disabled} placeholder="…o pegá aquí el texto de una partida exportada" value={pasted} onChange={(e) => setPasted(e.target.value)} style={{ minHeight: 60, padding: 8, fontSize: 12 }} />
+      <span className="act"><button className="btn sm" disabled={disabled || !pasted.trim()} onClick={() => setPending({ text: pasted, label: 'el texto pegado' })}>Importar y verificar</button><InfoButton term="accion_exportar" /></span>
+    </>
+  );
+}
+
 function SettingsView() {
   const ui = useUI();
   const [exportText, setExportText] = useState<string | null>(null);
-  const [importText, setImportText] = useState('');
   const [backups, setBackups] = useState<Awaited<ReturnType<typeof store.backups>>>([]);
   const [audit, setAudit] = useState<string[] | null>(null);
   const [open, setOpen] = useState<string>('game');
@@ -312,7 +345,7 @@ function SettingsView() {
           <Avatar data={avatarOf(s)} size={46} bust />
           <div style={{ flex: 1, minWidth: 0 }}>
             <strong>{s.player.name}</strong>
-            <div className="tiny muted">{formatDate(s.day)} · dificultad {DIFFICULTY_BY_ID[s.options.difficulty].name.toLowerCase()} · {ui.lastSaved ? `guardado ${new Date(ui.lastSaved).toLocaleTimeString()}` : 'sin guardar aún'}</div>
+            <div className="tiny muted">{formatDate(s.day)} · dificultad {DIFFICULTY_BY_ID[s.options.difficulty].name.toLowerCase()} · <SavedAgo className="" /></div>
           </div>
           <span className="act"><button className="btn sm dark" onClick={async () => { if (await store.save()) store.toast('Partida guardada.', 'ok'); }}><Icon name="save" size={15} /> Guardar</button><InfoButton term="accion_guardar" /></span>
         </div>
@@ -327,7 +360,8 @@ function SettingsView() {
           <div className="btn-row">
             <button className="btn sm" onClick={() => { store.run((x) => { x.tutorial.dismissed = false; }, { toast: false }); navStore.open({ kind: 'tutorial' }); }}><Icon name="missions" size={15} /> Ver misiones</button>
           </div>
-          <ConfirmButton label="Empezar una partida nueva" className="btn sm danger" confirmLabel="Borrar y empezar de nuevo" detail="Se eliminarán la partida y sus copias de este dispositivo. Exportala antes si querés conservarla." onConfirm={() => { navStore.closeAll(); void store.abandonGame(); }} />
+          <button className="btn sm" disabled={!store.canCreateSlot()} onClick={() => { navStore.closeAll(); void store.requestNewGame(); }}><Icon name="plus" size={15} /> Nueva partida</button>
+          <p className="tiny muted">{store.canCreateSlot() ? 'La partida actual queda guardada: podés volver a ella desde «Tus partidas».' : 'Ya tenés el máximo de partidas: borrá una en «Guardado y copias» para empezar otra.'}</p>
         </SettingsSection>
       )}
       <SettingsSection id="look" icon="palette" title="Apariencia" summary={`${st.theme === 'system' ? 'Tema del sistema' : st.theme === 'dark' ? 'Oscuro' : 'Claro'} · aprendizaje ${st.learningMode ? 'activado' : 'desactivado'}`} open={open === 'look'} onToggle={toggle}>
@@ -355,38 +389,40 @@ function SettingsView() {
         <Seg items={[{ id: 0, label: 'Nada' }, { id: 7, label: '7 días' }, { id: 30, label: '30 días' }, { id: 90, label: '90 días' }]} value={st.offlineMaxDays} onChange={(v) => store.updateSettings({ offlineMaxDays: v })} />
         <p className="tiny muted">Las alertas del Asesor IA se eligen en el Asesor → Preferencias.</p>
       </SettingsSection>
-      <SettingsSection id="save" icon="disk" title="Guardado y copias" summary={ui.storageKind === 'native' ? 'Archivos privados de la app · 3 copias automáticas' : ui.storageKind === 'local' ? 'Navegador · exportá una copia' : 'Solo memoria: exportá'} open={open === 'save'} onToggle={toggle}>
+      <SettingsSection id="save" icon="disk" title="Guardado y copias" summary={<>{ui.slots.length} {ui.slots.length === 1 ? 'partida' : 'partidas'} · <SavedAgo className="" /></>} open={open === 'save'} onToggle={toggle}>
         <p className="small muted">
-          Guardado automático cada 30 días de juego y al salir. {ui.storageKind === 'native' ? 'Tu partida vive en los archivos privados de la app (con una segunda copia en las preferencias del sistema): las actualizaciones no la borran.' : ui.storageKind === 'local' ? 'Se guarda en el navegador: exportá un archivo como respaldo.' : 'Sin almacenamiento: exportá para no perder la partida.'}
+          Se guarda solo cada 90 segundos, al pausar, al salir de la app y después de cada decisión. {ui.storageKind === 'native' ? 'Tu partida vive en los archivos privados de la app: las actualizaciones no la borran.' : ui.storageKind === 'local' ? 'Se guarda en el navegador: exportá un archivo como respaldo.' : 'Sin almacenamiento: exportá para no perder la partida.'}
           {ui.saveBytes && ` Tamaño: ${(ui.saveBytes / 1024).toFixed(0)} KB.`}
           {s?.ledger.archive && ` Libro mayor: ${s.ledger.entries.length} asientos detallados + ${s.ledger.archive.entries} resumidos.`}
         </p>
         {ui.saveError && <p className="small loss">{ui.saveError}</p>}
+        <span className="eyebrow">Tus partidas</span>
+        <SlotList />
         <div className="btn-row">
           <span className="act"><button className="btn sm dark" onClick={() => void store.exportFile()}><Icon name="upload" size={15} /> Exportar a archivo</button><InfoButton term="accion_exportar" /></span>
           <span className="act"><button className="btn sm" onClick={() => setAudit(store.audit())}>Auditar contabilidad</button><InfoButton term="accion_auditar" /></span>
         </div>
-        {audit && (audit.length === 0 ? <p className="small gain">✓ {s?.ledger.entries.length} asientos verificados: todo cuadra.</p> : <ul className="small loss">{audit.map((a) => <li key={a}>{a}</li>)}</ul>)}
-        <span className="eyebrow">Copias de seguridad</span>
+        {audit && (audit.length === 0 ? <p className="small gain"><Icon name="check" size={14} /> {s?.ledger.entries.length} asientos verificados: todo cuadra.</p> : <ul className="small loss">{audit.map((a) => <li key={a}>{a}</li>)}</ul>)}
+        <span className="eyebrow">Copias de seguridad de esta partida</span>
+        <p className="tiny muted">La copia 1 tiene como mucho 10 minutos; la 2, entre 10 y 70 minutos; la 3, de una hora a un día. Así un error reciente no alcanza a todas. Restaurar guarda antes la partida actual en «Antes de restaurar».</p>
         <div className="rows">
-          {backups.filter((b) => b.header).map((b) => (
+          {backups.filter((b) => b.header).map((b, i) => (
             <div className="row" key={b.key}>
-              <div className="grow small">{b.key.endsWith('primary') ? 'Principal' : `Copia ${b.key.slice(-1)}`} · {b.header!.name} · {formatDate(b.header!.day)}</div>
-              {!b.key.endsWith('primary') && <ConfirmButton label="Restaurar" className="btn sm ghost" help="accion_restaurar" confirmLabel="Restaurar" detail="Reemplaza la partida actual por esta copia." onConfirm={async () => { const r = await store.restore(b.key); store.toast(r.ok ? r.message ?? 'OK' : r.error, r.ok ? 'ok' : 'error'); }} />}
+              <div className="grow small">{b.kind === 'principal' ? 'Principal' : b.kind === 'copia' ? `Copia ${i}` : b.kind === 'antes de restaurar' ? 'Antes de restaurar' : 'Antes de actualizar'} · {formatDate(b.header!.day)} · {agoText(Date.now() - b.header!.savedAt)}</div>
+              {b.kind !== 'principal' && <ConfirmButton label="Restaurar" className="btn sm ghost" help="accion_restaurar" confirmLabel="Restaurar" detail={<>La partida vuelve al {formatDate(b.header!.day)}. La actual queda en «Antes de restaurar» por si querés deshacerlo.</>} onConfirm={async () => { const r = await store.restore(b.key); store.toast(r.ok ? r.message ?? 'OK' : r.error, r.ok ? 'ok' : 'error'); }} />}
             </div>
           ))}
         </div>
         <button className="btn sm" onClick={() => setExportText(store.exportText())}>Mostrar como texto</button>
         {exportText && (
           <>
-            <textarea className="input" readOnly value={exportText} style={{ minHeight: 90, padding: 8, fontSize: 11 }} onFocus={(e) => e.target.select()} />
+            <textarea className="input" aria-label="Partida exportada como texto" readOnly value={exportText} style={{ minHeight: 90, padding: 8, fontSize: 11 }} onFocus={(e) => e.target.select()} />
             <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(exportText); store.toast('Copiado.', 'ok'); } catch { store.toast('Seleccioná el texto y copialo manualmente.', 'error'); } }}>Copiar</button>
           </>
         )}
-        <label className="small" htmlFor="import-file">Importar desde archivo .json</label>
-        <input id="import-file" type="file" accept=".json,application/json,text/plain" className="small" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const r = await store.importText(await f.text()); if (r.ok) navStore.closeAll(); e.target.value = ''; }} />
-        <textarea className="input" placeholder="…o pegá aquí el texto de una partida exportada" value={importText} onChange={(e) => setImportText(e.target.value)} style={{ minHeight: 60, padding: 8, fontSize: 12 }} />
-        <span className="act"><button className="btn sm" disabled={!importText.trim()} onClick={async () => { const r = await store.importText(importText); if (r.ok) { setImportText(''); navStore.closeAll(); } }}>Importar y verificar</button><InfoButton term="accion_exportar" /></span>
+        <span className="eyebrow">Importar una partida</span>
+        <p className="tiny muted">{store.canCreateSlot() ? 'La partida importada se abre como una partida nueva: la actual queda guardada.' : 'Ya tenés el máximo de partidas: borrá una para importar otra.'}</p>
+        <ImportControls disabled={!store.canCreateSlot()} />
       </SettingsSection>
       <SettingsSection id="updates" icon="update" title="Actualizaciones" summary={ota.check?.kind === 'available' ? `Versión ${ota.check.manifest.version} disponible` : `Versión ${APP_VERSION}`} open={open === 'updates'} onToggle={toggle}>
         <UpdatesPanel />

@@ -560,3 +560,8 @@ button.card:active, .menu-row:active, .news-mini:active { transform: scale(0.99)
 .amount-hint:empty { display: none; }
 .num-input { display: inline-flex; flex-direction: column; gap: 2px; }
 .input[aria-invalid="true"] { border-color: var(--loss); }
+
+/* 1.3 · Partidas guardadas */
+.slot-list .slot { flex-wrap: wrap; gap: 8px; }
+.slot-list .slot.on .title { color: var(--text); }
+.slot-list .pill { margin-left: 4px; }

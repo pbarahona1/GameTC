@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { BACKGROUNDS, BackgroundId, PLAY_STYLES, PlayStyle } from '../../content/backgrounds';
 import { EDUCATION_NAMES } from '../../content/jobs';
 import { LIFESTYLE_BY_ID } from '../../content/lifestyle';
-import { store } from '../store';
+import { store, useUI } from '../store';
+import { SlotList } from '../components/Slots';
 import { fmtMoney } from '../../engine/format';
 import { usd } from '../../engine/money';
 import { DIFFICULTIES, type Difficulty } from '../../engine/economy/difficulty';
@@ -27,8 +28,22 @@ function ImportCard() {
       <details>
         <summary className="small muted">O pegar el texto exportado</summary>
         <textarea id="imp" className="input" style={{ minHeight: 100, padding: 10, marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Pegá acá el texto de la partida" />
-        <button className="btn sm" style={{ marginTop: 8 }} disabled={!text.trim()} onClick={() => store.importText(text)}>Importar y verificar</button>
+        <button className="btn sm" style={{ marginTop: 8 }} disabled={!text.trim()} onClick={() => void store.importText(text)}>Importar y verificar</button>
       </details>
+    </div>
+  );
+}
+
+/** Partidas ya guardadas en el dispositivo (al volver desde "Nueva partida" o tras un error). */
+function SavedGames() {
+  const ui = useUI();
+  if (!ui.slots.length) return null;
+  const back = ui.returnSlot ? ui.slots.find((x) => x.id === ui.returnSlot) : null;
+  return (
+    <div className="card">
+      <div className="card-head"><h2>Tus partidas guardadas</h2></div>
+      {back && <button className="btn primary block" onClick={() => void store.openSlot(back.id)}><Icon name="undo" size={16} /> Volver a la partida de {back.name}</button>}
+      <SlotList />
     </div>
   );
 }
@@ -50,6 +65,8 @@ export function Onboarding() {
         <h1 className="brand">Ultimate <em>Realistic</em> Tycoon</h1>
         <p className="muted">Empezás con poco dinero. Cada peso entra y sale por un libro contable real: nada aparece por arte de magia. Tu fortuna depende de tus decisiones.</p>
       </div>
+
+      <SavedGames />
 
       <ImportCard />
 
@@ -114,7 +131,7 @@ export function Onboarding() {
         </div>
       </details>
 
-      <button className="btn primary block" style={{ minHeight: 52, fontSize: 16 }} onClick={() => store.startNewGame({ name: name || 'Jugador', background: bg, style, color, seed: seed || undefined, difficulty, illegalEnabled: illegal, look })}>
+      <button className="btn primary block" style={{ minHeight: 52, fontSize: 16 }} onClick={() => void store.startNewGame({ name: name || 'Jugador', background: bg, style, color, seed: seed || undefined, difficulty, illegalEnabled: illegal, look })}>
         Comenzar partida
       </button>
 

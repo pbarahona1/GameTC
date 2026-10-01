@@ -18,7 +18,7 @@ void (async () => {
   await store.boot();
   const ui = store.getSnapshot();
   if (!ui.state && ui.bootError) failBoot('La versión nueva no pudo leer la partida.');
-  else requestAnimationFrame(() => markHealthy());
+  else requestAnimationFrame(() => markHealthy(() => void store.onUpdateConfirmed()));
   if (store.getSnapshot().settings.autoUpdate !== false) setTimeout(() => void autoCheck(), 4000);
 })();
 

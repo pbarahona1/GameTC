@@ -7,7 +7,9 @@ import { refreshListings } from '../engine/business/simulate';
 import { updateProgression } from '../engine/progression/progression';
 import { checkInvariants } from '../engine/invariants';
 import { takeSnapshot } from '../engine/snapshot';
-import { loadGame, saveGame, KV, serialize, listBackups, restoreBackup, deleteAll, snapshotBeforeUpdate, collectRawCopies, rescueBundle, parseImport, preserveCopies } from '../persistence/save';
+import { loadGame, saveGame, KV, serialize, listBackups, restoreBackup, deleteSlot, snapshotBeforeUpdate, collectRawCopies, rescueBundle, parseImport, slotKeys, allKeys, clearPreupdate, type LoadReport } from '../persistence/save';
+import { readRegistry, writeRegistry, newSlotId, upsertSlot, removeSlot, MAX_SLOTS, type SlotRegistry, type SlotMeta } from '../persistence/slots';
+import { balanceSheet } from '../engine/reports/statements';
 import { offlineDays, DEFAULT_OFFLINE } from '../persistence/offline';
 import { createStorage, exportToFile } from '../persistence/platformStorage';
 import { APP_VERSION } from '../version';
@@ -52,7 +54,8 @@ const DEFAULT_SETTINGS: Settings = {
 
 /** Milisegundos reales por día de juego a velocidad 1× (valor por defecto). */
 export const MS_PER_DAY_1X = 2000;
-const AUTOSAVE_EVERY_DAYS = 30;
+/** Guardado automático por tiempo REAL (no por días de juego, que a 8× pasan en segundos). */
+export const AUTOSAVE = { everyMs: 90 * 1000, afterActionMs: 3000 };
 
 export interface Toast {
   id: number;
@@ -91,6 +94,12 @@ export interface UIState {
   saveBytes: number | null;
   simError: SimError | null;
   bootError: BootError | null;
+  /** Partidas guardadas en este dispositivo. */
+  slots: SlotMeta[];
+  /** Partida abierta (o la que se intentó abrir). */
+  activeSlot: string | null;
+  /** Al elegir "Nueva partida" con otra abierta: a cuál se puede volver. */
+  returnSlot: string | null;
 }
 
 /** Texto para soporte: qué falló, dónde y en qué versión (sin datos personales). */
@@ -148,14 +157,17 @@ export class GameStore {
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastTick = 0;
   private accumulator = 0;
-  private daysSinceSave = 0;
   private dirty = false;
   private toastId = 1;
   private listenersAttached = false;
-  /** Después de una carga fallida, la próxima partida nueva conserva antes las copias ilegibles. */
-  private preserveOnNewGame = false;
+  private registry: SlotRegistry = { version: 1, active: null, slots: [] };
+  /** Guardado en curso (candado: nunca dos guardados a la vez). */
+  private saving: Promise<boolean> | null = null;
+  private saveAgain = false;
+  private lastSaveAttempt = 0;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
   ui: UIState = {
-    version: 0, ready: false, state: null, speed: 0, settings: DEFAULT_SETTINGS, toasts: [], absence: null, loadNotice: null, storageKind: '', lastSaved: null, saveError: null, saveBytes: null, simError: null, bootError: null,
+    version: 0, ready: false, state: null, speed: 0, settings: DEFAULT_SETTINGS, toasts: [], absence: null, loadNotice: null, storageKind: '', lastSaved: null, saveError: null, saveBytes: null, simError: null, bootError: null, slots: [], activeSlot: null, returnSlot: null,
   };
 
   subscribe = (l: Listener) => {
@@ -212,32 +224,58 @@ export class GameStore {
         this.kv = storage.kv;
         this.ui.storageKind = storage.kind;
       }
-      const report = await withTimeout(loadGame(this.kv), BOOT_TIMEOUTS.load, 'La lectura de la partida');
-      if (report.state) {
-        this.ui.state = report.state;
-        if (!report.state.listings.length) refreshListings(report.state);
-        const notices: string[] = [];
-        if (report.recovered && report.source === 'urt.save.preupdate') notices.push('Se cargó la copia guardada justo antes de la última actualización.');
-        else if (report.recovered) notices.push(`La partida principal no se pudo leer; se recuperó una copia de seguridad (${report.source}).`);
-        if (report.migratedFrom !== null) notices.push(`Partida actualizada desde la versión ${report.migratedFrom}.`);
-        this.ui.loadNotice = notices.join(' ') || null;
-        const days = offlineDays(report.state.meta.lastRealTime, Date.now(), { ...DEFAULT_OFFLINE, maxDays: this.ui.settings.offlineMaxDays });
-        if (days > 0) {
-          const run = simulateDaysSafe(report.state, days, this.opts.step);
-          this.ui.state = run.state;
-          this.ui.absence = run.daysDone > 0 ? run.report : null;
-          if (run.failure) this.onSimFailure(run.failure, 'offline');
-          await this.save();
-        }
-      } else if (report.problems.length) {
-        this.ui.bootError = { kind: 'unreadable', message: 'Encontramos tu partida, pero ninguna de sus copias se pudo leer.', details: report.problems };
-      }
+      this.registry = await withTimeout(readRegistry(this.kv), BOOT_TIMEOUTS.load, 'El índice de partidas');
+      this.syncSlots();
+      const active = this.registry.active;
+      if (!active) return;
+      const report = await withTimeout(loadGame(this.kv, slotKeys(active)), BOOT_TIMEOUTS.load, 'La lectura de la partida');
+      if (report.state) await this.applyLoaded(report);
+      else if (report.problems.length) this.ui.bootError = { kind: 'unreadable', message: 'Encontramos tu partida, pero ninguna de sus copias se pudo leer.', details: report.problems };
     } catch (e) {
       const err = e as Error;
       const kind: BootError['kind'] = err?.name === 'BootTimeout' ? 'timeout' : this.kv ? 'unexpected' : 'storage';
       const message = kind === 'timeout' ? `${err.message} Puede ser un problema momentáneo del teléfono.` : kind === 'storage' ? 'No se pudo acceder al almacenamiento del dispositivo.' : 'Ocurrió un error inesperado al abrir la partida.';
       this.ui.bootError = { kind, message, details: [`${err?.name ?? 'Error'}: ${err?.message ?? String(e)}`] };
     }
+  }
+
+  /** Abre una partida ya leída: avisos de recuperación y días transcurridos mientras estaba cerrada. */
+  private async applyLoaded(report: LoadReport) {
+    const state = report.state!;
+    this.ui.state = state;
+    this.ui.absence = null;
+    this.ui.simError = null;
+    if (!state.listings.length) refreshListings(state);
+    const notices: string[] = [];
+    const k = slotKeys(this.registry.active ?? undefined);
+    if (report.recovered && report.source === k.preupdate) notices.push('Se cargó la copia guardada justo antes de la última actualización.');
+    else if (report.recovered && report.source === k.prerestore) notices.push('Se cargó la copia guardada antes de la última restauración.');
+    else if (report.recovered) notices.push(`La partida principal no se pudo leer o era más vieja; se recuperó la copia de seguridad más reciente (${report.source}).`);
+    if (report.migratedFrom !== null) notices.push(`Partida actualizada desde la versión ${report.migratedFrom}.`);
+    this.ui.loadNotice = notices.join(' ') || null;
+    const days = offlineDays(state.meta.lastRealTime, Date.now(), { ...DEFAULT_OFFLINE, maxDays: this.ui.settings.offlineMaxDays });
+    if (days > 0) {
+      const run = simulateDaysSafe(state, days, this.opts.step);
+      this.ui.state = run.state;
+      this.ui.absence = run.daysDone > 0 ? run.report : null;
+      if (run.failure) this.onSimFailure(run.failure, 'offline');
+      await this.save();
+    }
+  }
+
+  private syncSlots() {
+    this.ui.slots = this.registry.slots;
+    this.ui.activeSlot = this.registry.active;
+  }
+
+  private async setRegistry(r: SlotRegistry) {
+    this.registry = r;
+    this.syncSlots();
+    if (this.kv) await writeRegistry(this.kv, r);
+  }
+
+  private keys() {
+    return slotKeys(this.registry.active ?? undefined);
   }
 
   /** Vuelve a intentar abrir la partida desde la pantalla de error de arranque. */
@@ -251,21 +289,21 @@ export class GameStore {
 
   /**
    * Desde la pantalla de error de arranque: ir a "partida nueva" SIN borrar
-   * las copias ilegibles. Se conservan aparte al crear la partida nueva.
+   * nada. La partida que no se pudo leer sigue guardada en su ranura.
    */
   startOverAfterBootError() {
-    this.preserveOnNewGame = true;
     this.ui.bootError = null;
+    this.ui.returnSlot = null;
     this.emit();
   }
 
-  /** Exporta el texto crudo de todas las copias, aunque estén dañadas (para recuperarlas o enviarlas a soporte). */
+  /** Exporta el texto crudo de todas las copias de la partida, aunque estén dañadas. */
   async exportRawCopies(): Promise<void> {
     if (!this.kv) {
       this.toast('No hay acceso al almacenamiento para leer las copias.', 'error');
       return;
     }
-    const copies = await collectRawCopies(this.kv);
+    const copies = await collectRawCopies(this.kv, allKeys(this.keys()));
     if (!Object.keys(copies).length) {
       this.toast('No hay copias guardadas en este dispositivo.', 'info');
       return;
@@ -275,33 +313,88 @@ export class GameStore {
     this.toast(r.message, r.ok ? 'ok' : 'error');
   }
 
-  // ---------- Partida ----------
-  async startNewGame(opts: NewGameOptions) {
-    if (this.preserveOnNewGame && this.kv) {
-      try {
-        await preserveCopies(this.kv, String(Date.now()));
-        this.preserveOnNewGame = false;
-      } catch (e) {
-        this.toast(`No se pudieron apartar las copias anteriores (${(e as Error).message}); no se creó la partida nueva.`, 'error');
-        return;
-      }
+  // ---------- Partidas (ranuras) ----------
+  /** ¿Hay lugar para otra partida? */
+  canCreateSlot(): boolean {
+    return this.registry.slots.length < MAX_SLOTS;
+  }
+
+  /**
+   * Crea una partida nueva en una ranura NUEVA: nunca reemplaza ni borra otra
+   * partida ni sus copias. Devuelve false si ya hay el máximo de partidas.
+   */
+  async startNewGame(opts: NewGameOptions): Promise<boolean> {
+    if (!this.canCreateSlot()) {
+      this.toast(`Ya tenés ${MAX_SLOTS} partidas guardadas. Borrá una en "Tus partidas" para empezar otra.`, 'error');
+      return false;
     }
-    this.ui.state = newGame({ ...opts, nowReal: Date.now(), seed: opts.seed || `${opts.name}-${Date.now()}` });
-    refreshListings(this.ui.state);
+    const now = Date.now();
+    const state = newGame({ ...opts, nowReal: now, seed: opts.seed || `${opts.name}-${now}` });
+    refreshListings(state);
+    updateProgression(state);
+    const id = newSlotId(this.registry, now);
+    await this.setRegistry(upsertSlot({ ...this.registry, active: id }, { id, name: state.player.name, day: 0, netWorth: null, savedAt: now, createdAt: now }));
+    this.ui.state = state;
     this.ui.absence = null;
     this.ui.simError = null;
+    this.ui.loadNotice = null;
+    this.ui.returnSlot = null;
     this.ui.speed = 0;
-    updateProgression(this.ui.state);
     this.dirty = true;
-    void this.save();
+    this.emit();
+    await this.save();
+    return true;
+  }
+
+  /** "Nueva partida" con otra abierta: la actual se guarda y queda en su ranura. */
+  async requestNewGame() {
+    await this.save();
+    this.setSpeed(0);
+    this.ui.returnSlot = this.registry.active;
+    this.ui.state = null;
+    this.ui.absence = null;
+    this.ui.simError = null;
+    this.ui.loadNotice = null;
     this.emit();
   }
 
-  async abandonGame() {
-    if (this.kv) await deleteAll(this.kv);
-    this.ui.state = null;
-    this.ui.speed = 0;
+  /** Abre otra partida guardada (la actual se guarda antes). */
+  async openSlot(id: string): Promise<boolean> {
+    if (!this.kv || !this.registry.slots.some((x) => x.id === id)) return false;
+    if (this.ui.state && this.registry.active !== id) await this.save();
+    this.setSpeed(0);
+    const report = await loadGame(this.kv, slotKeys(id));
+    if (!report.state) {
+      this.toast(`No se pudo abrir esa partida: ${report.problems[0] ?? 'no tiene copias'}. Podés exportar sus copias desde la lista.`, 'error');
+      return false;
+    }
+    await this.setRegistry({ ...this.registry, active: id });
+    this.ui.returnSlot = null;
+    this.ui.bootError = null;
+    await this.applyLoaded(report);
+    this.dirty = false;
     this.emit();
+    return true;
+  }
+
+  /** Borra una partida guardada que NO es la abierta (con todas sus copias). */
+  async deleteSlotById(id: string): Promise<boolean> {
+    if (!this.kv || (this.ui.state && this.registry.active === id)) return false;
+    await deleteSlot(this.kv, slotKeys(id));
+    await this.setRegistry(removeSlot(this.registry, id));
+    if (this.ui.returnSlot === id) this.ui.returnSlot = null;
+    this.emit();
+    return true;
+  }
+
+  /** Exporta las copias crudas de cualquier partida guardada (aunque no se pueda abrir). */
+  async exportSlotCopies(id: string): Promise<void> {
+    if (!this.kv) return;
+    const copies = await collectRawCopies(this.kv, allKeys(slotKeys(id)));
+    const meta = this.registry.slots.find((x) => x.id === id);
+    const safe = (meta?.name ?? 'partida').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const r = await exportToFile(rescueBundle(copies, Date.now(), APP_VERSION), `urt-${safe}-copias.json`);
+    this.toast(r.message, r.ok ? 'ok' : 'error');
   }
 
   /**
@@ -325,6 +418,8 @@ export class GameStore {
       else if (r.message && this.ui.settings.successToasts) this.toast(r.message, 'ok');
     }
     this.dirty = true;
+    // Una acción que cambió la partida se guarda poco después (sin esperar el guardado periódico).
+    if (r.ok) this.scheduleSave(AUTOSAVE.afterActionMs);
     this.emit();
     return r;
   }
@@ -344,10 +439,12 @@ export class GameStore {
 
   // ---------- Tiempo ----------
   setSpeed(speed: Speed) {
+    const pausing = speed === 0 && this.ui.speed !== 0;
     this.ui.speed = speed;
     this.accumulator = 0;
     this.lastTick = performance.now();
     this.emit();
+    if (pausing && this.dirty) void this.save();
   }
 
   /**
@@ -421,6 +518,8 @@ export class GameStore {
     const lastId = lastLogIdOf(s);
     const done = this.runDays(days, 'step', this.ui.settings.autoPause);
     this.afterAdvance(done, lastId);
+    // Un salto de días es progreso importante: se guarda enseguida.
+    if (done > 0) this.scheduleSave(AUTOSAVE.afterActionMs);
   }
 
   /** Detiene el reloj (pruebas y cierre). */
@@ -439,6 +538,7 @@ export class GameStore {
     const now = performance.now();
     const dt = now - this.lastTick;
     this.lastTick = now;
+    if (this.dirty && this.ui.state && Date.now() - this.lastSaveAttempt >= AUTOSAVE.everyMs) void this.save();
     const s = this.ui.state;
     if (!s || this.ui.speed === 0 || this.ui.simError) return;
     this.accumulator += dt * this.ui.speed;
@@ -454,37 +554,84 @@ export class GameStore {
 
   private afterAdvance(days: number, lastLogId: number) {
     const s = this.ui.state!;
-    this.dirty = true;
-    this.daysSinceSave += days;
+    if (days > 0) this.dirty = true;
     if (this.ui.settings.autoPause && this.ui.speed !== 0) {
       const fresh = s.log.filter((l) => l.id > lastLogId);
       const important = fresh.find((l) => this.isImportant(l));
       if (important) {
         this.ui.speed = 0;
         this.toast(`Pausa automática: ${important.text}`, important.kind === 'danger' ? 'error' : 'info');
+        void this.save();
       }
     }
-    if (this.daysSinceSave >= AUTOSAVE_EVERY_DAYS) void this.save();
     this.emit();
   }
 
   // ---------- Guardado ----------
-  async save(): Promise<boolean> {
+  /**
+   * Guarda la partida abierta. Nunca hay dos guardados a la vez: si se pide
+   * otro mientras uno está en curso, se hace UNO más al terminar (con el estado
+   * más reciente) y todos los que esperaban reciben su resultado.
+   */
+  save(): Promise<boolean> {
+    if (this.saving) {
+      this.saveAgain = true;
+      return this.saving;
+    }
+    const run = async () => {
+      let ok = false;
+      do {
+        this.saveAgain = false;
+        ok = await this.saveOnce();
+      } while (this.saveAgain);
+      return ok;
+    };
+    this.saving = run().finally(() => {
+      this.saving = null;
+    });
+    return this.saving;
+  }
+
+  /** Programa un guardado (se agrupan los pedidos cercanos). */
+  private scheduleSave(ms: number) {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      if (this.dirty) void this.save();
+    }, ms);
+  }
+
+  private async saveOnce(): Promise<boolean> {
     const s = this.ui.state;
-    if (!s || !this.kv) return false;
+    const active = this.registry.active;
+    if (!s || !this.kv || !active) return false;
+    this.lastSaveAttempt = Date.now();
+    const now = Date.now();
+    this.dirty = false;
     let r: Awaited<ReturnType<typeof saveGame>>;
     try {
-      r = await saveGame(this.kv, s, Date.now());
+      r = await saveGame(this.kv, s, now, slotKeys(active));
     } catch (e) {
       r = { ok: false, error: `No se pudo guardar: ${(e as Error).message}` };
     }
-    this.daysSinceSave = 0;
     if (r.ok) {
-      this.dirty = false;
-      this.ui.lastSaved = Date.now();
+      this.ui.lastSaved = now;
       this.ui.saveBytes = r.bytes;
       this.ui.saveError = null;
+      const prev = this.registry.slots.find((x) => x.id === active);
+      let netWorth: number | null = null;
+      try {
+        netWorth = balanceSheet(s).netWorth;
+      } catch {
+        netWorth = null;
+      }
+      try {
+        await this.setRegistry(upsertSlot(this.registry, { id: active, name: s.player.name, day: s.day, netWorth, savedAt: now, createdAt: prev?.createdAt ?? now }));
+      } catch {
+        /* el índice se reconstruye desde las copias si hiciera falta */
+      }
     } else {
+      this.dirty = true;
       this.ui.saveError = r.error;
       this.toast(r.error, 'error');
     }
@@ -503,9 +650,21 @@ export class GameStore {
     if (!this.ui.state) return true;
     if (!(await this.save())) return false;
     try {
-      return await snapshotBeforeUpdate(this.kv);
+      return await snapshotBeforeUpdate(this.kv, this.keys());
     } catch {
       return false;
+    }
+  }
+
+  /** La actualización se confirmó: la copia "antes de actualizar" ya no hace falta. */
+  async onUpdateConfirmed(): Promise<void> {
+    if (!this.kv) return;
+    for (const slot of this.registry.slots) {
+      try {
+        await clearPreupdate(this.kv, slotKeys(slot.id));
+      } catch {
+        /* no crítico */
+      }
     }
   }
 
@@ -521,35 +680,55 @@ export class GameStore {
     this.toast(r.message, r.ok ? 'ok' : 'error');
   }
 
+  /**
+   * Importa una partida como partida NUEVA (otra ranura): la que estaba abierta
+   * queda guardada. Si ya hay el máximo de partidas, no importa nada.
+   */
   async importText(text: string): Promise<ActionResult> {
     const r = await parseImport(text.trim());
     if (!r.ok) {
       this.toast(`No se pudo importar: ${r.error}`, 'error');
       return { ok: false, error: r.error };
     }
-    this.toast('Partida importada y verificada.', 'ok');
+    if (!this.canCreateSlot()) {
+      const error = `Ya tenés ${MAX_SLOTS} partidas guardadas. Borrá una en "Tus partidas" para importar otra.`;
+      this.toast(error, 'error');
+      return { ok: false, error };
+    }
+    if (this.ui.state) await this.save();
+    const now = Date.now();
+    const id = newSlotId(this.registry, now);
+    await this.setRegistry(upsertSlot({ ...this.registry, active: id }, { id, name: r.state.player.name, day: r.state.day, netWorth: null, savedAt: now, createdAt: now }));
     this.ui.state = r.state;
     this.ui.simError = null;
     this.ui.bootError = null;
+    this.ui.absence = null;
+    this.ui.loadNotice = null;
+    this.ui.returnSlot = null;
     this.ui.speed = 0;
-    void this.save();
+    this.dirty = true;
+    await this.save();
+    this.toast('Partida importada y verificada. Se abrió como una partida nueva.', 'ok');
     this.emit();
     return { ok: true, message: 'Partida importada.' };
   }
 
   async backups() {
-    return this.kv ? listBackups(this.kv) : [];
+    return this.kv ? listBackups(this.kv, this.keys()) : [];
   }
 
+  /** Restaura una copia; la partida actual queda en "antes de restaurar" (se puede deshacer). */
   async restore(key: string): Promise<ActionResult> {
     if (!this.kv) return { ok: false, error: 'Sin almacenamiento.' };
-    const r = await restoreBackup(this.kv, key);
+    const r = await restoreBackup(this.kv, key, this.keys());
     if (!r.ok) return { ok: false, error: r.error };
     this.ui.state = r.state;
+    this.ui.simError = null;
     this.ui.speed = 0;
-    void this.save();
+    this.dirty = true;
+    await this.save();
     this.emit();
-    return { ok: true, message: 'Copia restaurada.' };
+    return { ok: true, message: 'Copia restaurada. La partida anterior quedó en «Antes de restaurar» por si querés volver.' };
   }
 
   audit(): string[] {

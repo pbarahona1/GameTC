@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { GameStore, BOOT_TIMEOUTS } from '../src/ui/store';
+import { GameStore, BOOT_TIMEOUTS, AUTOSAVE } from '../src/ui/store';
 import { KEYS, saveGame, serialize, rescueBundle } from '../src/persistence/save';
 import { advanceDay } from '../src/engine/simulation';
 import { createStorage } from '../src/persistence/platformStorage';
@@ -52,7 +52,7 @@ describe('Fase 1 · arranque', () => {
     expect(st.getSnapshot().bootError).toBeNull();
   });
 
-  it('con todas las copias ilegibles: muestra el error, no borra nada y la partida nueva las conserva aparte', async () => {
+  it('con todas las copias ilegibles: muestra el error, no borra nada y la partida nueva va a otra ranura', async () => {
     const broken = '{"format":"urt-save","payload":"x","checksum":"0"}';
     localStorage.setItem(KEYS.primary, broken);
     localStorage.setItem(KEYS.backups[0], broken + ' ');
@@ -65,11 +65,14 @@ describe('Fase 1 · arranque', () => {
     expect(ui.bootError?.details.length).toBeGreaterThan(0);
     expect(localStorage.getItem(KEYS.primary)).toBe(broken);
     st.startOverAfterBootError();
-    await st.startNewGame(NEW);
+    expect(await st.startNewGame(NEW)).toBe(true);
     await st.save();
-    const kept = Object.keys(localStorage).filter((k) => k.startsWith('urt.keep.'));
-    expect(kept.length).toBe(2);
-    expect(kept.some((k) => localStorage.getItem(k) === broken)).toBe(true);
+    // La partida dañada sigue intacta en su ranura y la nueva tiene la suya.
+    expect(localStorage.getItem(KEYS.primary)).toBe(broken);
+    expect(localStorage.getItem(KEYS.backups[0])).toBe(broken + ' ');
+    const slots = st.getSnapshot().slots;
+    expect(slots.length).toBe(2);
+    expect(st.getSnapshot().activeSlot).not.toBe('main');
     expect(st.getSnapshot().state?.player.name).toBe('Prueba');
   });
 
@@ -153,5 +156,110 @@ describe('Fase 1 · días que fallan en el juego', () => {
     const r = await st.importText(file);
     expect(r.ok).toBe(true);
     expect(st.getSnapshot().state?.day).toBe(9);
+  });
+});
+
+describe('Fase 3 · partidas y guardado automático', () => {
+  it('dos partidas en dos ranuras: se cambia entre ellas sin perder ninguna', async () => {
+    const st = make();
+    await st.boot();
+    await st.startNewGame({ ...NEW, name: 'Ana', seed: 'ana' });
+    st.step(10);
+    await st.save();
+    const anaSlot = st.getSnapshot().activeSlot!;
+    await st.requestNewGame();
+    expect(st.getSnapshot().state).toBeNull();
+    expect(st.getSnapshot().returnSlot).toBe(anaSlot);
+    await st.startNewGame({ ...NEW, name: 'Beto', seed: 'beto' });
+    st.step(3);
+    await st.save();
+    expect(st.getSnapshot().slots.map((x) => x.name)).toEqual(['Ana', 'Beto']);
+    expect(await st.openSlot(anaSlot)).toBe(true);
+    expect(st.getSnapshot().state?.player.name).toBe('Ana');
+    expect(st.getSnapshot().state?.day).toBe(10);
+    // La partida abierta no se puede borrar; la otra sí, sin tocar a Ana.
+    expect(await st.deleteSlotById(anaSlot)).toBe(false);
+    const beto = st.getSnapshot().slots.find((x) => x.name === 'Beto')!.id;
+    expect(await st.deleteSlotById(beto)).toBe(true);
+    expect(st.getSnapshot().slots.map((x) => x.name)).toEqual(['Ana']);
+    expect(st.getSnapshot().state?.day).toBe(10);
+  });
+
+  it('con el máximo de partidas no se crea otra (y no se pisa ninguna)', async () => {
+    const st = make();
+    await st.boot();
+    for (const n of ['A', 'B', 'C']) {
+      expect(await st.startNewGame({ ...NEW, name: n, seed: n })).toBe(true);
+      await st.requestNewGame();
+    }
+    expect(await st.startNewGame({ ...NEW, name: 'D', seed: 'D' })).toBe(false);
+    expect(st.getSnapshot().slots.map((x) => x.name)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('importar abre la partida importada en otra ranura y conserva la actual', async () => {
+    const st = make();
+    await st.boot();
+    await st.startNewGame({ ...NEW, name: 'Actual', seed: 'act' });
+    st.step(5);
+    const other = makeGame('herencia', 'import-me');
+    const r = await st.importText(serialize(other, 1));
+    expect(r.ok).toBe(true);
+    const ui = st.getSnapshot();
+    expect(ui.state?.player.name).toBe('Tester');
+    expect(ui.slots.map((x) => x.name)).toEqual(['Actual', 'Tester']);
+    const actual = ui.slots.find((x) => x.name === 'Actual')!;
+    expect(actual.day).toBe(5);
+  });
+
+  it('nunca hay dos guardados a la vez: los pedidos simultáneos se agrupan', async () => {
+    let writing = 0;
+    let maxWriting = 0;
+    let primaryWrites = 0;
+    const slow = {
+      get: async (k: string) => localStorage.getItem(k),
+      set: async (k: string, v: string) => {
+        writing++;
+        maxWriting = Math.max(maxWriting, writing);
+        await new Promise((res) => setTimeout(res, 15));
+        if (k.endsWith('.primary') || k === KEYS.primary) primaryWrites++;
+        localStorage.setItem(k, v);
+        writing--;
+      },
+      remove: async (k: string) => localStorage.removeItem(k),
+    };
+    vi.mocked(createStorage).mockResolvedValueOnce({ kind: 'local', kv: slow });
+    const st = make();
+    await st.boot();
+    await st.startNewGame(NEW);
+    primaryWrites = 0;
+    const results = await Promise.all([st.save(), st.save(), st.save(), st.save(), st.save()]);
+    expect(results.every(Boolean)).toBe(true);
+    expect(maxWriting).toBe(1);
+    expect(primaryWrites).toBeLessThanOrEqual(2);
+  });
+
+  it('se guarda solo al pausar y poco después de una decisión', async () => {
+    const prev = AUTOSAVE.afterActionMs;
+    AUTOSAVE.afterActionMs = 20;
+    try {
+      const st = make();
+      await st.boot();
+      await st.startNewGame(NEW);
+      const t0 = st.getSnapshot().lastSaved;
+      st.setSpeed(2);
+      st.step(3);
+      st.setSpeed(0);
+      await new Promise((r) => setTimeout(r, 50));
+      const t1 = st.getSnapshot().lastSaved;
+      expect(t1).not.toBeNull();
+      expect(t1! >= (t0 ?? 0)).toBe(true);
+      expect(st.isDirty()).toBe(false);
+      st.run((s) => { s.meta.seenTerms.push('prueba'); return { ok: true }; }, { toast: false });
+      expect(st.isDirty()).toBe(true);
+      await new Promise((r) => setTimeout(r, 120));
+      expect(st.isDirty()).toBe(false);
+    } finally {
+      AUTOSAVE.afterActionMs = prev;
+    }
   });
 });

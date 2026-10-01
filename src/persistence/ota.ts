@@ -197,7 +197,7 @@ export function failBoot(reason: string): void {
 }
 
 /** La partida cargó y la interfaz se dibujó: si esta versión estaba pendiente, se confirma. */
-export function markHealthy(): void {
+export function markHealthy(onConfirmed?: () => void): void {
   if (view.confirmed) return;
   setTimeout(async () => {
     try {
@@ -216,6 +216,7 @@ export function markHealthy(): void {
         bootErrorHandler = null;
       }
       set({ confirmed: true, justUpdated: p.justUpdated });
+      onConfirmed?.();
     } catch {
       /* se reintenta en el próximo arranque */
     }
