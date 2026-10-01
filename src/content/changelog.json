@@ -1,5 +1,20 @@
 [
   {
+    "version": "1.3.0",
+    "date": "2026-10-01",
+    "items": [
+      "Más seguridad: si un día de simulación falla, la partida vuelve al día anterior, se pausa y te avisa con opciones (reintentar, exportar).",
+      "Hasta 3 partidas en el mismo teléfono, cada una con guardado automático y copias de seguridad por tiempo real (10 minutos, 1 hora, 1 día). Restaurar una copia se puede deshacer.",
+      "Montos más claros: escribí 1,500 o 1500 y ves el valor interpretado antes de confirmar. Los formularios ya no arrastran datos de un inmueble, empresa o préstamo a otro.",
+      "Correcciones del motor: inspección y abogado, vivienda propia, equipos amortizados, holdings, empleo desde prisión y gerente delegado (ahora con resumen semanal).",
+      "Misiones con criterios correctos (ropa, vehículos, alquileres propios) que no se desmarcan solas.",
+      "Rumores más justos: también hay falsos sobre inmuebles y ya no se distinguen por su etiqueta; analizar una noticia no cambia lo que va a pasar.",
+      "«Disponible» arriba es exactamente lo que podés gastar; la pausa automática ahora avisa caídas fuertes de tus acciones.",
+      "Más fluido en partidas largas.",
+      "Android 16 y pantallas borde a borde; las actualizaciones por internet llegan firmadas y la app verifica la firma antes de instalarlas."
+    ]
+  },
+  {
     "version": "1.2.0",
     "date": "2026-09-28",
     "items": [

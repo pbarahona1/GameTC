@@ -340,16 +340,16 @@ describe('1.2 · Actualizaciones por internet', () => {
     expect(evaluateManifest({ ...good, sha256: 'xyz' }, ctx).kind).toBe('error');
   });
 
-  it('el manifiesto publicado coincide con el archivo (tamaño y SHA-256)', () => {
+  it('el puente para las APK 1.2 (ota/ en main) coincide con su archivo y les pide la APK nueva', () => {
     if (!existsSync('ota/manifest.json')) return;
     const m = JSON.parse(readFileSync('ota/manifest.json', 'utf8'));
     const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
     const html = readFileSync(`ota/${m.file}`);
     expect(m.format).toBe('urt-ota');
-    expect(m.version).toBe(pkg.version);
-    expect(m.build).toBe(buildNumber(pkg.version));
+    expect(m.build).toBeLessThanOrEqual(buildNumber(pkg.version));
     expect(html.length).toBe(m.size);
     expect(createHash('sha256').update(html).digest('hex')).toBe(m.sha256);
-    expect(m.minNativeCode).toBe(pkg.otaMinNativeCode);
+    // Una APK 1.2 (versionCode 5, Capacitor 6) nunca instala por internet una página de Capacitor 8.
+    expect(evaluateManifest(m, { webBuild: 10200, nativeCode: 5, failed: [], manual: true }).kind).toBe('needs-apk');
   });
 });

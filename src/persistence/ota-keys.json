@@ -1,0 +1,6 @@
+{
+  "_comment": "Claves PÚBLICAS para verificar las actualizaciones por internet (ECDSA P-256, SPKI en base64). La clave privada nunca va al repositorio: vive en el secreto URT_OTA_SIGNING_KEY de GitHub Actions. Para rotarla, agregá la nueva aquí, publicá una APK/actualización con ambas y recién después dejá de firmar con la vieja.",
+  "keys": {
+    "urt-ota-2026-10": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMvP7GCe2de9Ly0WzSbxLwxvvnJbSQtydsj1WROGywuofSqkwoW6Vtc7/3l7zGOh5C2FaCcADCM4BGDF9UhRVow=="
+  }
+}

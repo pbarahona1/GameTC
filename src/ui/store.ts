@@ -14,6 +14,7 @@ import { balanceSheet } from '../engine/reports/statements';
 import { offlineDays, DEFAULT_OFFLINE } from '../persistence/offline';
 import { createStorage, exportToFile } from '../persistence/platformStorage';
 import { APP_VERSION } from '../version';
+import { syncSystemBars } from './systemBars';
 
 export type Speed = 0 | 1 | 2 | 4 | 8;
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -802,6 +803,7 @@ export class GameStore {
     flag('data-motion', st.reduceMotion, 'reduce');
     flag('data-density', st.density === 'compacta', 'compact');
     root.style.setProperty('--ui-zoom', String(st.fontScale || 1));
+    void syncSystemBars(t);
   }
 
   toast(text: string, tone: Toast['tone'] = 'info') {

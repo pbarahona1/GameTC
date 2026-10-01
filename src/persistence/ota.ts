@@ -1,29 +1,43 @@
 import { APP_VERSION, WEB_BUILD } from '../version';
+import { verifySignedManifest } from './otaSignature';
 
 /**
  * Actualizaciones por internet (sin reinstalar la APK).
  *
  * El juego es una sola página web empaquetada dentro de la app. Cada versión nueva
- * de esa página se publica en el repositorio (carpeta ota/) con un manifiesto que
- * indica número de versión, tamaño y huella SHA-256. La app:
- *   1. descarga el manifiesto y, si hay una versión mayor compatible con la APK
- *      instalada, se la ofrece al jugador;
+ * de esa página la publica el CI en la rama `ota-channel`, con un manifiesto FIRMADO
+ * (ECDSA P-256, ver otaSignature.ts) que indica número de versión, tamaño y huella
+ * SHA-256. La app:
+ *   1. descarga el manifiesto, verifica la firma con la clave pública embebida y, si
+ *      hay una versión mayor compatible con la APK instalada, se la ofrece al jugador;
  *   2. descarga la página, comprueba tamaño y huella, y la guarda en los archivos
  *      privados de la app;
  *   3. guarda la partida y una copia "antes de actualizar";
  *   4. abre la versión nueva SIN hacerla permanente todavía;
  *   5. la versión nueva, cuando carga la partida y funciona unos segundos sin
  *      errores, se confirma a sí misma (queda como la versión de arranque).
- * Si la versión nueva falla antes de confirmarse, vuelve a la anterior; si se
- * cuelga, al cerrar y abrir la app arranca la anterior y la marca como fallida.
- * La partida vive fuera de la página (archivos de la app), así que no se pierde.
+ * Si la versión nueva falla antes de confirmarse, vuelve a la anterior. Si la app se
+ * cierra justo durante la confirmación (la versión nueva ya había cargado bien), al
+ * volver a abrirla se retoma la versión nueva en lugar de marcarla como fallida; solo
+ * se da por fallida si nunca llegó a funcionar o si arrancó varias veces sin confirmarse.
+ * La red tiene tiempos máximos y reintentos. La partida vive fuera de la página
+ * (archivos de la app), así que no se pierde.
  */
 
 export const OTA_REPO = 'pbarahona1/gametc';
-export const OTA_BRANCH = 'main';
-export const OTA_BASE = `https://raw.githubusercontent.com/${OTA_REPO}/${OTA_BRANCH}/ota/`;
+/**
+ * Canal firmado: rama que publica el CI (solo desde main) con el manifiesto firmado y
+ * los archivos de cada versión. La carpeta ota/ de main queda solo como puente para
+ * las versiones 1.2 y anteriores (que no verifican firmas).
+ */
+export const OTA_CHANNEL = 'ota-channel';
+export const OTA_BASE = `https://raw.githubusercontent.com/${OTA_REPO}/${OTA_CHANNEL}/`;
 const PREF_KEY = 'urt.ota';
 const CONFIRM_AFTER_MS = 6000;
+/** Tiempos y reintentos de red (la conexión del teléfono puede ser mala o cortarse). */
+export const OTA_NET = { manifestTimeoutMs: 15000, stallTimeoutMs: 30000, retries: 2, retryDelayMs: 1500 };
+/** Arranques sin confirmar que se toleran antes de dar por fallida una versión. */
+const MAX_UNCONFIRMED_STARTS = 3;
 
 export interface OtaManifest {
   format: 'urt-ota';
@@ -39,8 +53,22 @@ export interface OtaManifest {
   notes: string[];
 }
 
+interface PendingUpdate {
+  build: number;
+  version: string;
+  path: string;
+  prevPath: string;
+  fromVersion: string;
+  at: number;
+  notes: string[];
+  /** Veces que la versión nueva llegó a arrancar sin confirmarse todavía. */
+  starts?: number;
+  /** La versión nueva cargó la partida y dibujó la interfaz (aunque no alcanzó a confirmarse). */
+  healthyAt?: number;
+}
+
 interface OtaPrefs {
-  pending?: { build: number; version: string; path: string; prevPath: string; fromVersion: string; at: number; notes: string[] };
+  pending?: PendingUpdate;
   failed: number[];
   current?: number;
   justUpdated?: { from: string; to: string; notes: string[] };
@@ -74,6 +102,86 @@ export async function sha256Hex(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Qué hacer al arrancar con una actualización pendiente (lógica pura, probada en tests). */
+export type BootDecision =
+  | { kind: 'none' }
+  | { kind: 'watch' }
+  | { kind: 'resume'; path: string }
+  | { kind: 'failed'; reason: string; rollback: boolean };
+
+export function decideBoot(pending: PendingUpdate | undefined, webBuild: number): BootDecision {
+  if (!pending) return { kind: 'none' };
+  const starts = pending.starts ?? 0;
+  if (pending.build === webBuild) {
+    // Esta página ES la versión pendiente.
+    if (starts >= MAX_UNCONFIRMED_STARTS) return { kind: 'failed', reason: 'La versión nueva arrancó varias veces sin poder confirmarse.', rollback: true };
+    return { kind: 'watch' };
+  }
+  // Arrancó otra versión (la anterior): el cambio todavía no era permanente.
+  if (pending.healthyAt && starts < MAX_UNCONFIRMED_STARTS) return { kind: 'resume', path: pending.path };
+  return { kind: 'failed', reason: 'La versión nueva no terminó de iniciar.', rollback: false };
+}
+
+/** Error de red que vale la pena reintentar (no los de integridad del archivo). */
+class NetError extends Error {}
+
+/** fetch con tiempo máximo y reintentos ante fallas de red o del servidor (5xx). */
+async function fetchRetry(url: string, timeoutMs: number): Promise<Response> {
+  let last: unknown = null;
+  for (let attempt = 0; attempt <= OTA_NET.retries; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, OTA_NET.retryDelayMs * attempt));
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+      if (res.status >= 500) throw new NetError(`el servidor respondió ${res.status}`);
+      if (!res.ok) throw new Error(`el servidor respondió ${res.status}`);
+      return res;
+    } catch (e) {
+      last = e;
+      const retryable = e instanceof NetError || (e as Error).name === 'AbortError' || e instanceof TypeError;
+      if (!retryable) throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const err = last as Error;
+  throw new Error(err?.name === 'AbortError' ? 'la conexión tardó demasiado' : err?.message ?? 'sin conexión');
+}
+
+/** Lee el cuerpo con barra de progreso y corta si deja de llegar información. */
+async function readBody(res: Response, total: number, onProgress: (p: number) => void): Promise<string> {
+  if (!res.body || !total) return res.text();
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let got = 0;
+  for (;;) {
+    let stall: ReturnType<typeof setTimeout> | undefined;
+    const stalled = new Promise<never>((_, reject) => {
+      stall = setTimeout(() => reject(new NetError('la descarga se detuvo')), OTA_NET.stallTimeoutMs);
+    });
+    try {
+      const { done, value } = await Promise.race([reader.read(), stalled]);
+      if (done) break;
+      chunks.push(value);
+      got += value.length;
+      onProgress(Math.min(0.99, got / total));
+    } catch (e) {
+      void reader.cancel().catch(() => undefined);
+      throw e;
+    } finally {
+      clearTimeout(stall);
+    }
+  }
+  const all = new Uint8Array(got);
+  let o = 0;
+  for (const c of chunks) {
+    all.set(c, o);
+    o += c.length;
+  }
+  return new TextDecoder().decode(all);
+}
+
 // ------------------------------------------------------------------ plataforma
 
 async function native(): Promise<boolean> {
@@ -99,6 +207,22 @@ async function readPrefs(): Promise<OtaPrefs> {
 async function writePrefs(p: OtaPrefs): Promise<void> {
   const { Preferences } = await import('@capacitor/preferences');
   await Preferences.set({ key: PREF_KEY, value: JSON.stringify(p) });
+}
+
+/**
+ * Lee, modifica y guarda el estado de actualizaciones EN ORDEN: dos cambios que
+ * ocurren casi a la vez (anotar "funcionó" y confirmar) nunca se pisan.
+ */
+let prefsQueue: Promise<unknown> = Promise.resolve();
+function updatePrefs<T>(fn: (p: OtaPrefs) => T): Promise<{ prefs: OtaPrefs; result: T }> {
+  const run = prefsQueue.then(async () => {
+    const prefs = await readPrefs();
+    const result = fn(prefs);
+    await writePrefs(prefs);
+    return { prefs, result };
+  });
+  prefsQueue = run.catch(() => undefined);
+  return run;
 }
 
 export async function nativeInfo(): Promise<{ version: string; code: number } | null> {
@@ -149,13 +273,15 @@ export const otaStore = {
 let bootErrorHandler: ((e: unknown) => void) | null = null;
 
 async function rollback(reason: string): Promise<void> {
-  const p = await readPrefs();
-  const pend = p.pending;
-  if (!pend || pend.build !== WEB_BUILD) return;
-  p.failed = [...new Set([...p.failed, pend.build])];
-  p.pending = undefined;
-  p.rolledBack = { version: pend.version, reason };
-  await writePrefs(p);
+  const { result: pend } = await updatePrefs((p) => {
+    const pending = p.pending;
+    if (!pending || pending.build !== WEB_BUILD) return null;
+    p.failed = [...new Set([...p.failed, pending.build])];
+    p.pending = undefined;
+    p.rolledBack = { version: pending.version, reason };
+    return pending;
+  });
+  if (!pend) return;
   const { WebView } = await import('@capacitor/core');
   // Volver a la versión anterior: otra página descargada o la que viene dentro de la APK.
   if (pend.prevPath && pend.prevPath.startsWith('/')) await WebView.setServerBasePath({ path: pend.prevPath });
@@ -171,23 +297,36 @@ async function rollback(reason: string): Promise<void> {
  */
 export async function otaBoot(): Promise<void> {
   if (!(await native())) return;
-  const p = await readPrefs();
-  set({ native: await nativeInfo(), justUpdated: p.justUpdated ?? null, rolledBack: p.rolledBack ?? null });
-  if (p.pending) {
-    if (p.pending.build === WEB_BUILD) {
-      set({ confirmed: false });
-      bootErrorHandler = () => void rollback('La versión nueva tuvo un error al iniciar.');
-      window.addEventListener('error', bootErrorHandler);
-      window.addEventListener('unhandledrejection', bootErrorHandler);
-      return;
+  const nat = await nativeInfo();
+  const { prefs: p, result: d } = await updatePrefs((p): BootDecision => {
+    const d = decideBoot(p.pending, WEB_BUILD);
+    if (d.kind === 'watch' && p.pending) p.pending.starts = (p.pending.starts ?? 0) + 1;
+    if (d.kind === 'failed' && !d.rollback && p.pending) {
+      p.failed = [...new Set([...p.failed, p.pending.build])];
+      p.rolledBack = { version: p.pending.version, reason: d.reason };
+      p.pending = undefined;
     }
-    p.failed = [...new Set([...p.failed, p.pending.build])];
-    p.rolledBack = { version: p.pending.version, reason: 'La versión nueva no terminó de iniciar.' };
-    p.pending = undefined;
-    await writePrefs(p);
-    set({ rolledBack: p.rolledBack });
+    return d;
+  });
+  set({ native: nat, justUpdated: p.justUpdated ?? null, rolledBack: p.rolledBack ?? null });
+  if (d.kind === 'watch') {
+    set({ confirmed: false });
+    bootErrorHandler = () => void rollback('La versión nueva tuvo un error al iniciar.');
+    window.addEventListener('error', bootErrorHandler);
+    window.addEventListener('unhandledrejection', bootErrorHandler);
+    return;
   }
-  void cleanupOldBundles(p.current);
+  if (d.kind === 'resume') {
+    // La versión nueva ya había funcionado pero la app se cerró antes de confirmarla.
+    const { WebView } = await import('@capacitor/core');
+    await WebView.setServerBasePath({ path: d.path });
+    return;
+  }
+  if (d.kind === 'failed' && d.rollback) {
+    await rollback(d.reason);
+    return;
+  }
+  void cleanupOldBundles([p.current, p.pending?.build]);
 }
 
 /** La versión pendiente no pudo cargar la partida: volver a la anterior. */
@@ -199,17 +338,24 @@ export function failBoot(reason: string): void {
 /** La partida cargó y la interfaz se dibujó: si esta versión estaba pendiente, se confirma. */
 export function markHealthy(onConfirmed?: () => void): void {
   if (view.confirmed) return;
+  // Se anota YA que la versión funcionó: si la app se cierra durante la espera, al
+  // volver a abrirla se retoma esta versión en lugar de darla por fallida.
+  void updatePrefs((p) => {
+    if (p.pending && p.pending.build === WEB_BUILD && !p.pending.healthyAt) p.pending.healthyAt = Date.now();
+  }).catch(() => undefined);
   setTimeout(async () => {
     try {
-      const p = await readPrefs();
-      if (!p.pending || p.pending.build !== WEB_BUILD) return;
+      const { prefs } = await updatePrefs(() => undefined);
+      if (!prefs.pending || prefs.pending.build !== WEB_BUILD) return;
       const { WebView } = await import('@capacitor/core');
       await WebView.persistServerBasePath();
-      p.justUpdated = { from: p.pending.fromVersion, to: APP_VERSION, notes: p.pending.notes ?? [] };
-      p.current = WEB_BUILD;
-      p.pending = undefined;
-      p.rolledBack = undefined;
-      await writePrefs(p);
+      const { prefs: p } = await updatePrefs((p) => {
+        if (!p.pending || p.pending.build !== WEB_BUILD) return;
+        p.justUpdated = { from: p.pending.fromVersion, to: APP_VERSION, notes: p.pending.notes ?? [] };
+        p.current = WEB_BUILD;
+        p.pending = undefined;
+        p.rolledBack = undefined;
+      });
       if (bootErrorHandler) {
         window.removeEventListener('error', bootErrorHandler);
         window.removeEventListener('unhandledrejection', bootErrorHandler);
@@ -225,19 +371,20 @@ export function markHealthy(onConfirmed?: () => void): void {
 
 export async function dismissUpdateNotes(): Promise<void> {
   if (!(await native())) return;
-  const p = await readPrefs();
-  p.justUpdated = undefined;
-  p.rolledBack = undefined;
-  await writePrefs(p);
+  await updatePrefs((p) => {
+    p.justUpdated = undefined;
+    p.rolledBack = undefined;
+  });
   set({ justUpdated: null, rolledBack: null });
 }
 
-async function cleanupOldBundles(current?: number): Promise<void> {
+async function cleanupOldBundles(keep: Array<number | undefined>): Promise<void> {
+  const keepNames = new Set([String(WEB_BUILD), ...keep.filter((x): x is number => typeof x === 'number').map(String)]);
   try {
     const fs = await import('@capacitor/filesystem');
     const dir = await fs.Filesystem.readdir({ path: 'ota', directory: fs.Directory.Data });
     for (const f of dir.files) {
-      if (f.name !== String(current) && f.name !== String(WEB_BUILD)) {
+      if (!keepNames.has(f.name)) {
         await fs.Filesystem.rmdir({ path: `ota/${f.name}`, directory: fs.Directory.Data, recursive: true });
       }
     }
@@ -256,14 +403,16 @@ export async function checkForUpdate(manual: boolean): Promise<OtaCheck> {
   }
   set({ phase: 'checking', message: null });
   try {
-    const res = await fetch(`${OTA_BASE}manifest.json?t=${Date.now()}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`el servidor respondió ${res.status}`);
-    const man = await res.json();
-    const p = await readPrefs();
+    const res = await fetchRetry(`${OTA_BASE}manifest.json?t=${Date.now()}`, OTA_NET.manifestTimeoutMs);
+    const doc: unknown = await res.json();
+    const signed = await verifySignedManifest(doc);
     const nat = view.native ?? (await nativeInfo());
-    const r = evaluateManifest(man, { webBuild: WEB_BUILD, nativeCode: nat?.code ?? 0, failed: p.failed, manual });
-    p.lastCheck = Date.now();
-    await writePrefs(p);
+    const { result: r } = await updatePrefs((p): OtaCheck => {
+      p.lastCheck = Date.now();
+      return signed.ok
+        ? evaluateManifest(signed.manifest, { webBuild: WEB_BUILD, nativeCode: nat?.code ?? 0, failed: p.failed, manual })
+        : { kind: 'error', message: signed.error };
+    });
     set({ phase: r.kind === 'error' ? 'error' : 'idle', check: r, message: r.kind === 'error' ? r.message : null });
     return r;
   } catch (e) {
@@ -280,29 +429,19 @@ export async function checkForUpdate(manual: boolean): Promise<OtaCheck> {
 export async function applyUpdate(man: OtaManifest, beforeSwitch: () => Promise<boolean>): Promise<string | null> {
   try {
     set({ phase: 'downloading', progress: 0, message: null });
-    const res = await fetch(`${OTA_BASE}${man.file}?t=${man.build}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`descarga fallida (${res.status})`);
-    const total = man.size || Number(res.headers.get('content-length')) || 0;
-    let text: string;
-    if (res.body && total) {
-      const reader = res.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let got = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        got += value.length;
-        set({ progress: Math.min(0.99, got / total) });
+    let text = '';
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await fetchRetry(`${OTA_BASE}${man.file}?t=${man.build}`, OTA_NET.manifestTimeoutMs);
+        const total = man.size || Number(res.headers.get('content-length')) || 0;
+        text = await readBody(res, total, (progress) => set({ progress }));
+        break;
+      } catch (e) {
+        // Una descarga cortada se reintenta desde cero; un error de otro tipo, no.
+        if (!(e instanceof NetError) || attempt >= OTA_NET.retries) throw e;
+        set({ progress: 0 });
       }
-      const all = new Uint8Array(got);
-      let o = 0;
-      for (const c of chunks) {
-        all.set(c, o);
-        o += c.length;
-      }
-      text = new TextDecoder().decode(all);
-    } else text = await res.text();
+    }
     set({ phase: 'verifying', progress: 1 });
     const bytes = new TextEncoder().encode(text).length;
     if (man.size && bytes !== man.size) throw new Error(`tamaño inesperado (${bytes} de ${man.size} bytes)`);
@@ -328,10 +467,10 @@ export async function applyUpdate(man: OtaManifest, beforeSwitch: () => Promise<
 
     const { WebView } = await import('@capacitor/core');
     const prev = (await WebView.getServerBasePath()).path ?? '';
-    const p = await readPrefs();
-    p.pending = { build: man.build, version: man.version, path, prevPath: prev, fromVersion: APP_VERSION, at: Date.now(), notes: (man.notes ?? []).slice(0, 30) };
-    p.failed = p.failed.filter((b) => b !== man.build);
-    await writePrefs(p);
+    await updatePrefs((p) => {
+      p.pending = { build: man.build, version: man.version, path, prevPath: prev, fromVersion: APP_VERSION, at: Date.now(), notes: (man.notes ?? []).slice(0, 30) };
+      p.failed = p.failed.filter((b) => b !== man.build);
+    });
     await WebView.setServerBasePath({ path });
     return null;
   } catch (e) {
