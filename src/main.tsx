@@ -5,6 +5,7 @@ import './ui/theme.css';
 import { App } from './ui/App';
 import { store } from './ui/store';
 import { otaBoot, markHealthy, failBoot, autoCheck } from './persistence/ota';
+import { ErrorBoundary } from './ui/components/ErrorBoundary';
 
 // Arranque: primero se revisa si esta página es una actualización recién instalada
 // (para poder volver atrás si falla), después se carga la partida.
@@ -16,7 +17,7 @@ void (async () => {
   }
   await store.boot();
   const ui = store.getSnapshot();
-  if (!ui.state && ui.loadNotice?.startsWith('No se pudo recuperar')) failBoot('La versión nueva no pudo leer la partida.');
+  if (!ui.state && ui.bootError) failBoot('La versión nueva no pudo leer la partida.');
   else requestAnimationFrame(() => markHealthy());
   if (store.getSnapshot().settings.autoUpdate !== false) setTimeout(() => void autoCheck(), 4000);
 })();
@@ -28,7 +29,10 @@ void import('@capacitor/core').then(async ({ Capacitor }) => {
   const { navStore } = await import('./ui/nav');
   CapApp.addListener('backButton', () => {
     const nav = navStore.get();
-    if (nav.sheets.length) navStore.close();
+    const ui = store.getSnapshot();
+    if (ui.simError) store.dismissSimError();
+    else if (ui.absence) store.dismissAbsence();
+    else if (nav.sheets.length) navStore.close();
     else if (nav.tab !== 'home') navStore.go('home');
     else void store.save().then(() => CapApp.minimizeApp());
   });
@@ -37,6 +41,8 @@ void import('@capacitor/core').then(async ({ Capacitor }) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary scope="app">
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

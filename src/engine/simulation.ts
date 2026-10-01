@@ -32,6 +32,8 @@ import { embezzlementMonth, prosMonthEnd } from './pros/pros';
  *     atributos, puntaje, foto mensual).
  */
 import { compactLedgers } from './ledger/compaction';
+import { takeSnapshot as takeStateSnapshot } from './snapshot';
+import { checkInvariants } from './invariants';
 import { worldDay, worldMonth } from './world/rivals';
 import { possessionsMonth } from './lifestyle/shops';
 
@@ -115,9 +117,13 @@ export interface SimReport {
 
 export function simulateDays(state: GameState, days: number): SimReport {
   const before = balanceSheet(state);
+  const lastLogId = lastLogIdOf(state);
   const fromDay = state.day;
-  const lastLogId = state.log.length ? state.log[state.log.length - 1].id : 0;
   for (let i = 0; i < days; i++) advanceDay(state);
+  return simReport(state, fromDay, before, lastLogId);
+}
+
+function simReport(state: GameState, fromDay: number, before: { netWorth: number; liquid: number }, lastLogId: number): SimReport {
   const after = balanceSheet(state);
   return {
     fromDay,
@@ -128,4 +134,92 @@ export function simulateDays(state: GameState, days: number): SimReport {
     liquidAfter: after.liquid,
     logs: state.log.filter((l) => l.id > lastLogId),
   };
+}
+
+export function lastLogIdOf(state: GameState): number {
+  return state.log.length ? state.log[state.log.length - 1].id : 0;
+}
+
+// ------------------------------------------------------------------ días atómicos
+
+/** Un día que no se pudo simular. El estado quedó exactamente como al terminar el día anterior. */
+export interface DayFailure {
+  /** Día que se intentó simular. */
+  day: number;
+  kind: 'exception' | 'invariants';
+  name: string;
+  message: string;
+  stack: string | null;
+}
+
+export type SafeDayResult = { ok: true; state: GameState } | { ok: false; state: GameState; failure: DayFailure };
+
+export class InvariantViolation extends Error {
+  constructor(readonly problems: string[]) {
+    super(`Contabilidad inconsistente al cerrar el día: ${problems.slice(0, 3).join(' ')}`);
+    this.name = 'InvariantViolation';
+  }
+}
+
+function describeFailure(e: unknown, day: number): DayFailure {
+  const err = e instanceof Error ? e : new Error(String(e));
+  return {
+    day,
+    kind: err instanceof InvariantViolation ? 'invariants' : 'exception',
+    name: err.name || 'Error',
+    message: err.message || String(e),
+    stack: err.stack ? err.stack.split('\n').slice(0, 12).join('\n') : null,
+  };
+}
+
+/**
+ * Avanza un día de forma atómica: o se aplica el día completo, o el estado
+ * vuelve exactamente a como estaba. Si falla, devuelve el estado restaurado
+ * (un objeto NUEVO: quien llama debe reemplazar su referencia) y la causa.
+ *
+ * Al cerrar cada mes también se verifican los invariantes contables: una
+ * inconsistencia se trata como una falla del día, no se deja avanzar en silencio.
+ * `step` permite a las pruebas simular fallas; en el juego es `advanceDay`.
+ */
+export function advanceDaySafe(state: GameState, step: (s: GameState) => void = advanceDay): SafeDayResult {
+  const snap = takeStateSnapshot(state);
+  const day = state.day + 1;
+  try {
+    step(state);
+    if (isLastDayOfMonth(state.day)) {
+      const problems = checkInvariants(state);
+      if (problems.length) throw new InvariantViolation(problems);
+    }
+    return { ok: true, state };
+  } catch (e) {
+    return { ok: false, state: snap.restore(), failure: describeFailure(e, day) };
+  }
+}
+
+export interface SafeRun {
+  /** Estado final: el mismo objeto si todo salió bien, uno restaurado si un día falló. */
+  state: GameState;
+  report: SimReport;
+  daysDone: number;
+  failure: DayFailure | null;
+}
+
+/** Simula varios días con días atómicos: se detiene en el primero que falla. */
+export function simulateDaysSafe(state: GameState, days: number, step?: (s: GameState) => void): SafeRun {
+  const before = balanceSheet(state);
+  const lastLogId = lastLogIdOf(state);
+  const fromDay = state.day;
+  let cur = state;
+  let failure: DayFailure | null = null;
+  let done = 0;
+  for (let i = 0; i < days; i++) {
+    const r = advanceDaySafe(cur, step);
+    cur = r.state;
+    if (!r.ok) {
+      failure = r.failure;
+      break;
+    }
+    done++;
+  }
+  return { state: cur, report: simReport(cur, fromDay, before, lastLogId), daysDone: done, failure };
 }

@@ -25,5 +25,5 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  test: { globals: true, environment: 'node', include: ['tests/**/*.test.ts'], testTimeout: 120000, hookTimeout: 120000 },
+  test: { globals: true, environment: 'node', include: ['tests/**/*.test.{ts,tsx}'], testTimeout: 120000, hookTimeout: 120000 },
 }));

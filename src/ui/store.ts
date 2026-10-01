@@ -2,14 +2,15 @@ import { useSyncExternalStore } from 'react';
 import type { GameState, LogItem } from '../engine/state';
 import { newGame, NewGameOptions } from '../engine/state';
 import type { ActionResult } from '../engine/result';
-import { advanceDay, simulateDays, SimReport } from '../engine/simulation';
+import { advanceDaySafe, simulateDaysSafe, lastLogIdOf, SimReport, DayFailure } from '../engine/simulation';
 import { refreshListings } from '../engine/business/simulate';
 import { updateProgression } from '../engine/progression/progression';
 import { checkInvariants } from '../engine/invariants';
 import { takeSnapshot } from '../engine/snapshot';
-import { loadGame, saveGame, KV, serialize, deserializeAny, listBackups, restoreBackup, deleteAll, snapshotBeforeUpdate } from '../persistence/save';
+import { loadGame, saveGame, KV, serialize, listBackups, restoreBackup, deleteAll, snapshotBeforeUpdate, collectRawCopies, rescueBundle, parseImport, preserveCopies } from '../persistence/save';
 import { offlineDays, DEFAULT_OFFLINE } from '../persistence/offline';
 import { createStorage, exportToFile } from '../persistence/platformStorage';
+import { APP_VERSION } from '../version';
 
 export type Speed = 0 | 1 | 2 | 4 | 8;
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -59,6 +60,22 @@ export interface Toast {
   tone: 'ok' | 'error' | 'info';
 }
 
+/** Un día de simulación que falló: la partida volvió al día anterior y el tiempo quedó en pausa. */
+export interface SimError extends DayFailure {
+  /** Dónde ocurrió: reloj, salto manual o días simulados mientras la app estaba cerrada. */
+  context: 'tick' | 'step' | 'offline';
+  /** Veces seguidas que falló el mismo día (para saber si reintentar tiene sentido). */
+  attempts: number;
+  at: number;
+}
+
+/** La partida no se pudo abrir al iniciar. */
+export interface BootError {
+  kind: 'unreadable' | 'storage' | 'timeout' | 'unexpected';
+  message: string;
+  details: string[];
+}
+
 export interface UIState {
   version: number;
   ready: boolean;
@@ -72,7 +89,40 @@ export interface UIState {
   lastSaved: number | null;
   saveError: string | null;
   saveBytes: number | null;
+  simError: SimError | null;
+  bootError: BootError | null;
 }
+
+/** Texto para soporte: qué falló, dónde y en qué versión (sin datos personales). */
+export function errorReport(e: { name: string; message: string; stack: string | null }, extra: Record<string, string | number | undefined>): string {
+  const lines = [`${e.name}: ${e.message}`, ...Object.entries(extra).filter(([, v]) => v !== undefined).map(([k, v]) => `${k}: ${v}`)];
+  if (e.stack) lines.push('', e.stack);
+  return lines.join('\n');
+}
+
+async function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new BootTimeout(what)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+class BootTimeout extends Error {
+  constructor(what: string) {
+    super(`${what} no respondió a tiempo.`);
+    this.name = 'BootTimeout';
+  }
+}
+
+/** Tiempos máximos del arranque: nunca debe quedar "Cargando…" para siempre. */
+export const BOOT_TIMEOUTS = { storage: 15000, load: 30000 };
 
 type Listener = () => void;
 
@@ -86,7 +136,13 @@ export function pauseCategory(l: LogItem): PauseCategory | null {
   return null;
 }
 
-class GameStore {
+export interface StoreOptions {
+  /** Cómo se simula un día (las pruebas lo reemplazan para provocar fallas). */
+  step?: (s: GameState) => void;
+}
+
+export class GameStore {
+  constructor(private readonly opts: StoreOptions = {}) {}
   private listeners = new Set<Listener>();
   private kv: KV | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -95,8 +151,11 @@ class GameStore {
   private daysSinceSave = 0;
   private dirty = false;
   private toastId = 1;
+  private listenersAttached = false;
+  /** Después de una carga fallida, la próxima partida nueva conserva antes las copias ilegibles. */
+  private preserveOnNewGame = false;
   ui: UIState = {
-    version: 0, ready: false, state: null, speed: 0, settings: DEFAULT_SETTINGS, toasts: [], absence: null, loadNotice: null, storageKind: '', lastSaved: null, saveError: null, saveBytes: null,
+    version: 0, ready: false, state: null, speed: 0, settings: DEFAULT_SETTINGS, toasts: [], absence: null, loadNotice: null, storageKind: '', lastSaved: null, saveError: null, saveBytes: null, simError: null, bootError: null,
   };
 
   subscribe = (l: Listener) => {
@@ -111,7 +170,28 @@ class GameStore {
   }
 
   // ---------- Arranque ----------
+  /**
+   * Arranque. Nunca queda colgado: cualquier falla del almacenamiento, de la
+   * carga, de una migración o de la simulación sin conexión termina en una
+   * partida abierta o en `bootError` (pantalla "No pudimos abrir tu partida").
+   */
   async boot() {
+    this.loadSettings();
+    await this.loadFromStorage();
+    this.ui.ready = true;
+    this.applyTheme();
+    this.emit();
+    this.startClock();
+    if (!this.listenersAttached && typeof document !== 'undefined') {
+      this.listenersAttached = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') void this.save();
+      });
+      window.addEventListener('pagehide', () => void this.save());
+    }
+  }
+
+  private loadSettings() {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
       if (raw) {
@@ -122,41 +202,94 @@ class GameStore {
     } catch {
       /* ajustes por defecto */
     }
-    const storage = await createStorage();
-    this.kv = storage.kv;
-    this.ui.storageKind = storage.kind;
-    const report = await loadGame(storage.kv);
-    if (report.state) {
-      this.ui.state = report.state;
-      if (!report.state.listings.length) refreshListings(report.state);
-      const notices: string[] = [];
-      if (report.recovered && report.source === 'urt.save.preupdate') notices.push('Se cargó la copia guardada justo antes de la última actualización.');
-      else if (report.recovered) notices.push(`La partida principal no se pudo leer; se recuperó una copia de seguridad (${report.source}).`);
-      if (report.migratedFrom !== null) notices.push(`Partida actualizada desde la versión ${report.migratedFrom}.`);
-      this.ui.loadNotice = notices.join(' ') || null;
-      const days = offlineDays(report.state.meta.lastRealTime, Date.now(), { ...DEFAULT_OFFLINE, maxDays: this.ui.settings.offlineMaxDays });
-      if (days > 0) {
-        this.ui.absence = simulateDays(report.state, days);
-        await this.save();
+  }
+
+  private async loadFromStorage() {
+    this.ui.bootError = null;
+    try {
+      if (!this.kv) {
+        const storage = await withTimeout(createStorage(), BOOT_TIMEOUTS.storage, 'El almacenamiento del dispositivo');
+        this.kv = storage.kv;
+        this.ui.storageKind = storage.kind;
       }
-    } else if (report.problems.length) {
-      this.ui.loadNotice = 'No se pudo recuperar ninguna partida: ' + report.problems.join(' | ');
+      const report = await withTimeout(loadGame(this.kv), BOOT_TIMEOUTS.load, 'La lectura de la partida');
+      if (report.state) {
+        this.ui.state = report.state;
+        if (!report.state.listings.length) refreshListings(report.state);
+        const notices: string[] = [];
+        if (report.recovered && report.source === 'urt.save.preupdate') notices.push('Se cargó la copia guardada justo antes de la última actualización.');
+        else if (report.recovered) notices.push(`La partida principal no se pudo leer; se recuperó una copia de seguridad (${report.source}).`);
+        if (report.migratedFrom !== null) notices.push(`Partida actualizada desde la versión ${report.migratedFrom}.`);
+        this.ui.loadNotice = notices.join(' ') || null;
+        const days = offlineDays(report.state.meta.lastRealTime, Date.now(), { ...DEFAULT_OFFLINE, maxDays: this.ui.settings.offlineMaxDays });
+        if (days > 0) {
+          const run = simulateDaysSafe(report.state, days, this.opts.step);
+          this.ui.state = run.state;
+          this.ui.absence = run.daysDone > 0 ? run.report : null;
+          if (run.failure) this.onSimFailure(run.failure, 'offline');
+          await this.save();
+        }
+      } else if (report.problems.length) {
+        this.ui.bootError = { kind: 'unreadable', message: 'Encontramos tu partida, pero ninguna de sus copias se pudo leer.', details: report.problems };
+      }
+    } catch (e) {
+      const err = e as Error;
+      const kind: BootError['kind'] = err?.name === 'BootTimeout' ? 'timeout' : this.kv ? 'unexpected' : 'storage';
+      const message = kind === 'timeout' ? `${err.message} Puede ser un problema momentáneo del teléfono.` : kind === 'storage' ? 'No se pudo acceder al almacenamiento del dispositivo.' : 'Ocurrió un error inesperado al abrir la partida.';
+      this.ui.bootError = { kind, message, details: [`${err?.name ?? 'Error'}: ${err?.message ?? String(e)}`] };
     }
-    this.ui.ready = true;
-    this.applyTheme();
+  }
+
+  /** Vuelve a intentar abrir la partida desde la pantalla de error de arranque. */
+  async retryBoot() {
+    this.ui.ready = false;
     this.emit();
-    this.startClock();
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') void this.save();
-    });
-    window.addEventListener('pagehide', () => void this.save());
+    await this.loadFromStorage();
+    this.ui.ready = true;
+    this.emit();
+  }
+
+  /**
+   * Desde la pantalla de error de arranque: ir a "partida nueva" SIN borrar
+   * las copias ilegibles. Se conservan aparte al crear la partida nueva.
+   */
+  startOverAfterBootError() {
+    this.preserveOnNewGame = true;
+    this.ui.bootError = null;
+    this.emit();
+  }
+
+  /** Exporta el texto crudo de todas las copias, aunque estén dañadas (para recuperarlas o enviarlas a soporte). */
+  async exportRawCopies(): Promise<void> {
+    if (!this.kv) {
+      this.toast('No hay acceso al almacenamiento para leer las copias.', 'error');
+      return;
+    }
+    const copies = await collectRawCopies(this.kv);
+    if (!Object.keys(copies).length) {
+      this.toast('No hay copias guardadas en este dispositivo.', 'info');
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    const r = await exportToFile(rescueBundle(copies, Date.now(), APP_VERSION), `urt-copias-${stamp}.json`);
+    this.toast(r.message, r.ok ? 'ok' : 'error');
   }
 
   // ---------- Partida ----------
-  startNewGame(opts: NewGameOptions) {
+  async startNewGame(opts: NewGameOptions) {
+    if (this.preserveOnNewGame && this.kv) {
+      try {
+        await preserveCopies(this.kv, String(Date.now()));
+        this.preserveOnNewGame = false;
+      } catch (e) {
+        this.toast(`No se pudieron apartar las copias anteriores (${(e as Error).message}); no se creó la partida nueva.`, 'error');
+        return;
+      }
+    }
     this.ui.state = newGame({ ...opts, nowReal: Date.now(), seed: opts.seed || `${opts.name}-${Date.now()}` });
     refreshListings(this.ui.state);
     this.ui.absence = null;
+    this.ui.simError = null;
     this.ui.speed = 0;
     updateProgression(this.ui.state);
     this.dirty = true;
@@ -217,17 +350,26 @@ class GameStore {
     this.emit();
   }
 
-  step(days: number) {
-    const s = this.ui.state;
-    if (!s) return;
-    const lastId = s.log.length ? s.log[s.log.length - 1].id : 0;
+  /**
+   * Avanza días de a uno y de forma atómica. Si un día falla, la partida queda
+   * en el día anterior, el tiempo se pausa y se muestra un error recuperable.
+   * Devuelve cuántos días se completaron.
+   */
+  private runDays(days: number, context: SimError['context'], stopOnImportant: boolean): number {
     let done = 0;
     for (let i = 0; i < days; i++) {
-      const before = s.log.length ? s.log[s.log.length - 1].id : 0;
-      advanceDay(s);
+      const s = this.ui.state;
+      if (!s) break;
+      const before = lastLogIdOf(s);
+      const r = advanceDaySafe(s, this.opts.step);
+      if (!r.ok) {
+        this.ui.state = r.state;
+        this.onSimFailure(r.failure, context);
+        break;
+      }
       done++;
       // Los saltos se detienen ante un evento importante para que no se pierdan ofertas ni alertas.
-      if (this.ui.settings.autoPause && i < days - 1) {
+      if (stopOnImportant && i < days - 1) {
         const hit = s.log.find((l) => l.id > before && this.isImportant(l));
         if (hit) {
           this.toast(`Salto detenido: ${hit.text}`, hit.kind === 'danger' ? 'error' : 'info');
@@ -235,7 +377,56 @@ class GameStore {
         }
       }
     }
+    return done;
+  }
+
+  private onSimFailure(f: DayFailure, context: SimError['context']) {
+    const prev = this.ui.simError;
+    const attempts = prev && prev.day === f.day ? prev.attempts + 1 : 1;
+    this.ui.simError = { ...f, context, attempts, at: Date.now() };
+    this.ui.speed = 0;
+    this.accumulator = 0;
+    console.error(`[URT] Falló la simulación del día ${f.day}:`, f.message, f.stack ?? '');
+    // La partida restaurada es consistente: se guarda para no perder el progreso previo.
+    if (this.ui.ready) void this.save();
+  }
+
+  /** Vuelve a intentar el día que falló (la partida ya está restaurada, así que es seguro). */
+  retrySimDay() {
+    if (!this.ui.state) return;
+    const lastId = lastLogIdOf(this.ui.state);
+    const done = this.runDays(1, 'step', false);
+    if (done) this.ui.simError = null;
     this.afterAdvance(done, lastId);
+  }
+
+  dismissSimError() {
+    this.ui.simError = null;
+    this.emit();
+  }
+
+  /** Un error de la interfaz: se pausa el tiempo para que nada avance sin que el jugador lo vea. */
+  pauseForError(error: Error) {
+    console.error('[URT] Error de interfaz:', error);
+    if (this.ui.speed !== 0) {
+      this.ui.speed = 0;
+      this.accumulator = 0;
+      this.emit();
+    }
+  }
+
+  step(days: number) {
+    const s = this.ui.state;
+    if (!s || this.ui.simError) return;
+    const lastId = lastLogIdOf(s);
+    const done = this.runDays(days, 'step', this.ui.settings.autoPause);
+    this.afterAdvance(done, lastId);
+  }
+
+  /** Detiene el reloj (pruebas y cierre). */
+  stopClock() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
   }
 
   private startClock() {
@@ -249,16 +440,16 @@ class GameStore {
     const dt = now - this.lastTick;
     this.lastTick = now;
     const s = this.ui.state;
-    if (!s || this.ui.speed === 0) return;
+    if (!s || this.ui.speed === 0 || this.ui.simError) return;
     this.accumulator += dt * this.ui.speed;
     const ms = this.ui.settings.msPerDay || MS_PER_DAY_1X;
     let days = Math.floor(this.accumulator / ms);
     if (days <= 0) return;
     this.accumulator -= days * ms;
     days = Math.min(days, 8);
-    const lastId = s.log.length ? s.log[s.log.length - 1].id : 0;
-    for (let i = 0; i < days; i++) advanceDay(s);
-    this.afterAdvance(days, lastId);
+    const lastId = lastLogIdOf(s);
+    const done = this.runDays(days, 'tick', false);
+    this.afterAdvance(done, lastId);
   }
 
   private afterAdvance(days: number, lastLogId: number) {
@@ -331,13 +522,15 @@ class GameStore {
   }
 
   async importText(text: string): Promise<ActionResult> {
-    const r = await deserializeAny(text.trim());
+    const r = await parseImport(text.trim());
     if (!r.ok) {
       this.toast(`No se pudo importar: ${r.error}`, 'error');
       return { ok: false, error: r.error };
     }
     this.toast('Partida importada y verificada.', 'ok');
     this.ui.state = r.state;
+    this.ui.simError = null;
+    this.ui.bootError = null;
     this.ui.speed = 0;
     void this.save();
     this.emit();

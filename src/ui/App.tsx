@@ -17,6 +17,8 @@ const Finance = lazy(() => import('./screens/Finance').then((m) => ({ default: m
 const Career = lazy(() => import('./screens/Career').then((m) => ({ default: m.Career })));
 import { Money, Sheet, InfoButton } from './components/common';
 import { fmtMoney } from '../engine/format';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { BootErrorScreen, SimErrorSheet } from './screens/Recovery';
 
 const TABS: Array<{ id: Tab; label: string; icon: IconName }> = [
   { id: 'home', label: 'Inicio', icon: 'home' },
@@ -168,6 +170,7 @@ export function App() {
       </div>
     );
   }
+  if (!ui.state && ui.bootError) return <><BootErrorScreen /><Toasts /></>;
   if (!ui.state) return <><Onboarding /><SheetHost /><Toasts /></>;
   return (
     <div className="app">
@@ -183,6 +186,7 @@ export function App() {
         </div>
       )}
       <main className="screen">
+        <ErrorBoundary key={nav.tab} scope="section">
         <Suspense fallback={<p className="small muted">Cargando…</p>}>
         {nav.tab === 'home' && <Home />}
         {nav.tab === 'career' && <Career />}
@@ -197,10 +201,14 @@ export function App() {
           </>
         )}
         </Suspense>
+        </ErrorBoundary>
       </main>
       <BottomNav />
-      <SheetHost />
+      <ErrorBoundary key={nav.sheets.length} scope="section">
+        <SheetHost />
+      </ErrorBoundary>
       <AbsenceReport />
+      <SimErrorSheet />
       <Toasts />
     </div>
   );

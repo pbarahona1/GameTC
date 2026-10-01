@@ -5,6 +5,7 @@ import {
   UserCog, ChevronRight, X, Check, Info, Search, ZoomIn, ZoomOut, RefreshCw, ShieldAlert, Palette, Accessibility, Clock, Save, Upload, Sparkles, Crown,
   Store, Watch, Bike, Smartphone, Tag, Handshake, Magnet, Bell, SquareParking, KeyRound, GraduationCap, PiggyBank, Banknote, Coins, Gauge, Lightbulb,
   ListChecks, Rocket, Plus, Minus, Zap, Wallet, Eye, HardDrive, Maximize2, Undo2, Flame, Pause, Play, Gift,
+  TriangleAlert, History, FolderOpen, Copy, ArchiveRestore, SkipForward, ChevronDown, CalendarDays, ChevronsRight, Ellipsis,
 } from 'lucide-react';
 
 /**
@@ -23,6 +24,8 @@ const MAP = {
   tag: Tag, deal: Handshake, poach: Magnet, bell: Bell, parking: SquareParking, key: KeyRound, education: GraduationCap,
   savings: PiggyBank, cash: Banknote, coins: Coins, gauge: Gauge, idea: Lightbulb, list: ListChecks, rocket: Rocket,
   plus: Plus, minus: Minus, bolt: Zap, wallet: Wallet, eye: Eye, disk: HardDrive, expand: Maximize2, undo: Undo2, fire: Flame, pause: Pause, play: Play, gift: Gift,
+  alert: TriangleAlert, history: History, folder: FolderOpen, copy: Copy, restore: ArchiveRestore, skip: SkipForward,
+  chevronDown: ChevronDown, calendar: CalendarDays, fastForward: ChevronsRight, dots: Ellipsis,
 } as const;
 
 export type IconName = keyof typeof MAP;

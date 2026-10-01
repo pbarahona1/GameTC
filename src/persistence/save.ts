@@ -63,7 +63,13 @@ function b64ToBytes(b64: string): Uint8Array {
 }
 
 async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
-  const out = new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(stream));
+  const src = new ReadableStream<Uint8Array>({
+    start(c) {
+      c.enqueue(bytes);
+      c.close();
+    },
+  });
+  const out = new Response(src.pipeThrough(stream as unknown as ReadableWritablePair<Uint8Array, Uint8Array>));
   return new Uint8Array(await out.arrayBuffer());
 }
 
@@ -277,6 +283,78 @@ export async function restoreBackup(kv: KV, key: string): Promise<LoadResult> {
 
 export async function deleteAll(kv: KV): Promise<void> {
   for (const k of [KEYS.primary, KEYS.temp, KEYS.preupdate, ...KEYS.backups]) await kv.remove(k);
+}
+
+// ------------------------------------------------------------ rescate de copias
+
+/** Todas las ranuras de una partida, en el orden en que se intentan leer. */
+export const ALL_SAVE_KEYS: string[] = [KEYS.primary, KEYS.temp, KEYS.preupdate, ...KEYS.backups];
+
+/** Archivo con el texto crudo de todas las copias (aunque estén dañadas). */
+export interface RescueBundle {
+  format: 'urt-rescue';
+  exportedAt: number;
+  app: string;
+  copies: Record<string, string>;
+}
+
+/** Lee el texto crudo de cada ranura. Una ranura ilegible se omite: nunca lanza. */
+export async function collectRawCopies(kv: KV, keys: string[] = ALL_SAVE_KEYS): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const k of keys) {
+    try {
+      const v = await kv.get(k);
+      if (v) out[k] = v;
+    } catch {
+      /* ranura ilegible: se sigue con las demás */
+    }
+  }
+  return out;
+}
+
+/**
+ * Conserva el texto crudo de las ranuras actuales bajo otra clave antes de que
+ * una partida nueva las reemplace (por ejemplo, después de una carga fallida).
+ */
+export async function preserveCopies(kv: KV, tag: string): Promise<number> {
+  const copies = await collectRawCopies(kv);
+  let n = 0;
+  for (const [k, v] of Object.entries(copies)) {
+    await kv.set(`urt.keep.${tag}.${k}`, v);
+    n++;
+  }
+  return n;
+}
+
+export function rescueBundle(copies: Record<string, string>, now: number, app: string): string {
+  const b: RescueBundle = { format: 'urt-rescue', exportedAt: now, app, copies };
+  return JSON.stringify(b);
+}
+
+/**
+ * Interpreta un texto importado: una partida exportada o un archivo de rescate
+ * (en ese caso se usa la copia válida más reciente que contenga).
+ */
+export async function parseImport(text: string): Promise<LoadResult & { source?: string }> {
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, error: 'El archivo está dañado (JSON inválido).' };
+  }
+  const b = parsed as Partial<RescueBundle> | null;
+  if (b && b.format === 'urt-rescue' && b.copies && typeof b.copies === 'object') {
+    const entries = Object.entries(b.copies).filter((e): e is [string, string] => typeof e[1] === 'string');
+    entries.sort((x, y) => (deserializeHeader(y[1])?.savedAt ?? 0) - (deserializeHeader(x[1])?.savedAt ?? 0));
+    const errors: string[] = [];
+    for (const [key, raw] of entries) {
+      const r = await deserializeAny(raw);
+      if (r.ok) return { ...r, source: key };
+      errors.push(`${key}: ${r.error}`);
+    }
+    return { ok: false, error: entries.length ? `Ninguna copia del archivo se pudo leer (${errors.join(' | ')}).` : 'El archivo de rescate no tiene copias.' };
+  }
+  return deserializeAny(text);
 }
 
 /** Copia la partida principal (ya verificada) a la ranura "antes de actualizar". */
