@@ -49,13 +49,13 @@ function Ticket({ id }: { id: string }) {
       </div>
       <div className="inline-form">
         <label className="tiny muted" htmlFor="pro-qty">Cantidad</label>
-        <NumInput id="pro-qty" value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} />
+        <NumInput id="pro-qty" live value={qty} onChange={setQty} min={1} />
         {h && side === 'venta' && <button className="btn sm ghost" onClick={() => setQty(h.qty)}>Todas ({h.qty})</button>}
       </div>
       {needStop && <div className="field"><label htmlFor="pro-stop">Precio de activación (stop)</label><AmountInput id="pro-stop" value={stop} onChange={setStop} /></div>}
       {needLimit && <div className="field"><label htmlFor="pro-limit">{type === 'take_profit' ? 'Precio objetivo' : 'Precio límite'}</label><AmountInput id="pro-limit" value={limit} onChange={setLimit} /></div>}
-      {type === 'trailing' && <div className="inline-form"><label className="tiny muted" htmlFor="pro-trail">% bajo el máximo</label><NumInput id="pro-trail" value={trail} onChange={setTrail} min={1} suffix="%" /></div>}
-      {type !== 'mercado' && <div className="inline-form"><label className="tiny muted" htmlFor="pro-days">Vigencia</label><NumInput id="pro-days" value={days} onChange={setDays} min={1} suffix="días (máx. 90)" /></div>}
+      {type === 'trailing' && <div className="inline-form"><label className="tiny muted" htmlFor="pro-trail">% bajo el máximo</label><NumInput id="pro-trail" live value={trail} onChange={setTrail} min={1} suffix="%" /></div>}
+      {type !== 'mercado' && <div className="inline-form"><label className="tiny muted" htmlFor="pro-days">Vigencia</label><NumInput id="pro-days" live value={days} onChange={setDays} min={1} max={90} suffix="días (máx. 90)" /></div>}
       <p className="tiny muted">{type === 'mercado' ? `Ejecución inmediata ≈ ${fmtMoney(q.price)} por acción (diferencial ${fmtPct(q.spread, 2)}, impacto ${fmtPct(q.impact, 2)}). Total ≈ ${fmtMoney(q.total)}.` : 'Se revisa cada día hábil contra el mínimo y el máximo del día.'}{!isTradingDay(s.day) ? ' Hoy la bolsa está cerrada.' : ''}</p>
       <Act label="Enviar orden" help="accion_orden" className="btn primary" onClick={() => store.run((x) => placeStockOrder(x, { stockId: id, side, type, qty, limit: needLimit ? limit : undefined, stop: needStop ? stop : undefined, trailPct: type === 'trailing' ? trail / 100 : undefined, days }))} />
       {h && (

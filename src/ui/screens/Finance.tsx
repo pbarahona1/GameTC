@@ -17,7 +17,7 @@ import { incomeStatement } from '../../engine/reports/statements';
 import { addMonths, formatDate, startOfMonth, formatMonth } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
 import { usd } from '../../engine/money';
-import type { PaymentMethod } from '../../engine/state';
+import type { Loan, PaymentMethod } from '../../engine/state';
 import { Money, InfoButton, Tabs, Seg, AmountInput, ConfirmButton, Pill, Bar, LineChart, Learn, ScreenIntro } from '../components/common';
 
 type Sub = 'accounts' | 'card' | 'loans' | 'invest' | 'budget' | 'credit';
@@ -212,34 +212,40 @@ function Card() {
   );
 }
 
+/** Un préstamo activo con SU propio monto de amortización (no se comparte entre préstamos). */
+function LoanCard({ l }: { l: Loan }) {
+  const s = useGame();
+  const [prepay, setPrepay] = useState(0);
+  return (
+    <div className="card" style={l.status === 'default' ? { borderColor: 'var(--loss)' } : undefined}>
+      <div className="card-head">
+        <h2>{BANK_BY_ID[l.bankId].name}</h2>
+        {l.status === 'default' ? <Pill tone="loss">Impago</Pill> : <Pill tone="info">Activo</Pill>}
+      </div>
+      <div className="kv">
+        <dt>Saldo</dt><dd>{fmtMoney(l.balance)}</dd>
+        <dt>Cuota mensual</dt><dd>{fmtMoney(l.payment)}</dd>
+        <dt>Tasa anual fija</dt><dd>{fmtPct(l.apr, 2)}</dd>
+        <dt>Cuotas pagadas</dt><dd>{l.paymentsMade} de {l.termMonths}</dd>
+        <dt>Próximo vencimiento</dt><dd>{formatDate(l.nextDueDay)}</dd>
+        <dt>Intereses pagados</dt><dd>{fmtMoney(l.interestPaid)}</dd>
+      </div>
+      <AmountInput id={`prepay-${l.id}`} label={`Amortizar el préstamo de ${BANK_BY_ID[l.bankId].name}`} value={prepay} onChange={setPrepay} max={Math.min(l.balance, s.ledger.balances.checking)} />
+      <span className="act"><button className="btn sm dark" disabled={prepay <= 0} onClick={() => { const r = store.run((st) => prepayLoan(st, l.id, prepay)); if (r.ok) setPrepay(0); }}>Amortizar anticipadamente</button><InfoButton term="accion_amortizar" /></span>
+    </div>
+  );
+}
+
 function Loans() {
   const s = useGame();
   const [amount, setAmount] = useState(usd(1000));
   const [term, setTerm] = useState(12);
   const [showSched, setShowSched] = useState<string | null>(null);
-  const [prepay, setPrepay] = useState(0);
   const offers = useMemo(() => quoteAll(s, amount, term), [amount, term, s.day, s.credit.score, s.bank.loans.length, JSON.stringify(s.bank.rateNegotiations)]); // eslint-disable-line react-hooks/exhaustive-deps
   const active = s.bank.loans.filter((l) => l.status !== 'paid');
   return (
     <>
-      {active.map((l) => (
-        <div className="card" key={l.id} style={l.status === 'default' ? { borderColor: 'var(--loss)' } : undefined}>
-          <div className="card-head">
-            <h2>{BANK_BY_ID[l.bankId].name}</h2>
-            {l.status === 'default' ? <Pill tone="loss">Impago</Pill> : <Pill tone="info">Activo</Pill>}
-          </div>
-          <div className="kv">
-            <dt>Saldo</dt><dd>{fmtMoney(l.balance)}</dd>
-            <dt>Cuota mensual</dt><dd>{fmtMoney(l.payment)}</dd>
-            <dt>Tasa anual fija</dt><dd>{fmtPct(l.apr, 2)}</dd>
-            <dt>Cuotas pagadas</dt><dd>{l.paymentsMade} de {l.termMonths}</dd>
-            <dt>Próximo vencimiento</dt><dd>{formatDate(l.nextDueDay)}</dd>
-            <dt>Intereses pagados</dt><dd>{fmtMoney(l.interestPaid)}</dd>
-          </div>
-          <AmountInput id={`prepay-${l.id}`} value={prepay} onChange={setPrepay} max={Math.min(l.balance, s.ledger.balances.checking)} />
-          <span className="act"><button className="btn sm dark" disabled={prepay <= 0} onClick={() => { const r = store.run((st) => prepayLoan(st, l.id, prepay)); if (r.ok) setPrepay(0); }}>Amortizar anticipadamente</button><InfoButton term="accion_amortizar" /></span>
-        </div>
-      ))}
+      {active.map((l) => <LoanCard key={l.id} l={l} />)}
 
       <div className="card">
         <div className="card-head"><h2>Comparar préstamos</h2><InfoButton term="prestamo" /></div>

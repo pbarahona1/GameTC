@@ -75,7 +75,7 @@ function QuickTrade({ p }: { p: PositionSummary }) {
     const b = st ? quoteMarket(s, st, 'compra', Math.max(1, qty)) : null;
     body = (
       <>
-        <div className="inline-form small"><span>Acciones</span><NumInput id={`qt-${p.id}`} value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas ({p.qty})</button></div>
+        <div className="inline-form small"><span>Acciones</span><NumInput id={`qt-${p.id}`} live value={qty} onChange={setQty} min={1} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas ({p.qty})</button></div>
         <span className="tiny muted">Comprar ≈ {fmtMoney(b?.total ?? 0)} · Vender ≈ {fmtMoney(q?.total ?? 0)} neto{!isTradingDay(s.day) ? ' · Mercado cerrado: se ejecuta en la apertura' : ''}</span>
         <div className="btn-row">
           <Act label="Comprar más" help="accion_comprar_accion" className="btn sm primary" disabled={st?.status !== 'activa'} onClick={() => store.run((x) => placeStockOrder(x, { stockId: p.id, side: 'compra', type: 'mercado', qty }))} />
@@ -88,7 +88,7 @@ function QuickTrade({ p }: { p: PositionSummary }) {
     const q = b ? bondQuote(s, b, Math.max(1, qty), 'venta') : null;
     body = (
       <>
-        <div className="inline-form small"><span>Bonos</span><NumInput id={`qt-${p.id}`} value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todos ({p.qty})</button></div>
+        <div className="inline-form small"><span>Bonos</span><NumInput id={`qt-${p.id}`} live value={qty} onChange={setQty} min={1} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todos ({p.qty})</button></div>
         <span className="tiny muted">Vender ≈ {fmtMoney(q?.total ?? 0)} neto</span>
         <div className="btn-row">
           <Act label="Comprar más" help="accion_comprar_bono" className="btn sm primary" disabled={b?.status !== 'vigente'} onClick={() => store.run((x) => buyBond(x, p.id, qty))} />
@@ -101,7 +101,7 @@ function QuickTrade({ p }: { p: PositionSummary }) {
       <>
         <div className="field"><label htmlFor={`qa-${p.id}`}>Invertir más</label><AmountInput id={`qa-${p.id}`} value={amount} onChange={setAmount} /></div>
         <Act label="Invertir" help="accion_invertir_fondo" className="btn sm primary" onClick={() => store.run((x) => buyFund(x, p.id, amount))} />
-        <div className="inline-form small"><span>Rescatar participaciones</span><NumInput id={`qt-${p.id}`} value={qty} onChange={setQty} step={0.01} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas</button></div>
+        <div className="inline-form small"><span>Rescatar participaciones</span><NumInput id={`qt-${p.id}`} live value={qty} onChange={setQty} step={0.01} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas</button></div>
         <Act label={`Rescatar ≈ ${fmtMoney(Math.round(Math.min(qty, p.qty) * p.price))}`} help="accion_rescatar_fondo" className="btn sm" disabled={!(qty > 0)} onClick={() => store.run((x) => sellFund(x, p.id, qty >= p.qty - 0.005 ? p.qty : qty))} />
       </>
     );
@@ -110,7 +110,7 @@ function QuickTrade({ p }: { p: PositionSummary }) {
     const q = a ? mogulQuote(s, a, Math.max(0.01, Math.min(qty, p.qty)), 'venta') : null;
     body = (
       <>
-        <div className="inline-form small"><span>Participaciones</span><NumInput id={`qt-${p.id}`} value={qty} onChange={setQty} step={0.01} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas</button></div>
+        <div className="inline-form small"><span>Participaciones</span><NumInput id={`qt-${p.id}`} live value={qty} onChange={setQty} step={0.01} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas</button></div>
         <span className="tiny muted">Vender ≈ {fmtMoney(q?.total ?? 0)} neto (diferencial incluido)</span>
         <div className="btn-row">
           <Act label="Comprar más" help="accion_mogul_comprar" className="btn sm primary" disabled={a?.status !== 'activo'} onClick={() => store.run((x) => buyMogul(x, p.id, qty))} />

@@ -52,7 +52,7 @@ function Detail({ a, onClose }: { a: MogulAsset; onClose: () => void }) {
         <>
           <div className="field">
             <label htmlFor="mog-u">Participaciones (acepta fracciones, mín. 0,01)</label>
-            <NumInput id="mog-u" value={units} onChange={setUnits} step={0.01} />
+            <NumInput id="mog-u" live value={units} onChange={setUnits} step={0.01} />
             <span className="tiny muted">Compra ≈ {fmtMoney(bq.total)} · Venta ≈ {fmtMoney(sq.total)} neto · Podés comprar hasta {maxUnits.toFixed(2)} más (tope 49 %).</span>
           </div>
           <div className="btn-row">
@@ -80,7 +80,7 @@ export function MogulScreen() {
         <p className="small">Comprá fracciones de activos reales: pequeñas empresas, edificios alquilados y derechos de regalías. Cobrás tu parte de los repartos mensuales y el valor se recalcula cada mes con los datos del activo. Es menos líquido que la bolsa: el diferencial compra/venta es mayor.</p>
         <div className="kv"><dt>Repartos cobrados (histórico)</dt><dd>{fmtMoney(s.mogul.distributionsReceived)}</dd></div>
       </div>
-      {a && <Detail a={a} onClose={() => setSel(null)} />}
+      {a && <Detail key={a.id} a={a} onClose={() => setSel(null)} />}
       <Seg items={[{ id: 'todos', label: 'Todos' }, { id: 'empresa', label: 'Empresas' }, { id: 'inmueble', label: 'Edificios' }, { id: 'regalias', label: 'Regalías' }]} value={kind} onChange={setKind} />
       <div className="card" style={{ paddingBlock: 4 }}>
         <div className="rows">

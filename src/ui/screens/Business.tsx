@@ -280,6 +280,7 @@ function Market({ buyerId }: { buyerId: number | null }) {
               label={offer < l.askPrice ? 'Contraofertar' : 'Comprar'}
               className="btn primary"
               help="accion_comprar_empresa"
+              disabled={!(offer > 0)}
               confirmLabel="Confirmar"
               detail={<>Pagarías {fmtMoney(offer)} + {fmtMoney(fee)} de costos legales (3 %). {offer < l.askPrice ? 'El vendedor puede rechazar la contraoferta (una sola vez).' : ''}</>}
               onConfirm={() => {
@@ -306,7 +307,7 @@ export function Business() {
   if (sub.startsWith('co:')) {
     const [, id, tab] = sub.split(':');
     const co = s.companies.find((c) => c.id === Number(id));
-    if (co) return <CompanyView co={co} tab={tab ?? 'summary'} />;
+    if (co) return <CompanyView key={co.id} co={co} tab={tab ?? 'summary'} />;
     return (
       <>
         <Empty icon="📦">Esa empresa ya no forma parte de tu cartera.</Empty>

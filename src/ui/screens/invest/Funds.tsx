@@ -52,7 +52,7 @@ function FundCard({ id }: { id: string }) {
           {h && (
             <div className="field">
               <label htmlFor={`fund-u-${id}`}>Participaciones a rescatar (tenés {h.qty.toFixed(2)})</label>
-              <NumInput id={`fund-u-${id}`} value={units} onChange={setUnits} step={0.01} />
+              <NumInput id={`fund-u-${id}`} live value={units} onChange={setUnits} step={0.01} />
               <div className="btn-row">
                 <button className="btn sm ghost" onClick={() => setUnits(Math.floor(h.qty * 100) / 100)}>Todo</button>
                 <Act label={`Rescatar ≈ ${fmtMoney(Math.round(Math.min(units, h.qty) * f.nav))}`} help="accion_rescatar_fondo" className="btn" disabled={!(units > 0)} onClick={() => store.run((x) => sellFund(x, id, units >= h.qty - 0.005 ? h.qty : units))} />

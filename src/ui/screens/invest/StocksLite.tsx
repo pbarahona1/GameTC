@@ -79,7 +79,7 @@ function StockDetail({ st }: { st: Stock }) {
       {h && <p className="small">Tenés <strong>{h.qty}</strong> acciones · costo {fmtMoney(h.cost)} · valor {fmtMoney(Math.round(h.qty * st.price))} (<Money c={Math.round(h.qty * st.price) - h.cost} colored sign />)</p>}
       <div className="field">
         <label htmlFor="lite-qty">Cantidad de acciones</label>
-        <NumInput id="lite-qty" value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} />
+        <NumInput id="lite-qty" live value={qty} onChange={setQty} min={1} />
         <span className="tiny muted">Compra ≈ {fmtMoney(buyQ.total)} (incluye comisión {fmtMoney(buyQ.fee)}) · Venta ≈ {fmtMoney(sellQ.total)} neto{!isTradingDay(s.day) ? ' · Mercado cerrado: se ejecuta en la próxima apertura.' : ''}</span>
       </div>
       <div className="btn-row">
@@ -112,7 +112,7 @@ export function StocksLite({ selected }: { selected: string | null }) {
           <dt>Comisión <InfoButton term="comision_corretaje" /></dt><dd>0,2 % (mín. $1)</dd>
         </div>
       </div>
-      {st && <StockDetail st={st} />}
+      {st && <StockDetail key={st.id} st={st} />}
       <input className="input" placeholder="Buscar por nombre o código" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar acción" />
       <div className="chips">
         {['todos', 'mias', ...Object.keys(SECTOR_NAMES)].map((k) => (

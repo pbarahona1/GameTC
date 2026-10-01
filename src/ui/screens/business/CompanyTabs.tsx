@@ -70,7 +70,7 @@ export function MarketingTab({ co }: { co: Company }) {
         <p className="small muted">{ch.description}</p>
         <div className="field"><label>Público objetivo</label><Seg items={AUDIENCES.map((a) => ({ id: a.id, label: a.name }))} value={audience} onChange={setAudience} /></div>
         <div className="field"><label htmlFor="mk-budget">Presupuesto diario</label><AmountInput id="mk-budget" value={budget} onChange={setBudget} /></div>
-        <div className="inline-form small"><span>Duración</span><NumInput id="mk-days" value={days} onChange={setDays} suffix="días" /></div>
+        <div className="inline-form small"><span>Duración</span><NumInput id="mk-days" live value={days} onChange={setDays} suffix="días" /></div>
         <p className="small">Costo total: <strong>{fmtMoney(budget * days)}</strong>. Caja de la empresa: {fmtMoney(co.ledger.balances.cash)}.</p>
         <Act label="Lanzar campaña" help="accion_campana" className="btn primary" onClick={() => runCo(co.id, (st, x) => startCampaign(st, x, channel, budget, days, audience))} />
       </div>
@@ -260,7 +260,7 @@ export function FinanceTab({ co }: { co: Company }) {
           </div>
         ))}
         <div className="field"><label htmlFor={`la-${co.id}`}>Monto</label><AmountInput id={`la-${co.id}`} value={loanAmt} onChange={setLoanAmt} /></div>
-        <div className="inline-form small"><span>Plazo</span><NumInput id={`lt-${co.id}`} value={loanTerm} onChange={setLoanTerm} suffix="meses" /></div>
+        <div className="inline-form small"><span>Plazo</span><NumInput id={`lt-${co.id}`} live value={loanTerm} onChange={setLoanTerm} suffix="meses" /></div>
         {BIZ_BANKS.map((b) => {
           const q = quoteCoLoan(s, co, b, loanAmt, loanTerm);
           return (
@@ -274,7 +274,7 @@ export function FinanceTab({ co }: { co: Company }) {
                 {q.dscr !== null && <><dt>Cobertura (EBITDA/cuotas)</dt><dd>{q.dscr.toFixed(2)}×</dd></>}
               </div>
               {!q.approved && <ul className="tiny loss" style={{ margin: 0, paddingLeft: 16 }}>{q.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
-              <ConfirmButton label="Solicitar" className="btn sm primary" help="accion_prestamo_empresa" disabled={!q.approved} confirmLabel="Firmar" detail={<>{b.requiresGuarantee ? 'Garantizás personalmente: si la empresa quiebra, pagás el saldo vos. ' : ''}Primera cuota el {formatDate(addMonths(s.day, 1))}.</>} onConfirm={() => runCo(co.id, (st, c) => takeCoLoan(st, c, b.id, loanAmt, loanTerm))} />
+              <ConfirmButton label="Solicitar" className="btn sm primary" help="accion_prestamo_empresa" disabled={!q.approved || !(loanAmt > 0)} confirmLabel="Firmar" detail={<>{b.requiresGuarantee ? 'Garantizás personalmente: si la empresa quiebra, pagás el saldo vos. ' : ''}Primera cuota el {formatDate(addMonths(s.day, 1))}.</>} onConfirm={() => runCo(co.id, (st, c) => takeCoLoan(st, c, b.id, loanAmt, loanTerm))} />
             </div>
           );
         })}
@@ -349,7 +349,7 @@ export function ManageTab({ co }: { co: Company }) {
       {lf.canRaiseEquity && (
         <div className="card">
           <CardHead title="Vender acciones a inversionistas" term="accion_emitir" />
-          <div className="inline-form small"><span>Porcentaje a vender</span><NumInput id={`raise-${co.id}`} value={pct} onChange={setPct} suffix="%" /></div>
+          <div className="inline-form small"><span>Porcentaje a vender</span><NumInput id={`raise-${co.id}`} live value={pct} onChange={setPct} suffix="%" /></div>
           <p className="small">Ingresarían ≈ {fmtMoney(Math.round((v.value * pct) / 100 / (1 - pct / 100)))} a la caja. Tu participación pasaría a {fmtPct(co.ownership * (1 - pct / 100), 1)}.</p>
           <ConfirmButton label="Emitir acciones" className="btn" confirmLabel="Emitir" detail="La dilución es permanente: los inversionistas recibirán su parte de los dividendos y de una futura venta." onConfirm={() => runCo(co.id, (st, c) => raiseEquity(st, c, pct / 100))} />
         </div>

@@ -17,7 +17,7 @@ import { generateCandidates, hire, fire, train, setWage, marketWage, hiringFee, 
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import { Cents, usd } from '../../../engine/money';
-import { Money, InfoButton, Tabs, Pill, Bar, Empty, AmountInput, ConfirmButton, CardHead, Act, Stat, LineChart, Legend, NumInput, Seg } from '../../components/common';
+import { Money, InfoButton, Tabs, Pill, Bar, Empty, AmountInput, ConfirmButton, CardHead, Act, Stat, LineChart, Legend, NumInput, Seg, GuardedAct } from '../../components/common';
 import { MarketingTab, FinanceTab, MarketTab, ManageTab } from './CompanyTabs';
 import { ForecastPanel } from '../../components/ForecastPanel';
 import { BandChart } from '../../components/charts';
@@ -148,8 +148,20 @@ function Ops({ co }: { co: Company }) {
                 <dt>Demanda esperada por día (estim.)</dt><dd>{demandNow.toFixed(1)}</dd>
               </div>
               <div className="inline-form">
-                <div style={{ flex: 1, minWidth: 140 }}><AmountInput id={`price-${co.id}-${p.id}`} value={draft} onChange={(v) => setPrices({ ...prices, [p.id]: v })} /></div>
-                <Act label="Aplicar" help="accion_precio" className="btn sm dark" disabled={draft === ps.price} onClick={() => runCo(co.id, (st, c) => setPrice(st, c, p.id, draft))} />
+                <div style={{ flex: 1, minWidth: 140 }}><AmountInput id={`price-${co.id}-${p.id}`} label={`Precio de ${p.name}`} value={draft} onChange={(v) => setPrices({ ...prices, [p.id]: v })} /></div>
+                <GuardedAct
+                  label="Aplicar"
+                  help="accion_precio"
+                  className="btn sm dark"
+                  disabled={!(draft > 0) || draft === ps.price}
+                  warning={draft > 0 && draft < unitCost
+                    ? <>Con {fmtMoney(draft)} cada unidad se vende {fmtMoney(unitCost - draft)} por debajo de su costo directo estimado ({fmtMoney(unitCost)}).</>
+                    : draft > 0 && demandNow > 0 && demandDraft < demandNow * 0.25
+                      ? <>Con {fmtMoney(draft)} la demanda esperada cae de {demandNow.toFixed(1)} a {demandDraft.toFixed(1)} por día.</>
+                      : undefined}
+                  confirmLabel="Aplicar igual"
+                  onConfirm={() => runCo(co.id, (st, c) => setPrice(st, c, p.id, draft))}
+                />
               </div>
               {draft !== ps.price && <p className="tiny muted">Con {fmtMoney(draft)} la demanda esperada sería {demandDraft.toFixed(1)}/día ({demandDraft >= demandNow ? '+' : ''}{Math.round((demandDraft / Math.max(0.01, demandNow) - 1) * 100)} %). Elasticidad del sector: {p.elasticity}. <InfoButton term="elasticidad" /></p>}
               {sec.model === 'manufacturing' && (
@@ -307,7 +319,7 @@ function Inventory({ co }: { co: Company }) {
           <>
             <div className="inline-form">
               <span className="small">Cantidad</span>
-              <NumInput id="po-qty" value={q} onChange={setQty} min={0} step={1} suffix={sec.items.find((x) => x.id === item)!.unit} />
+              <NumInput id="po-qty" live value={q} onChange={setQty} min={0} step={1} suffix={sec.items.find((x) => x.id === item)!.unit} />
             </div>
             <p className="small">Total {fmtMoney(Math.round(supplierUnitCost(s, sup) * q))} + flete {fmtMoney(deliveryFee(s, co, sup))}. Caja: {fmtMoney(co.ledger.balances.cash)}.</p>
             <Act label="Pedir" help="accion_pedido" className="btn primary" onClick={() => runCo(co.id, (st, c) => placeOrder(st, c, sup.id, q))} />

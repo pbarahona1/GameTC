@@ -85,6 +85,7 @@ export function quoteCoLoan(state: GameState, co: Company, bank: BizBank, amount
 export function takeCoLoan(state: GameState, co: Company, bankId: string, amount: Cents, term: number): ActionResult {
   const bank = BIZ_BANKS.find((b) => b.id === bankId);
   if (!bank) return FAIL('Banco inexistente.');
+  if (!Number.isSafeInteger(amount) || amount <= 0) return FAIL('Ingresá un monto mayor a cero.');
   const q = quoteCoLoan(state, co, bank, amount, term);
   if (bank.requiresGuarantee) recordInquiry(state);
   if (!q.approved) return FAIL('Rechazado: ' + q.reasons.join(' '));

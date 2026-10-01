@@ -111,7 +111,7 @@ function IcLoans({ co }: { co: Company }) {
           <strong className="small">Prestar desde {co.name} a…</strong>
           <div className="chips">{members.map((m) => <button key={m.id} onClick={() => setTo(m.id)} style={to === m.id ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{m.name}</button>)}</div>
           <AmountInput id="ic-amt" value={amount} onChange={setAmount} max={co.ledger.balances.cash} />
-          <div className="inline-form small"><span>Tasa anual</span><NumInput id="ic-rate" value={rate} onChange={setRate} step={0.5} suffix="%" /><span>Plazo</span><NumInput id="ic-m" value={months} onChange={setMonths} suffix="meses" /></div>
+          <div className="inline-form small"><span>Tasa anual</span><NumInput id="ic-rate" live value={rate} onChange={setRate} step={0.5} suffix="%" /><span>Plazo</span><NumInput id="ic-m" live value={months} onChange={setMonths} suffix="meses" /></div>
           <p className="tiny muted">Los intereses son ingreso para quien presta y gasto para quien recibe (cambia dónde tributa la ganancia si están en distintas jurisdicciones). En los estados consolidados se eliminan.</p>
           <Act label="Otorgar préstamo" help="accion_prestamo_intragrupo" className="btn sm" disabled={!to || !(amount > 0)} onClick={() => store.run((x) => grantIcLoan(x, co.id, to!, amount, rate / 100, months))} />
         </>
@@ -151,7 +151,7 @@ export function GroupTab({ co }: { co: Company }) {
         <div className="card">
           <CardHead title={`Subsidiaria de ${parent.name}`} term="subsidiaria" />
           <p className="small">Su resultado se refleja en el patrimonio de {parent.name} por el método de participación. Los dividendos hacia la matriz no pagan retención.</p>
-          <div className="inline-form small"><span>Honorario de gestión a la matriz</span><NumInput id="mgmt-fee" value={fee} onChange={setFee} step={0.5} suffix="% de ventas" /></div>
+          <div className="inline-form small"><span>Honorario de gestión a la matriz</span><NumInput id="mgmt-fee" live value={fee} onChange={setFee} step={0.5} suffix="% de ventas" /></div>
           <Act label="Guardar honorario" help="honorario_gestion" className="btn sm" onClick={() => store.run((x) => setManagementFee(x, co.id, fee / 100))} />
           <ConfirmButton label="Sacar del grupo (a tu nombre)" help="accion_spinoff" className="btn sm ghost" detail="La matriz te entrega la empresa como dividendo en especie. Los préstamos intragrupo se cancelan primero." onConfirm={() => runCo(co.id, (st, c) => spinOff(st, c))} />
           <button className="btn sm ghost" onClick={() => navStore.setSub('business', `co:${parent.id}:group`)}>Ver el grupo completo</button>

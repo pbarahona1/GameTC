@@ -39,6 +39,26 @@ import { residence } from '../tax/taxEngine';
  */
 export const AGENCY_FEE = 0.08;
 export const SALE_COMMISSION = 0.03;
+/** Venta rápida: se cobra hoy este porcentaje de la tasación. */
+export const QUICK_SALE_RATIO = 0.92;
+
+/**
+ * Probabilidad semanal de que aparezca un comprador para un inmueble publicado.
+ * Sube exponencialmente al bajar el precio frente a la tasación y tiene tope:
+ * por debajo de cierto precio, vender más barato ya no acelera la venta.
+ */
+export function buyerWeeklyChance(state: GameState, price: Cents, appraisal: Cents): number {
+  const ratio = price / Math.max(1, appraisal);
+  let prob = 0.22 * Math.exp(-7 * (ratio - 1));
+  if (state.macro.phase === 'recesion') prob *= 0.55;
+  if (state.macro.phase === 'auge') prob *= 1.3;
+  return clamp(prob, 0.005, 0.7);
+}
+
+/** Precio que cobra la venta rápida (hoy, sin esperar comprador). */
+export function quickSalePrice(p: Property): Cents {
+  return roundCents(p.appraisal * QUICK_SALE_RATIO);
+}
 export const NOTARY_RATE = 0.01;
 export const FORECLOSURE_DISCOUNT = 0.75;
 export const MISSED_TO_FORECLOSE = 3;
@@ -247,16 +267,40 @@ export function realEstateDay(state: GameState): void {
   re.mortgages = re.mortgages.filter((m) => m.status === 'activa' || state.day - m.startDay < 3650);
 }
 
+const TENANT = { base: 0.35, slope: 6, min: 0.01, max: 0.9 };
+
+/** Multiplicador de la probabilidad de inquilino por estado del inmueble, vacancia de la zona y administración. */
+function tenantFactor(state: GameState, p: Property): number {
+  const vac = marketVacancy(state, p.zoneId, p.type);
+  return (0.5 + p.condition / 200) * (1 - vac * 2) * (p.management === 'agencia' ? 1.5 : 1);
+}
+
+/**
+ * Probabilidad semanal de conseguir inquilino con un alquiler pedido: baja si
+ * pedís más que el mercado o el estado es malo; tiene tope.
+ */
+export function tenantWeeklyChance(state: GameState, p: Property, rent: Cents): number {
+  const mr = marketRent(state, p);
+  const ratio = rent / Math.max(1, mr);
+  let prob = TENANT.base * Math.exp(-TENANT.slope * (ratio - 1)) * (0.5 + p.condition / 200) * (1 - marketVacancy(state, p.zoneId, p.type) * 2);
+  if (p.management === 'agencia') prob *= 1.5;
+  return clamp(prob, TENANT.min, TENANT.max);
+}
+
+/**
+ * Alquiler por debajo del cual pedir menos ya no consigue inquilino más rápido
+ * (la probabilidad semanal llegó a su tope): solo baja el ingreso.
+ */
+export function rentNoFasterBelow(state: GameState, p: Property): Cents {
+  const k = tenantFactor(state, p);
+  if (k <= 0) return 0;
+  const ratio = 1 - Math.log(TENANT.max / (TENANT.base * k)) / TENANT.slope;
+  return Math.max(0, roundCents(marketRent(state, p) * ratio));
+}
+
 function weeklyTenantSearch(state: GameState, p: Property): void {
   if (!p.listedForRent || p.lease || p.usedBy !== null || p.renovation || p.development || p.evictionUntil !== null || p.type === 'terreno' && p.m2 < 100) return;
-  const mr = marketRent(state, p);
-  const ratio = p.askingRent / Math.max(1, mr);
-  const vac = marketVacancy(state, p.zoneId, p.type);
-  // Probabilidad semanal de conseguir inquilino: baja si pedís más que el mercado o el estado es malo.
-  let prob = 0.35 * Math.exp(-6 * (ratio - 1)) * (0.5 + p.condition / 200) * (1 - vac * 2);
-  if (p.management === 'agencia') prob *= 1.5;
-  prob = clamp(prob, 0.01, 0.9);
-  if (chance(state, prob)) {
+  if (chance(state, tenantWeeklyChance(state, p, p.askingRent))) {
     p.lease = newLease(state, p, p.askingRent);
     p.vacantSince = null;
     if (p.owner.kind !== 'mogul') addLog(state, 'success', '🤝', `${p.name}: nuevo inquilino (${p.lease.tenant}) por ${fmtMoney(p.lease.rent)}/mes hasta ${formatDate(p.lease.endDay)}.`);
@@ -264,11 +308,7 @@ function weeklyTenantSearch(state: GameState, p: Property): void {
 }
 
 function weeklyBuyerSearch(state: GameState, p: Property): void {
-  const ratio = p.forSale!.price / Math.max(1, p.appraisal);
-  let prob = 0.22 * Math.exp(-7 * (ratio - 1));
-  if (state.macro.phase === 'recesion') prob *= 0.55;
-  if (state.macro.phase === 'auge') prob *= 1.3;
-  if (chance(state, clamp(prob, 0.005, 0.7))) completeSale(state, p, p.forSale!.price, 'mercado');
+  if (chance(state, buyerWeeklyChance(state, p.forSale!.price, p.appraisal))) completeSale(state, p, p.forSale!.price, 'mercado');
 }
 
 /** Economía mensual de un inmueble (sin contabilizar). Sirve también para Mogul y proyecciones. */
@@ -666,7 +706,8 @@ export function buyProperty(state: GameState, listingId: number, o: BuyOptions):
   if (!l) return FAIL('El inmueble ya no está en venta.');
   if (state.legal?.prison) return FAIL('Desde prisión no podés comprar inmuebles.');
   let price = l.askPrice;
-  if (o.offer && o.offer < l.askPrice) {
+  if (o.offer !== undefined && !(o.offer > 0)) return FAIL('La oferta debe ser mayor a cero.');
+  if (o.offer !== undefined && o.offer < l.askPrice) {
     if (l.negotiated) return FAIL('El vendedor ya rechazó una contraoferta: solo acepta el precio publicado.');
     l.negotiated = true;
     const p = clamp((o.offer / l.askPrice - 0.85) / 0.15 + state.skills.negotiation.level * 0.004 + state.skills.realEstate.level * 0.002, 0, 0.95);
@@ -738,7 +779,7 @@ export function buyProperty(state: GameState, listingId: number, o: BuyOptions):
   return OK(`Compra escriturada: ${p.name}. Pagaste ${fmtMoney(cashNeeded)} en total.`);
 }
 
-/** Venta: rápida (92 % de la tasación, inmediata) o publicada a un precio (espera comprador). */
+/** Venta: rápida (QUICK_SALE_RATIO de la tasación, inmediata) o publicada a un precio (espera comprador). */
 export function sellProperty(state: GameState, id: number, mode: 'rapida' | 'publicar' | 'retirar', price?: Cents): ActionResult {
   const p = state.realEstate.properties.find((x) => x.id === id);
   if (!p) return FAIL('Inmueble inexistente.');
@@ -748,11 +789,11 @@ export function sellProperty(state: GameState, id: number, mode: 'rapida' | 'pub
   }
   if (p.development) return FAIL('No se puede vender con la obra en curso.');
   if (mode === 'publicar') {
-    if (!price || price <= 0) return FAIL('Indicá el precio de venta.');
+    if (!price || !Number.isSafeInteger(price) || price <= 0) return FAIL('Indicá el precio de venta.');
     p.forSale = { price, since: state.day };
     return OK(`Publicaste ${p.name} a ${fmtMoney(price)} (${fmtPct(price / p.appraisal - 1, 0)} frente a la tasación). Cuanto más cerca de la tasación, más rápido se vende.`);
   }
-  return completeSale(state, p, roundCents(p.appraisal * 0.92), 'rapida');
+  return completeSale(state, p, quickSalePrice(p), 'rapida');
 }
 
 function completeSale(state: GameState, p: Property, price: Cents, how: 'rapida' | 'mercado'): ActionResult {

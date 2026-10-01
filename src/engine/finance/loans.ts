@@ -139,6 +139,7 @@ export function negotiateRate(state: GameState, bankId: string): ActionResult {
 export function takeLoan(state: GameState, bankId: string, amount: Cents, termMonths: number): ActionResult {
   const bank = BANK_BY_ID[bankId];
   if (!bank) return FAIL('Banco inexistente.');
+  if (!Number.isSafeInteger(amount) || amount <= 0) return FAIL('Ingresá un monto mayor a cero.');
   const offer = quoteLoan(state, bank, amount, termMonths);
   recordInquiry(state);
   if (!offer.approved) return FAIL(`Solicitud rechazada: ${offer.reasons.join(' ')}`);

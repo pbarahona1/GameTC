@@ -1,7 +1,7 @@
 import { Icon, isIconName, IconName } from '../icons';
-import { ReactNode, useEffect, useMemo, useState, type PointerEvent as RPointerEvent } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Cents } from '../../engine/money';
-import { fmtMoney, fmtCompact } from '../../engine/format';
+import { fmtMoney, fmtCompact, fmtAmountInput, fmtNumber, parseMoney, parseQuantity } from '../../engine/format';
 import { GLOSSARY_BY_ID } from '../../content/glossary';
 import { navStore } from '../nav';
 import { store, useUI } from '../store';
@@ -111,35 +111,69 @@ export function Sheet({ title, children, onClose }: { title: ReactNode; children
   );
 }
 
-/** Entrada de montos en dólares; devuelve centavos. */
-export function AmountInput({ id, value, onChange, max, placeholder }: { id: string; value: Cents; onChange: (c: Cents) => void; max?: Cents; placeholder?: string }) {
-  const [text, setText] = useState(value ? (value / 100).toFixed(2) : '');
+/**
+ * Entrada de montos. Usa el lector único (`parseMoney`): lo que el jugador
+ * escribe se guarda como borrador local y debajo se muestra el valor que el
+ * juego entendió. `onChange` recibe centavos; un campo vacío o inválido
+ * informa 0 (los botones que dependen del monto deben exigir un valor > 0).
+ */
+export function AmountInput({ id, value, onChange, max, placeholder, label }: { id: string; value: Cents; onChange: (c: Cents) => void; max?: Cents; placeholder?: string; label?: string }) {
+  const [text, setText] = useState(() => fmtAmountInput(value));
+  const [focused, setFocused] = useState(false);
+  // Último valor que este campo informó: si el padre cambia el valor por su cuenta
+  // (por ejemplo con un botón de 50 %), el texto se actualiza; si no, se respeta lo escrito.
+  const emitted = useRef<Cents>(value);
   useEffect(() => {
-    const cur = Math.round(parseFloat(text.replace(',', '.')) * 100) || 0;
-    if (cur !== value) setText(value ? (value / 100).toFixed(2) : '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (value !== emitted.current) {
+      emitted.current = value;
+      setText(fmtAmountInput(value));
+    }
   }, [value]);
+  const change = (t: string) => {
+    setText(t);
+    const r = parseMoney(t);
+    const c = r.ok ? r.cents ?? 0 : 0;
+    emitted.current = c;
+    onChange(c);
+  };
+  const parsed = parseMoney(text);
+  const canonical = parsed.ok && parsed.cents !== null && text === fmtAmountInput(parsed.cents);
+  const hintId = `${id}-hint`;
   return (
     <div className="stack" style={{ gap: 6 }}>
       <input
         id={id}
         className="input money"
         inputMode="decimal"
+        autoComplete="off"
+        aria-label={label}
+        aria-invalid={!parsed.ok}
+        aria-describedby={hintId}
         placeholder={placeholder ?? '0.00'}
         value={text}
-        onChange={(e) => {
-          const t = e.target.value.replace(/[^0-9.,]/g, '');
-          setText(t);
-          onChange(Math.max(0, Math.round((parseFloat(t.replace(',', '.')) || 0) * 100)));
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          // Al salir del campo se muestra el valor ya normalizado ("150000" → "150,000").
+          if (parsed.ok && parsed.cents !== null) setText(fmtAmountInput(parsed.cents));
         }}
+        onChange={(e) => change(e.target.value)}
       />
+      <span id={hintId} className="amount-hint" aria-live="polite">
+        {!parsed.ok ? <span className="tiny loss">{parsed.error}</span>
+          : parsed.cents !== null && (focused || !canonical) ? <span className="tiny muted">Valor interpretado: <strong className="num">{fmtMoney(parsed.cents)}</strong></span>
+          : null}
+      </span>
       {max !== undefined && max > 0 && (
         <div className="chips">
-          {[0.25, 0.5, 1].map((f) => (
-            <button key={f} type="button" onClick={() => onChange(Math.floor((max * f) / 100) * 100 || max)}>
-              {f === 1 ? 'Todo' : `${f * 100} %`} · {fmtMoney(Math.floor((max * f) / 100) * 100 || max, { decimals: false })}
-            </button>
-          ))}
+          {[0.25, 0.5, 1].map((f) => {
+            const amt = Math.floor((max * f) / 100) * 100 || max;
+            return (
+              <button key={f} type="button" onClick={() => change(fmtAmountInput(amt))}>
+                {f === 1 ? 'Todo' : `${f * 100} %`} · {fmtMoney(amt, { decimals: false })}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -284,6 +318,16 @@ export function Act({ label, help, onClick, className = 'btn', disabled }: { lab
   );
 }
 
+/**
+ * Acción que pide confirmación SOLO cuando hay un motivo (`warning`): un precio
+ * muy alejado de su referencia, algo irreversible. Si no hay motivo, es un botón
+ * normal: no se agregan confirmaciones innecesarias a acciones reversibles.
+ */
+export function GuardedAct({ label, help, onConfirm, warning, confirmLabel = 'Confirmar igual', className = 'btn', disabled }: { label: string; help: string; onConfirm: () => void; warning?: ReactNode; confirmLabel?: string; className?: string; disabled?: boolean }) {
+  if (warning) return <ConfirmButton label={label} help={help} className={className} disabled={disabled} detail={warning} confirmLabel={confirmLabel} onConfirm={onConfirm} />;
+  return <Act label={label} help={help} className={className} disabled={disabled} onClick={onConfirm} />;
+}
+
 export function CardHead({ title, term, right }: { title: ReactNode; term?: string; right?: ReactNode }) {
   return (
     <div className="card-head">
@@ -294,28 +338,90 @@ export function CardHead({ title, term, right }: { title: ReactNode; term?: stri
   );
 }
 
-/** Entrada numérica simple (cantidades, días). */
-export function NumInput({ id, value, onChange, min = 0, step = 1, suffix }: { id: string; value: number; onChange: (n: number) => void; min?: number; step?: number; suffix?: string }) {
-  const [text, setText] = useState(String(value));
+function showNum(n: number, decimals: number): string {
+  return fmtNumber(n, decimals > 0 && !Number.isInteger(n) ? decimals : 0);
+}
+
+/** Decimales que admite un campo según su paso (1 → 0, 0.5 → 1, 0.01 → 2). */
+function decimalsOf(step: number): number {
+  if (step >= 1) return 0;
+  const t = String(step);
+  return t.includes('.') ? t.split('.')[1].length : 0;
+}
+
+/**
+ * Entrada numérica (cantidades, días, porcentajes). Usa el mismo lector que los
+ * montos y mantiene un borrador local: por defecto el valor se aplica al salir
+ * del campo o con Enter, nunca en cada tecla (así una acción del motor no se
+ * ejecuta con valores intermedios como "1" mientras se escribe "120").
+ * `live` aplica cada valor válido al instante: solo para estado local de la
+ * pantalla (vistas previas), nunca para acciones del motor.
+ */
+export function NumInput({ id, value, onChange, min = 0, max, step = 1, suffix, live = false, label }: { id: string; value: number; onChange: (n: number) => void; min?: number; max?: number; step?: number; suffix?: string; live?: boolean; label?: string }) {
+  const decimals = decimalsOf(step);
+  const show = (n: number) => showNum(n, decimals);
+  const [text, setText] = useState(() => showNum(value, decimals));
+  const emitted = useRef(value);
   useEffect(() => {
-    if (Number(text) !== value) setText(String(value));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+    if (value !== emitted.current) {
+      emitted.current = value;
+      setText(showNum(value, decimals));
+    }
+  }, [value, decimals]);
+  const check = (t: string): { ok: true; value: number } | { ok: false; error: string } | null => {
+    const r = parseQuantity(t, decimals);
+    if (!r.ok) return r;
+    if (r.value === null) return null;
+    if (r.value < min) return { ok: false, error: `El mínimo es ${fmtNumber(min, decimals)}.` };
+    if (max !== undefined && r.value > max) return { ok: false, error: `El máximo es ${fmtNumber(max, decimals)}.` };
+    return { ok: true, value: r.value };
+  };
+  const result = check(text);
+  const commit = () => {
+    if (result && result.ok) {
+      setText(show(result.value));
+      if (result.value !== emitted.current) {
+        emitted.current = result.value;
+        onChange(result.value);
+      }
+    } else if (!result) setText(show(value));
+  };
+  const hintId = `${id}-hint`;
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <input
-        id={id}
-        className="input num"
-        style={{ width: 96, minHeight: 38 }}
-        inputMode="decimal"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          const n = Number(e.target.value.replace(',', '.'));
-          if (Number.isFinite(n) && n >= min) onChange(step >= 1 ? Math.round(n) : n);
-        }}
-      />
-      {suffix && <span className="tiny muted">{suffix}</span>}
+    <span className="num-input">
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <input
+          id={id}
+          className="input num"
+          style={{ width: 96, minHeight: 40 }}
+          inputMode={decimals ? 'decimal' : 'numeric'}
+          autoComplete="off"
+          aria-label={label}
+          aria-invalid={!!result && !result.ok}
+          aria-describedby={hintId}
+          value={text}
+          onChange={(e) => {
+            const t = e.target.value;
+            setText(t);
+            if (live) {
+              const r = check(t);
+              if (r && r.ok && r.value !== emitted.current) {
+                emitted.current = r.value;
+                onChange(r.value);
+              }
+            }
+          }}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commit();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+        />
+        {suffix && <span className="tiny muted">{suffix}</span>}
+      </span>
+      <span id={hintId} aria-live="polite">{result && !result.ok && <span className="tiny loss">{result.error}</span>}</span>
     </span>
   );
 }

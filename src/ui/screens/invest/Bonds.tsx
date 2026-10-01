@@ -47,7 +47,7 @@ function BondDetail({ b, onClose }: { b: BondIssue; onClose: () => void }) {
         <>
           <div className="field">
             <label htmlFor="bond-qty">Cantidad de bonos</label>
-            <NumInput id="bond-qty" value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} />
+            <NumInput id="bond-qty" live value={qty} onChange={setQty} min={1} />
             <span className="tiny muted">Compra ≈ {fmtMoney(buyQ.total)} (comisión {fmtMoney(buyQ.fee)}) · Venta ≈ {fmtMoney(sellQ.total)} neto</span>
           </div>
           <div className="btn-row">
@@ -78,7 +78,7 @@ export function BondsScreen() {
           <dt>Cupones cobrados (histórico)</dt><dd>{fmtMoney(s.bonds.couponsReceived)}</dd>
         </div>
       </div>
-      {b && <BondDetail b={b} onClose={() => setSel(null)} />}
+      {b && <BondDetail key={b.id} b={b} onClose={() => setSel(null)} />}
       <Seg items={[{ id: 'todos', label: 'Todos' }, { id: 'gobierno', label: 'Soberanos' }, { id: 'empresa', label: 'Corporativos' }]} value={kind} onChange={setKind} />
       <div className="card" style={{ paddingBlock: 4 }}>
         <div className="rows">
