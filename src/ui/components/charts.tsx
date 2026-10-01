@@ -214,17 +214,21 @@ export function Donut({ parts, size = 132 }: { parts: Array<{ label: string; val
   if (total <= 0) return <p className="small muted">Sin datos.</p>;
   const r = size / 2 - 10;
   const c = 2 * Math.PI * r;
+  const arcs: Array<{ p: (typeof parts)[number]; len: number; start: number }> = [];
   let acc = 0;
+  for (const p of parts) {
+    if (p.value <= 0) continue;
+    const len = (p.value / total) * c;
+    arcs.push({ p, len, start: acc });
+    acc += len;
+  }
   return (
     <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Composición">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: 'var(--surface-2)' }} strokeWidth={18} />
-        {parts.filter((p) => p.value > 0).map((p) => {
-          const len = (p.value / total) * c;
-          const el = <circle key={p.label} cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: p.color }} strokeWidth={18} strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-acc} transform={`rotate(-90 ${size / 2} ${size / 2})`} />;
-          acc += len;
-          return el;
-        })}
+        {arcs.map(({ p, len, start }) => (
+          <circle key={p.label} cx={size / 2} cy={size / 2} r={r} fill="none" style={{ stroke: p.color }} strokeWidth={18} strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-start} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        ))}
       </svg>
       <div className="stack" style={{ gap: 4, flex: 1, minWidth: 140 }}>
         {parts.filter((p) => p.value > 0).map((p) => (

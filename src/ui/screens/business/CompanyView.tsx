@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
-import { store, useGame, useUI } from '../../store';
+import { useState } from 'react';
+import { store, useGame, useUI, useDerived } from '../../store';
+import { coMetricsOf, coInsightsOf, coValuationOf } from '../../derived';
 import { navStore } from '../../nav';
 import type { Company } from '../../../engine/business/types';
 import type { GameState } from '../../../engine/state';
 import type { ActionResult } from '../../../engine/result';
 import { SECTOR_BY_ID, LEGAL_FORM_BY_ID, roleDef, allRoles, DEPT_NAMES, DeptId } from '../../../content/sectors';
-import { coMetrics, coIncomeStatement, valuation } from '../../../engine/business/reports';
-import { analyzeCompany } from '../../../engine/business/advisor';
+import { coIncomeStatement } from '../../../engine/business/reports';
 import { daysToBankruptcy } from '../../../engine/business/finance';
 import { capacity, countRole, hasManager, managerSkill, monthlyPayroll, equipDef } from '../../../engine/business/common';
 import { expectedDemand, refPrice, setPrice, setPlan, toggleProduct, buyEquipment, sellEquipment, setMaintenance } from '../../../engine/business/operations';
@@ -51,10 +51,9 @@ const HOLDING_TABS = [
 
 function Summary({ co }: { co: Company }) {
   const s = useGame();
-  const ui = useUI();
-  const m = useMemo(() => coMetrics(s, co), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
-  const insights = useMemo(() => analyzeCompany(s, co), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
-  const v = useMemo(() => valuation(s, co), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useDerived(coMetricsOf, co.id);
+  const insights = useDerived(coInsightsOf, co.id);
+  const v = useDerived(coValuationOf, co.id);
   const left = daysToBankruptcy(s, co);
   const h = co.history.slice(-18);
   return (

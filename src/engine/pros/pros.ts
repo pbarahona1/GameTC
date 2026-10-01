@@ -12,7 +12,7 @@ import { gAudit } from '../ledger/core';
 import { investmentsValue, positions } from '../invest/portfolio';
 import { formatDate, addMonths, dateOf } from '../time/calendar';
 import { closeMandatesOfHire } from '../invest/managed';
-import { hiredPro, hireOf } from './lookup';
+import { hiredPro } from './lookup';
 import { taxObligations } from '../tax/taxEngine';
 import { practice } from '../skills/skills';
 
@@ -364,10 +364,6 @@ export function companyFilingErrorRisk(state: GameState, companyId: number): num
   return clamp(0.12 - state.skills.accounting.level * 0.002, 0.01, 0.12);
 }
 
-export function lawyerFor(state: GameState, scope: 'personal' | number): ProHire | null {
-  return hireOf(state, 'abogado', scope) ?? (scope !== 'personal' ? hireOf(state, 'abogado', 'personal') : null);
-}
-
 export function prosSummary(state: GameState) {
   return state.pros.hires.map((h) => ({ hire: h, monthly: monthlyFee(state, h), where: h.scope === 'personal' ? 'Personal' : state.companies.find((c) => c.id === h.scope)?.name ?? '—' }));
 }
@@ -387,10 +383,5 @@ export function describeQuality(p: Professional): string {
 export function feeLabel(p: Professional): string {
   if (p.kind === 'gestor') return `${fmtPct(p.mgmtFee ?? 0.015, 1)} anual de gestión + ${fmtPct(p.perfFee ?? 0.15, 0)} de las ganancias`;
   return `${fmtMoney(p.fee)} ${PRO_INFO[p.kind].feeUnit}`;
-}
-
-export function personalLegalDefenseDiscount(state: GameState): number {
-  const l = hiredPro(state, 'abogado', 'personal');
-  return l ? l.quality / 100 : 0;
 }
 

@@ -393,7 +393,7 @@ export function rescueBundle(copies: Record<string, string>, now: number, app: s
  * (en ese caso se usa la copia válida más reciente que contenga).
  */
 export async function parseImport(text: string): Promise<LoadResult & { source?: string }> {
-  let parsed: unknown = null;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {

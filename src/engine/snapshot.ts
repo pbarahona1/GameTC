@@ -45,15 +45,27 @@ function collect(s: GameState): Slot[] {
   add((r) => r.ledger, 'entries');
   add((r) => r, 'log');
   add((r) => r, 'history');
+  add((r) => r.credit, 'history');
   s.companies.forEach((_, i) => {
     add((r) => r.companies[i]?.ledger, 'entries');
     add((r) => r.companies[i], 'stats');
+    add((r) => r.companies[i], 'history');
   });
-  (s.listings ?? []).forEach((_, i) => add((r) => r.listings[i]?.company.ledger, 'entries'));
+  (s.listings ?? []).forEach((_, i) => {
+    add((r) => r.listings[i]?.company.ledger, 'entries');
+    add((r) => r.listings[i]?.company, 'stats');
+    add((r) => r.listings[i]?.company, 'history');
+  });
   (s.mogul?.assets ?? []).forEach((a, i) => {
     add((r) => r.mogul.assets[i], 'history');
-    if (a.company) add((r) => r.mogul.assets[i]?.company?.ledger, 'entries');
+    add((r) => r.mogul.assets[i], 'distributions');
+    if (a.company) {
+      add((r) => r.mogul.assets[i]?.company?.ledger, 'entries');
+      add((r) => r.mogul.assets[i]?.company, 'stats');
+      add((r) => r.mogul.assets[i]?.company, 'history');
+    }
   });
+  (s.realEstate?.properties ?? []).forEach((_, i) => add((r) => r.realEstate.properties[i], 'monthly'));
   (s.stocks?.stocks ?? []).forEach((_, i) => {
     add((r) => r.stocks.stocks[i], 'history');
     add((r) => r.stocks.stocks[i], 'weekly');

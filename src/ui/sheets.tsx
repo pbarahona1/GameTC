@@ -1,12 +1,13 @@
-import { Fragment, ReactNode, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Fragment, ReactNode, useEffect, useState, useSyncExternalStore } from 'react';
 import { navStore, useNav, SheetSpec } from './nav';
-import { store, useUI, useGame } from './store';
+import { store, useUI, useGame, useDerived } from './store';
+import { insightsOf, stageOf } from './derived';
 import { GLOSSARY, GLOSSARY_BY_ID, GlossaryEntry } from '../content/glossary';
-import { analyze, CATEGORY_NAMES, Insight, AdvisorCategory } from '../engine/advisor/advisor';
+import { CATEGORY_NAMES, Insight, AdvisorCategory } from '../engine/advisor/advisor';
 import { DIFFICULTIES, DIFFICULTY_BY_ID } from '../engine/economy/difficulty';
 import type { PauseCategory } from './store';
 import { runScenario, ScenarioInput, ScenarioResult } from '../engine/advisor/scenarios';
-import { STAGES, ACHIEVEMENTS, evaluateStage } from '../engine/progression/progression';
+import { STAGES, ACHIEVEMENTS } from '../engine/progression/progression';
 import { TUTORIAL, CHAPTERS, nextMission, isMissionDone, missionProgress } from '../engine/progression/tutorial';
 import { SKILL_BY_ID } from '../content/skills';
 import { LIFESTYLES } from '../content/lifestyle';
@@ -17,7 +18,7 @@ import { formatDate } from '../engine/time/calendar';
 import { Sheet, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton, Switch } from './components/common';
 import { Icon, IconName } from './icons';
 import { Avatar, avatarOf } from './components/Avatar';
-import { SlotList, SavedAgo, agoText } from './components/Slots';
+import { SlotList, SavedAgo, agoText, useNow } from './components/Slots';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
 import { otaStore, applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
@@ -27,23 +28,27 @@ export function useOta() {
 }
 import { LogRow } from './screens/Home';
 
+/** Bloque de una ficha del glosario (no se muestra si el campo está vacío). */
+function TermBlock({ t, v }: { t: string; v?: string }) {
+  return v ? <div className="stack" style={{ gap: 2 }}><span className="eyebrow">{t}</span><p className="small">{v}</p></div> : null;
+}
+
 function TermView({ id }: { id: string }) {
   const g = GLOSSARY_BY_ID[id];
   useEffect(() => store.markSeen(id), [id]);
   if (!g) return <Sheet title="Término">No encontrado.</Sheet>;
-  const Block = ({ t, v }: { t: string; v?: string }) => (v ? <div className="stack" style={{ gap: 2 }}><span className="eyebrow">{t}</span><p className="small">{v}</p></div> : null);
   return (
     <Sheet title={g.term}>
       <Pill tone="neutral">{g.category}</Pill>
       <p style={{ fontSize: 16, fontWeight: 600 }}>{g.short}</p>
-      <Block t="Para qué sirve" v={g.purpose} />
+      <TermBlock t="Para qué sirve" v={g.purpose} />
       {g.formula && <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Cómo se calcula</span><p className="num small" style={{ background: 'var(--surface-2)', padding: 10, borderRadius: 10 }}>{g.formula}</p></div>}
-      <Block t="Ejemplo" v={g.example} />
-      <Block t="Cómo te afecta" v={g.impact} />
-      <Block t="Riesgos" v={g.risks} />
-      <Block t="Errores comunes" v={g.mistakes} />
-      <Block t="Diferencia con conceptos parecidos" v={g.versus} />
-      <Block t="Consejo" v={g.tip} />
+      <TermBlock t="Ejemplo" v={g.example} />
+      <TermBlock t="Cómo te afecta" v={g.impact} />
+      <TermBlock t="Riesgos" v={g.risks} />
+      <TermBlock t="Errores comunes" v={g.mistakes} />
+      <TermBlock t="Diferencia con conceptos parecidos" v={g.versus} />
+      <TermBlock t="Consejo" v={g.tip} />
       <button className="btn ghost" onClick={() => navStore.open({ kind: 'glossary' })}>Abrir el glosario completo</button>
     </Sheet>
   );
@@ -211,7 +216,7 @@ function AdvisorView() {
   const [tab, setTab] = useState<'alerts' | 'scen' | 'prefs'>('alerts');
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => store.markSeen('asesor'), []);
-  const all = useMemo(() => analyze(s), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const all = useDerived(insightsOf);
   const list = all.filter((i) => ui.settings.alertCategories.includes(i.category));
   return (
     <Sheet title="🧭 Asesor IA">
@@ -338,6 +343,7 @@ function SettingsView() {
   const s = ui.state;
   const toggle = (id: string) => setOpen((o) => (o === id ? '' : id));
   const ota = useOta();
+  const now = useNow();
   return (
     <Sheet title="Ajustes">
       {s && (
@@ -408,7 +414,7 @@ function SettingsView() {
         <div className="rows">
           {backups.filter((b) => b.header).map((b, i) => (
             <div className="row" key={b.key}>
-              <div className="grow small">{b.kind === 'principal' ? 'Principal' : b.kind === 'copia' ? `Copia ${i}` : b.kind === 'antes de restaurar' ? 'Antes de restaurar' : 'Antes de actualizar'} · {formatDate(b.header!.day)} · {agoText(Date.now() - b.header!.savedAt)}</div>
+              <div className="grow small">{b.kind === 'principal' ? 'Principal' : b.kind === 'copia' ? `Copia ${i}` : b.kind === 'antes de restaurar' ? 'Antes de restaurar' : 'Antes de actualizar'} · {formatDate(b.header!.day)} · {agoText(Math.max(0, now - b.header!.savedAt))}</div>
               {b.kind !== 'principal' && <ConfirmButton label="Restaurar" className="btn sm ghost" help="accion_restaurar" confirmLabel="Restaurar" detail={<>La partida vuelve al {formatDate(b.header!.day)}. La actual queda en «Antes de restaurar» por si querés deshacerlo.</>} onConfirm={async () => { const r = await store.restore(b.key); store.toast(r.ok ? r.message ?? 'OK' : r.error, r.ok ? 'ok' : 'error'); }} />}
             </div>
           ))}
@@ -434,9 +440,8 @@ function SettingsView() {
 }
 
 function ProgressView() {
-  const ui = useUI();
   const s = useGame();
-  const ev = useMemo(() => evaluateStage(s), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ev = useDerived(stageOf);
   const a = s.player.attributes;
   const attrs: Array<[string, number, string, string?]> = [
     ['Estrés', a.stress, 'Más de 60 reduce el desempeño; más de 50 desgasta la salud.', 'estres'],

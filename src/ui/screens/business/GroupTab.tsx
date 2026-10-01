@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
+import { groupOf, groupRisksOf } from '../../derived';
 import { navStore } from '../../nav';
 import type { Company } from '../../../engine/business/types';
 import { SECTOR_BY_ID, LEGAL_FORM_BY_ID } from '../../../content/sectors';
@@ -8,7 +9,7 @@ import { isOpen } from '../../../engine/business/common';
 import { coMetrics } from '../../../engine/business/reports';
 import { CO_CHART } from '../../../engine/business/companyLedger';
 import {
-  parentOf, childrenOf, rootOf, isHolding, icLoansOf, grantIcLoan, repayIcLoan, setGroupPolicy, setManagementFee, consolidateGroup, groupRisks, canJoinGroup, groupMembers,
+  parentOf, childrenOf, rootOf, isHolding, icLoansOf, grantIcLoan, repayIcLoan, setGroupPolicy, setManagementFee, canJoinGroup, groupMembers,
 } from '../../../engine/business/groups';
 import { transferToGroup, spinOff } from '../../../engine/business/ownership';
 import { companyTaxRates } from '../../../engine/business/ownership';
@@ -20,10 +21,8 @@ import { Money, InfoButton, CardHead, Act, ConfirmButton, Seg, AmountInput, NumI
 import { runCo } from './CompanyView';
 
 function Consolidated({ root }: { root: Company }) {
-  const s = useGame();
-  const ui = useUI();
-  const c = useMemo(() => consolidateGroup(s, root, Math.max(root.foundedDay, s.day - 29), s.day), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
-  const r = useMemo(() => groupRisks(s, root), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const c = useDerived(groupOf, root.id);
+  const r = useDerived(groupRisksOf, root.id);
   return (
     <>
       <div className="card">

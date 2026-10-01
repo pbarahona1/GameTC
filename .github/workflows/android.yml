@@ -41,6 +41,8 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
       - run: npm run build
       - run: npx cap sync android

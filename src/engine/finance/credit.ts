@@ -1,6 +1,5 @@
 import type { GameState } from '../state';
 import { clamp } from '../money';
-import { dateOf } from '../time/calendar';
 
 /**
  * Puntaje crediticio (300–850), recalculado a partir de datos del historial.
@@ -107,6 +106,3 @@ export function scoreBand(score: number): { label: string; tone: 'bad' | 'warn' 
   return { label: 'Excelente', tone: 'good' };
 }
 
-export function yearOf(day: number): number {
-  return dateOf(day).y;
-}

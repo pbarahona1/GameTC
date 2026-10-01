@@ -1,6 +1,6 @@
 import type { GameState } from '../state';
 import type { Company, CoLoan } from './types';
-import { coLog, coPay, isOpen, px, sectorOf } from './common';
+import { coLog, coPay, isOpen, px } from './common';
 import { coPost } from './companyLedger';
 import { coIncomeStatement, coMetrics, coBalanceSheet } from './reports';
 import { amortizedPayment, amortizationSchedule } from '../finance/loans';
@@ -259,14 +259,6 @@ export function payCoArrearsNow(state: GameState, co: Company): ActionResult {
   const paid = settleArrears(state, co);
   if (paid <= 0) return FAIL('La empresa no tiene caja. Aportá capital o pedí un préstamo.');
   return OK(`Se pagaron ${fmtMoney(paid)} de deudas vencidas.`);
-}
-
-export function clampShare(x: number): number {
-  return clamp(x, 0, 1);
-}
-
-export function sectorName(co: Company): string {
-  return sectorOf(co).name;
 }
 
 export { coPay };

@@ -1,5 +1,6 @@
-import { Fragment, useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../store';
+import { Fragment, useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../store';
+import { loanOffersOf, lastMonthOf } from '../derived';
 import { navStore, useNav } from '../nav';
 import type { AccountId } from '../../engine/ledger/accounts';
 import { accountDef } from '../../engine/ledger/accounts';
@@ -8,12 +9,11 @@ import { payCard, setAutopay, requestLimitIncrease, statementRemaining, minRemai
 import { cardTier } from '../../engine/finance/cardRewards';
 import { CARD_TIER_ORDER, CardTier } from '../../content/cards';
 import { Icon } from '../icons';
-import { quoteAll, takeLoan, negotiateRate, prepayLoan, amortizationSchedule, LOAN_TERMS, MAX_ACTIVE_LOANS } from '../../engine/finance/loans';
+import { takeLoan, negotiateRate, prepayLoan, amortizationSchedule, LOAN_TERMS, MAX_ACTIVE_LOANS } from '../../engine/finance/loans';
 import { changeLifestyle, movingCost, setPaymentMethod, setPrivateInsurance, payArrears, hasEmployerInsurance, insuranceCost, monthlyRecurring, effectiveAmount } from '../../engine/finance/budget';
 import { computeCreditScore, scoreBand } from '../../engine/finance/credit';
 import { BANK_BY_ID } from '../../content/banks';
 import { LIFESTYLES } from '../../content/lifestyle';
-import { incomeStatement } from '../../engine/reports/statements';
 import { addMonths, formatDate, startOfMonth, formatMonth } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
 import { spendable } from '../../engine/finance/payments';
@@ -242,7 +242,7 @@ function Loans() {
   const [amount, setAmount] = useState(usd(1000));
   const [term, setTerm] = useState(12);
   const [showSched, setShowSched] = useState<string | null>(null);
-  const offers = useMemo(() => quoteAll(s, amount, term), [amount, term, s.day, s.credit.score, s.bank.loans.length, JSON.stringify(s.bank.rateNegotiations)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const offers = useDerived(loanOffersOf, amount, term);
   const active = s.bank.loans.filter((l) => l.status !== 'paid');
   return (
     <>
@@ -372,10 +372,7 @@ function Invest() {
 function Budget() {
   const s = useGame();
   useUI();
-  const last = useMemo(() => {
-    const prevEnd = startOfMonth(s.day) - 1;
-    return prevEnd >= 0 ? incomeStatement(s, startOfMonth(prevEnd), prevEnd) : null;
-  }, [s.day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const last = useDerived(lastMonthOf);
   const [pay, setPay] = useState(0);
   const arrears = s.ledger.balances.arrears;
   return (

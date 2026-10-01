@@ -19,14 +19,20 @@ export function agoText(ms: number): string {
   return `hace ${Math.round(h / 24)} días`;
 }
 
+/** Hora actual que se refresca sola cada `everyMs` (para textos como "hace 2 min"). */
+export function useNow(everyMs = 10000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), everyMs);
+    return () => clearInterval(t);
+  }, [everyMs]);
+  return now;
+}
+
 /** Cuándo se guardó la partida por última vez (se actualiza solo). */
 export function SavedAgo({ className = 'tiny muted' }: { className?: string }) {
   const ui = useUI();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 10000);
-    return () => clearInterval(t);
-  }, []);
+  const now = useNow();
   const at = ui.lastSaved;
   return <span className={className} aria-live="off">{ui.saveError ? 'No se pudo guardar' : at ? `Guardado ${agoText(Math.max(now, at) - at)}` : 'Sin guardar todavía'}</span>;
 }
@@ -37,6 +43,7 @@ export function SavedAgo({ className = 'tiny muted' }: { className?: string }) {
  */
 export function SlotList({ onOpened }: { onOpened?: () => void }) {
   const ui = useUI();
+  const now = useNow();
   if (!ui.slots.length) return null;
   const openId = ui.state ? ui.activeSlot : null;
   return (
@@ -48,7 +55,7 @@ export function SlotList({ onOpened }: { onOpened?: () => void }) {
             <div className="grow">
               <div className="title small">Partida {i + 1} · {sl.name} {isOpen && <span className="pill accent">Abierta</span>}</div>
               <div className="meta">
-                {formatDate(sl.day)}{sl.netWorth !== null ? ` · patrimonio ${fmtMoney(sl.netWorth, { decimals: false })}` : ''} · {sl.savedAt ? `guardada ${agoText(Date.now() - sl.savedAt)}` : 'sin guardar'}
+                {formatDate(sl.day)}{sl.netWorth !== null ? ` · patrimonio ${fmtMoney(sl.netWorth, { decimals: false })}` : ''} · {sl.savedAt ? `guardada ${agoText(Math.max(0, now - sl.savedAt))}` : 'sin guardar'}
               </div>
             </div>
             <div className="btn-row" style={{ justifyContent: 'flex-end' }}>

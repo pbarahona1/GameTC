@@ -1,5 +1,5 @@
 import type { GameState } from '../state';
-import type { Company, ProductState, ReorderRule, Listing } from './types';
+import type { Company, ProductState, ReorderRule } from './types';
 import { SECTOR_BY_ID, BizSectorId, LegalForm, LEGAL_FORM_BY_ID, SectorDef, roleDef } from '../../content/sectors';
 import { emptyCoLedger, coPost } from './companyLedger';
 import { px, coLog, coEquity, distributableProfit, isOpen, sectorOf, monthlyPayroll, monthlyFixed } from './common';
@@ -24,7 +24,6 @@ import { residence } from '../tax/taxEngine';
 export const SETUP_DAYS = 7;
 export const ACQUISITION_FEE = 0.03;
 export const SALE_FEE = 0.03;
-export const CAPITAL_GAINS_RATE = 0.15;
 
 // ------------------------------------------------------------ Creación
 
@@ -712,14 +711,6 @@ function forcedSaleOfSubsidiary(state: GameState, parent: Company, sub: Company)
   const gone = new Set(groupMembers(state, sub).map((c) => c.id));
   state.companies = state.companies.filter((c) => !gone.has(c.id));
   addLog(state, 'warning', '⚖️', price > 0 ? `${sub.name} fue vendida por ${fmtMoney(price)} para pagar a los acreedores de ${parent.name}.` : `${sub.name} no tenía valor y se entregó a los acreedores de ${parent.name} sin pago.`, undefined, 'peligro');
-}
-
-export function companySummaryLine(co: Company): string {
-  return `${co.name} · ${SECTOR_BY_ID[co.sector].name} · ${LEGAL_FORM_BY_ID[co.legalForm].name}`;
-}
-
-export function listingValuation(state: GameState, l: Listing) {
-  return valuation(state, l.company);
 }
 
 export { inventoryValue };

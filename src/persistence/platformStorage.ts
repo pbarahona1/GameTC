@@ -73,7 +73,7 @@ class FilesystemKV implements KV {
 export class MirroredKV implements KV {
   constructor(private a: KV, private b: KV) {}
   async get(key: string) {
-    let v: string | null = null;
+    let v: string | null;
     try {
       v = await this.a.get(key);
     } catch {

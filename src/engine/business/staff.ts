@@ -1,11 +1,11 @@
 import type { GameState } from '../state';
 import type { Company, Employee, Candidate } from './types';
 import { sectorOf, px, coLog, coPay, countRole } from './common';
-import { roleDef, EMPLOYER_PAYROLL_RATE, allRoles } from '../../content/sectors';
+import { roleDef, EMPLOYER_PAYROLL_RATE } from '../../content/sectors';
 import { Cents, clamp, roundCents } from '../money';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtMoney } from '../format';
-import { chance, randInt, randRange, nextRandom } from '../rng';
+import { chance, randRange, nextRandom } from '../rng';
 import { dateOf, daysInMonth } from '../time/calendar';
 import { practice } from '../skills/skills';
 
@@ -159,10 +159,3 @@ export function averageMorale(co: Company): number {
   return co.employees.length ? co.employees.reduce((s, e) => s + e.morale, 0) / co.employees.length : 0;
 }
 
-export function rolesFor(co: Company) {
-  return allRoles(sectorOf(co));
-}
-
-export function randomSkill(state: GameState): number {
-  return randInt(state, 35, 70);
-}

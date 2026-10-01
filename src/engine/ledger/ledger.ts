@@ -2,7 +2,7 @@ import { ACCOUNTS, AccountId } from './accounts';
 import type { Cents } from '../money';
 import {
   CashFlowClass as CF, Chart, GEntry, GLedger, GLine, GPostInput, LedgerError as LE,
-  emptyGLedger, gEntryDelta, gPost, gRecompute, gSigned, gValidate, gArchiveOpening,
+  emptyGLedger, gEntryDelta, gPost, gRecompute, gValidate, gArchiveOpening,
 } from './core';
 
 /**
@@ -20,10 +20,6 @@ const CHART = ACCOUNTS as unknown as Chart<AccountId>;
 
 export function emptyLedger(): LedgerState {
   return emptyGLedger(CHART);
-}
-
-export function signedDelta(account: AccountId, debit: Cents, credit: Cents): Cents {
-  return gSigned(CHART, account, debit, credit);
 }
 
 export function validateEntry(ledger: LedgerState, input: PostInput): string | null {
@@ -60,16 +56,3 @@ export function entryDelta(e: JournalEntry, account: AccountId): Cents {
   return gEntryDelta(CHART, e, account);
 }
 
-export function balanceAt(ledger: LedgerState, account: AccountId, day: number): Cents {
-  let b = 0;
-  for (const k of ledger.archive?.buckets ?? []) {
-    const v = k.totals[account] ?? 0;
-    if (k.to <= day) b += v;
-    else if (k.from <= day) b += Math.round((v * (day - k.from + 1)) / (k.to - k.from + 1));
-  }
-  for (const e of ledger.entries) {
-    if (e.day > day) break;
-    b += entryDelta(e, account);
-  }
-  return b;
-}

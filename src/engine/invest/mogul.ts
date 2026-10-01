@@ -267,7 +267,7 @@ function payDistribution(state: GameState, a: MogulAsset, total: Cents): void {
 }
 
 function liquidateAsset(state: GameState, a: MogulAsset, reason: string): void {
-  let perUnit = 0;
+  let perUnit: number;
   if (a.kind === 'empresa' && a.company) {
     const co = a.company;
     const b = co.ledger.balances;

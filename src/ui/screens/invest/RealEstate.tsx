@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
 import { navStore } from '../../nav';
 import { InfoButton, CardHead, Pill, NumInput, Act, Learn, LineChart, Money, Seg, AmountInput, ConfirmButton, Empty, Stat, Bar, GuardedAct } from '../../components/common';
 import {
@@ -202,23 +202,27 @@ function PropertyDetail({ p }: { p: Property }) {
   );
 }
 
+/** Valor, deuda y flujo mensual de tus inmuebles y los de tus empresas. */
+function myPropertiesTotals(s: GameState) {
+  let value = 0;
+  let debt = 0;
+  let flow = 0;
+  for (const p of s.realEstate.properties) {
+    if (p.owner.kind === 'mogul') continue;
+    const r = propertyReport(s, p);
+    value += r.value;
+    debt += r.debt;
+    flow += r.monthlyCashFlow;
+  }
+  return { value, debt, flow };
+}
+
 function Mine({ selected }: { selected: number | null }) {
   const s = useGame();
   useUI();
   const props = s.realEstate.properties.filter((p) => p.owner.kind !== 'mogul');
   const sel = selected !== null ? props.find((p) => p.id === selected) : null;
-  const totals = useMemo(() => {
-    let value = 0;
-    let debt = 0;
-    let flow = 0;
-    for (const p of props) {
-      const r = propertyReport(s, p);
-      value += r.value;
-      debt += r.debt;
-      flow += r.monthlyCashFlow;
-    }
-    return { value, debt, flow };
-  }, [s.day, props.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const totals = useDerived(myPropertiesTotals);
   return (
     <>
       {sel && <PropertyDetail key={sel.id} p={sel} />}

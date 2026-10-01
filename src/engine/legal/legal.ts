@@ -15,7 +15,6 @@ import { coPay, isOpen, sectorOf } from '../business/common';
 import { coPost } from '../business/companyLedger';
 import type { Company } from '../business/types';
 import { hireOf, hiredPro } from '../pros/lookup';
-import { balanceSheet } from '../reports/statements';
 import { bookSell, holdingsOf, markPrice, revalueInvestments } from '../invest/portfolio';
 import { recordLate, refreshCreditScore } from '../finance/credit';
 import { endEmploymentForPrison } from '../career/career';
@@ -807,10 +806,6 @@ export function legalRiskSummary(state: GameState) {
 
 export function heatLabel(h: number): string {
   return h < 15 ? 'Baja' : h < 35 ? 'Moderada' : h < 60 ? 'Alta' : 'Muy alta';
-}
-
-export function netWorthForLegal(state: GameState): Cents {
-  return balanceSheet(state).netWorth;
 }
 
 export function jurisdictionName(id: JurisdictionId): string {

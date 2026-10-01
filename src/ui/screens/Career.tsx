@@ -1,5 +1,5 @@
 import { imageJobBonus } from '../../engine/lifestyle/effects';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useGame, useUI, store } from '../store';
 import { navStore, useNav } from '../nav';
 import { JOBS, JOB_BY_ID, SECTOR_NAMES, Sector, EDUCATION_NAMES, FIELD_NAMES } from '../../content/jobs';
@@ -345,7 +345,7 @@ export function Career() {
   useUI();
   const s = useGame();
   const sub = (nav.sub.career as Sub) ?? 'job';
-  const offers = useMemo(() => s.career.applications.filter((a) => a.status === 'offer').length, [s.career.applications.length, s.day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const offers = s.career.applications.filter((a) => a.status === 'offer').length;
   return (
     <>
       <ScreenIntro icon="career" title="Carrera" text="Tu trabajo y tu formación: postulate a empleos, estudiá para subir tus habilidades y negociá tu sueldo." term="nivel_profesional" />

@@ -1,10 +1,8 @@
-import { ReactNode, useMemo } from 'react';
-import { useGame, useUI, store } from '../store';
+import { ReactNode } from 'react';
+import { useGame, useUI, useDerived, store } from '../store';
+import { metricsOf, insightsOf, monthOf } from '../derived';
 import { navStore } from '../nav';
-import { computeMetrics } from '../../engine/reports/metrics';
-import { analyze } from '../../engine/advisor/advisor';
-import { cashFlowStatement, incomeStatement } from '../../engine/reports/statements';
-import { startOfMonth, formatMonth, formatDate } from '../../engine/time/calendar';
+import { formatMonth, formatDate } from '../../engine/time/calendar';
 import { STAGES, professionalLevel } from '../../engine/progression/progression';
 import { nextMission, CHAPTERS, missionProgress } from '../../engine/progression/tutorial';
 import { Icon, IconName } from '../icons';
@@ -37,13 +35,9 @@ export function LogRow({ l }: { l: LogItem }) {
 export function Home() {
   const ui = useUI();
   const s = useGame();
-  const v = ui.version;
-  const m = useMemo(() => computeMetrics(s), [v]); // eslint-disable-line react-hooks/exhaustive-deps
-  const insights = useMemo(() => analyze(s, m).filter((i) => ui.settings.alertCategories.includes(i.category)), [v]); // eslint-disable-line react-hooks/exhaustive-deps
-  const month = useMemo(() => {
-    const from = startOfMonth(s.day);
-    return { is: incomeStatement(s, from, s.day), cf: cashFlowStatement(s, from, s.day) };
-  }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useDerived(metricsOf);
+  const insights = useDerived(insightsOf).filter((i) => ui.settings.alertCategories.includes(i.category));
+  const month = useDerived(monthOf);
   const hist = s.history.slice(-24);
   const nwSeries = [...hist.map((h) => h.netWorth), m.netWorth];
   const prev = hist[hist.length - 1];

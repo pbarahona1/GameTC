@@ -1,11 +1,12 @@
-import { Fragment, useMemo, useState } from 'react';
-import { useGame, useUI } from '../../store';
+import { Fragment, useState } from 'react';
+import { useGame, useUI, useDerived } from '../../store';
+import { coIncomeOf, coCashFlowOf } from '../../derived';
 import type { Company, Channel, Audience } from '../../../engine/business/types';
 import { SECTOR_BY_ID, LEGAL_FORM_BY_ID } from '../../../content/sectors';
 import { CHANNELS, CHANNEL_BY_ID, AUDIENCES, startCampaign, stopCampaign, buyResearch, hasResearch, RESEARCH_COST, activeCampaigns } from '../../../engine/business/marketing';
-import { coIncomeStatement, coBalanceSheet, coCashFlow, coMetrics, valuation } from '../../../engine/business/reports';
+import { coIncomeStatement, coBalanceSheet, coMetrics, valuation } from '../../../engine/business/reports';
 import { BIZ_BANKS, quoteCoLoan, takeCoLoan, prepayCoLoan, payCoArrearsNow, coTaxRateLabel } from '../../../engine/business/finance';
-import { injectCapital, distribute, maxDistribution, requestSaleOffer, acceptSale, liquidate, raiseEquity } from '../../../engine/business/ownership';
+import { injectCapital, distribute, maxDistribution, requestSaleOffer, acceptSale, liquidate, raiseEquity, SALE_FEE } from '../../../engine/business/ownership';
 import { rivalsAttraction } from '../../../engine/business/market';
 import { expectedShare, refPrice, companyAttraction, effectivePrice } from '../../../engine/business/operations';
 import { distributableProfit, isOpen } from '../../../engine/business/common';
@@ -148,24 +149,25 @@ export function MarketTab({ co }: { co: Company }) {
 
 type Period = 'month' | 'year' | 'all';
 
+/** Renglón de un estado contable de la empresa. */
+function Row({ label, v, strong, term }: { label: string; v: Cents; strong?: boolean; term?: string }) {
+  return <div className={`row ${strong ? 'total' : 'sub'}`}><div className="grow small" style={strong ? { fontWeight: 800 } : undefined}>{label} {term && <InfoButton term={term} />}</div><Money c={v} className="amt small" colored={strong} /></div>;
+}
+
 export function FinanceTab({ co }: { co: Company }) {
   const s = useGame();
-  const ui = useUI();
   const [period, setPeriod] = useState<Period>('month');
   const [inject, setInject] = useState<Cents>(0);
   const [div, setDiv] = useState<Cents>(0);
   const [loanAmt, setLoanAmt] = useState<Cents>(usd(5000));
   const [loanTerm, setLoanTerm] = useState(24);
   const from = period === 'month' ? Math.max(co.foundedDay, startOfMonth(s.day)) : period === 'year' ? Math.max(co.foundedDay, startOfYear(s.day)) : co.foundedDay;
-  const is = useMemo(() => coIncomeStatement(co, from, s.day), [ui.version, from]); // eslint-disable-line react-hooks/exhaustive-deps
+  const is = useDerived(coIncomeOf, co.id, from);
   const bs = coBalanceSheet(co);
-  const cf = useMemo(() => coCashFlow(co, from, s.day), [ui.version, from]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cf = useDerived(coCashFlowOf, co.id, from);
   const lim = maxDistribution(s, co);
   const lf = LEGAL_FORM_BY_ID[co.legalForm];
   const m = coMetrics(s, co);
-  const Row = ({ label, v, strong, term }: { label: string; v: Cents; strong?: boolean; term?: string }) => (
-    <div className={`row ${strong ? 'total' : 'sub'}`}><div className="grow small" style={strong ? { fontWeight: 800 } : undefined}>{label} {term && <InfoButton term={term} />}</div><Money c={v} className="amt small" colored={strong} /></div>
-  );
   return (
     <>
       {bs.liabilities.some((l) => l.account === 'arrears') && (
@@ -341,7 +343,9 @@ export function ManageTab({ co }: { co: Company }) {
         {offer ? (
           <>
             <p className="small">Oferta{offer.from ? <> de <strong>{offer.from}</strong></> : ''}: <strong>{fmtMoney(offer.price)}</strong> por el 100 % (tu parte {fmtMoney(Math.round(offer.price * co.ownership))}). {v.value > 0 && <>Es {offer.price >= v.value ? `${Math.round((offer.price / v.value - 1) * 100)} % más` : `${Math.round((1 - offer.price / v.value) * 100)} % menos`} que la valoración. </>}Vence el {formatDate(offer.expires)}.</p>
-            <ConfirmButton label="Aceptar oferta" className="btn primary" confirmLabel="Vender" help="accion_vender_empresa" detail={<>Recibirás tu parte menos 3 % de comisión y 15 % de impuesto sobre la ganancia frente a tu valor contable ({fmtMoney(co.carrying)}).</>} onConfirm={() => { const r = runCo(co.id, (st, c) => acceptSale(st, c)); if (r.ok) navStore.setSub('business', 'portfolio'); }} />
+            <ConfirmButton label="Aceptar oferta" className="btn primary" confirmLabel="Vender" help="accion_vender_empresa" detail={co.parentId !== null
+              ? <>La holding recibe su parte menos {fmtPct(SALE_FEE, 0)} de comisión; el resultado de la venta queda en sus libros.</>
+              : <>Recibirás tu parte menos {fmtPct(SALE_FEE, 0)} de comisión. La ganancia (lo que cobrás menos lo que aportaste, {fmtMoney(co.investedByOwner)}) tributa como ganancia de capital en tu declaración anual, según tu jurisdicción.</>} onConfirm={() => { const r = runCo(co.id, (st, c) => acceptSale(st, c)); if (r.ok) navStore.setSub('business', 'portfolio'); }} />
           </>
         ) : (
           <Act label="Pedir ofertas a compradores" help="accion_vender_empresa" className="btn" onClick={() => runCo(co.id, (st, c) => requestSaleOffer(st, c))} />

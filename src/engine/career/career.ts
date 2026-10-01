@@ -5,7 +5,7 @@ import { post } from '../ledger/ledger';
 import { Cents, clamp, roundCents, usd } from '../money';
 import type { Application, GameState } from '../state';
 import { nextId } from '../state';
-import { addMonths, dateOf, dayOf, daysInMonth, endOfMonth } from '../time/calendar';
+import { addMonths, dateOf, dayOf, daysInMonth } from '../time/calendar';
 import { addLog } from '../log';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtMoney, fmtPct } from '../format';
@@ -27,10 +27,6 @@ export function jobSalary(state: GameState, job: JobDef): Cents {
 /** Ingreso bruto mensual fijo (base conservadora que usan los bancos). */
 export function monthlyGrossIncome(state: GameState): Cents {
   return state.career.job ? state.career.job.salary : 0;
-}
-
-export function currentJob(state: GameState): JobDef | null {
-  return state.career.job ? JOB_BY_ID[state.career.job.jobId] : null;
 }
 
 export interface RequirementCheck {
@@ -398,6 +394,3 @@ export function processReview(state: GameState): void {
   addLog(state, raise > 0 ? 'success' : 'warning', '📋', `Evaluación anual: desempeño ${perf}/100. Aumento del ${fmtPct(raise)} (inflación del año: ${fmtPct(state.macro.inflation)}).`);
 }
 
-export function nextPayDay(state: GameState): number {
-  return endOfMonth(state.day);
-}

@@ -1,8 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react';
-import { store, useUI, Speed } from './store';
+import { lazy, Suspense, useEffect } from 'react';
+import { store, useUI, useDerived, Speed } from './store';
+import { insightsOf } from './derived';
 import { navStore, useNav, Tab } from './nav';
 import { formatDateShort } from '../engine/time/calendar';
-import { analyze } from '../engine/advisor/advisor';
 import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
 import { SheetHost, useOta } from './sheets';
@@ -41,7 +41,7 @@ const SPEEDS: Array<{ s: Speed; label: string; aria: string }> = [
 function TopBar() {
   const ui = useUI();
   const s = ui.state!;
-  const alerts = useMemo(() => analyze(s).filter((i) => (i.severity === 'critical' || i.severity === 'warning') && ui.settings.alertCategories.includes(i.category)).length, [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const alerts = useDerived(insightsOf).filter((i) => (i.severity === 'critical' || i.severity === 'warning') && ui.settings.alertCategories.includes(i.category)).length;
   const unread = unreadNews(s);
   return (
     <header className="topbar">

@@ -81,7 +81,10 @@ export interface BootError {
 }
 
 export interface UIState {
+  /** Sube con cada cambio de la interfaz (incluye avisos, guardado, ajustes…). */
   version: number;
+  /** Sube solo cuando cambia la PARTIDA: es la clave de los cálculos derivados (useDerived). */
+  gameRev: number;
   ready: boolean;
   state: GameState | null;
   speed: Speed;
@@ -136,6 +139,9 @@ export const BOOT_TIMEOUTS = { storage: 15000, load: 30000 };
 
 type Listener = () => void;
 
+/** Cálculo puro a partir de la partida y parámetros serializables. */
+export type Derivation<A extends unknown[], T> = (s: GameState, ...args: A) => T;
+
 /** Categoría de pausa de un evento del registro (null = no pausa). Es la del motor: explícita, no por ícono. */
 export const pauseCategory = logCategory;
 
@@ -161,7 +167,7 @@ export class GameStore {
   private lastSaveAttempt = 0;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   ui: UIState = {
-    version: 0, ready: false, state: null, speed: 0, settings: DEFAULT_SETTINGS, toasts: [], absence: null, loadNotice: null, storageKind: '', lastSaved: null, saveError: null, saveBytes: null, simError: null, bootError: null, slots: [], activeSlot: null, returnSlot: null,
+    version: 0, gameRev: 0, ready: false, state: null, speed: 0, settings: DEFAULT_SETTINGS, toasts: [], absence: null, loadNotice: null, storageKind: '', lastSaved: null, saveError: null, saveBytes: null, simError: null, bootError: null, slots: [], activeSlot: null, returnSlot: null,
   };
 
   subscribe = (l: Listener) => {
@@ -170,9 +176,49 @@ export class GameStore {
   };
   getSnapshot = () => this.ui;
 
+  /** La partida cambió: hay que guardarla y recalcular lo derivado. */
+  private changed = false;
+  private revState: GameState | null = null;
+  private touch() {
+    this.dirty = true;
+    this.changed = true;
+  }
+
   private emit() {
-    this.ui = { ...this.ui, version: this.ui.version + 1 };
+    let gameRev = this.ui.gameRev;
+    if (this.changed || this.ui.state !== this.revState) {
+      gameRev++;
+      this.changed = false;
+      this.revState = this.ui.state;
+    }
+    this.ui = { ...this.ui, version: this.ui.version + 1, gameRev };
     for (const l of this.listeners) l();
+  }
+
+  // ---------- Cálculos derivados ----------
+  private derivedRev = -1;
+  private derived = new Map<Derivation<never[], unknown>, Map<string, unknown>>();
+
+  /**
+   * Valor derivado de la partida, calculado UNA vez por cambio de la partida y
+   * compartido entre todos los componentes que lo pidan (ver useDerived).
+   * `fn` debe ser una función pura y estable (definida a nivel de módulo).
+   */
+  derive<A extends unknown[], T>(fn: Derivation<A, T>, args: A): T {
+    const s = this.ui.state;
+    if (!s) throw new Error('No hay una partida abierta.');
+    if (this.derivedRev !== this.ui.gameRev || this.revState !== s) {
+      this.derived.clear();
+      this.derivedRev = this.ui.gameRev;
+    }
+    const f = fn as unknown as Derivation<never[], unknown>;
+    let byArgs = this.derived.get(f);
+    if (!byArgs) this.derived.set(f, (byArgs = new Map()));
+    const key = args.length ? JSON.stringify(args) : '';
+    if (byArgs.has(key)) return byArgs.get(key) as T;
+    const value = fn(s, ...args);
+    byArgs.set(key, value);
+    return value;
   }
 
   // ---------- Arranque ----------
@@ -334,7 +380,7 @@ export class GameStore {
     this.ui.loadNotice = null;
     this.ui.returnSlot = null;
     this.ui.speed = 0;
-    this.dirty = true;
+    this.touch();
     this.emit();
     await this.save();
     return true;
@@ -411,7 +457,7 @@ export class GameStore {
       if (!r.ok) this.toast(r.error, 'error');
       else if (r.message && this.ui.settings.successToasts) this.toast(r.message, 'ok');
     }
-    this.dirty = true;
+    this.touch();
     // Una acción que cambió la partida se guarda poco después (sin esperar el guardado periódico).
     if (r.ok) this.scheduleSave(AUTOSAVE.afterActionMs);
     this.emit();
@@ -422,7 +468,7 @@ export class GameStore {
     const s = this.ui.state;
     if (!s || s.meta.seenTerms.includes(term)) return;
     s.meta.seenTerms.push(term);
-    this.dirty = true;
+    this.touch();
     this.emit();
   }
 
@@ -548,7 +594,7 @@ export class GameStore {
 
   private afterAdvance(days: number, lastLogId: number) {
     const s = this.ui.state!;
-    if (days > 0) this.dirty = true;
+    if (days > 0) this.touch();
     if (this.ui.settings.autoPause && this.ui.speed !== 0) {
       const fresh = s.log.filter((l) => l.id > lastLogId);
       const important = fresh.find((l) => this.isImportant(l));
@@ -573,7 +619,7 @@ export class GameStore {
       return this.saving;
     }
     const run = async () => {
-      let ok = false;
+      let ok: boolean;
       do {
         this.saveAgain = false;
         ok = await this.saveOnce();
@@ -613,7 +659,7 @@ export class GameStore {
       this.ui.saveBytes = r.bytes;
       this.ui.saveError = null;
       const prev = this.registry.slots.find((x) => x.id === active);
-      let netWorth: number | null = null;
+      let netWorth: number | null;
       try {
         netWorth = balanceSheet(s).netWorth;
       } catch {
@@ -700,7 +746,7 @@ export class GameStore {
     this.ui.loadNotice = null;
     this.ui.returnSlot = null;
     this.ui.speed = 0;
-    this.dirty = true;
+    this.touch();
     await this.save();
     this.toast('Partida importada y verificada. Se abrió como una partida nueva.', 'ok');
     this.emit();
@@ -719,7 +765,7 @@ export class GameStore {
     this.ui.state = r.state;
     this.ui.simError = null;
     this.ui.speed = 0;
-    this.dirty = true;
+    this.touch();
     await this.save();
     this.emit();
     return { ok: true, message: 'Copia restaurada. La partida anterior quedó en «Antes de restaurar» por si querés volver.' };
@@ -789,6 +835,16 @@ export const store = new GameStore();
 
 export function useUI(): UIState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot);
+}
+
+/**
+ * Cálculo derivado de la partida (métricas, informes, asesor…): se recalcula
+ * solo cuando cambia la partida, no con cada aviso o guardado, y se comparte
+ * entre componentes. Los parámetros forman parte de la clave del caché.
+ */
+export function useDerived<A extends unknown[], T>(fn: Derivation<A, T>, ...args: A): T {
+  useUI();
+  return store.derive(fn, args);
 }
 
 /** Estado de juego garantizado (usar solo dentro de pantallas con partida activa). */

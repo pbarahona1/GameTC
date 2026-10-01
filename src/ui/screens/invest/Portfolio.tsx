@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
 import { navStore } from '../../nav';
 import { Money, Stat, InfoButton, CardHead, Learn, Pill, NumInput, AmountInput, Act } from '../../components/common';
 import { Donut, CHART_COLORS, Sparkline } from '../../components/charts';
@@ -161,20 +161,21 @@ function HoldingRow({ p, open, onToggle }: { p: PositionSummary; open: boolean; 
   );
 }
 
+/** Resumen de "Mis inversiones": posiciones, valor, riesgo y proyección a 12 meses. */
+function portfolioOf(s: GameState) {
+  const b = s.ledger.balances;
+  const all = (['stocks', 'bonds', 'funds', 'mogul', 'managed'] as InvestClass[]).flatMap((cls) => positions(s, cls)).sort((a, x) => x.value - a.value);
+  const cost = all.reduce((a, p) => a + p.cost, 0);
+  const value = investmentsValue(s);
+  const personalProps = s.realEstate.properties.filter((p) => p.owner.kind === 'personal');
+  const reEquity = b.real_estate - b.mortgages;
+  return { all, cost, value, reEquity, props: personalProps, risk: portfolioRisk(s), proj: projectPortfolio(s, 12) };
+}
+
 export function Portfolio() {
   const s = useGame();
-  const ui = useUI();
-  const v = ui.version;
   const [open, setOpen] = useState<string | null>(null);
-  const data = useMemo(() => {
-    const b = s.ledger.balances;
-    const all = (['stocks', 'bonds', 'funds', 'mogul', 'managed'] as InvestClass[]).flatMap((cls) => positions(s, cls)).sort((a, x) => x.value - a.value);
-    const cost = all.reduce((a, p) => a + p.cost, 0);
-    const value = investmentsValue(s);
-    const personalProps = s.realEstate.properties.filter((p) => p.owner.kind === 'personal');
-    const reEquity = b.real_estate - b.mortgages;
-    return { all, cost, value, reEquity, props: personalProps, risk: portfolioRisk(s), proj: projectPortfolio(s, 12) };
-  }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
+  const data = useDerived(portfolioOf);
   const b = s.ledger.balances;
   const y = s.tax.ytd;
   const total = data.value + Math.max(0, data.reEquity);

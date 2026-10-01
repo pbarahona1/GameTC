@@ -1,10 +1,10 @@
 import { Icon, isIconName, IconName } from '../icons';
-import { ReactNode, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { ReactNode, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Cents } from '../../engine/money';
 import { fmtMoney, fmtCompact, fmtAmountInput, fmtNumber, parseMoney, parseQuantity } from '../../engine/format';
 import { GLOSSARY_BY_ID } from '../../content/glossary';
 import { navStore } from '../nav';
-import { store, useUI } from '../store';
+import { useUI } from '../store';
 
 export function Money({ c, compact, sign, colored, className = '' }: { c: Cents; compact?: boolean; sign?: boolean; colored?: boolean; className?: string }) {
   const cls = colored ? (c > 0 ? 'gain' : c < 0 ? 'loss' : '') : '';
@@ -214,6 +214,17 @@ export interface Series {
   dashed?: boolean;
 }
 
+/** Escala vertical de un gráfico: incluye el cero y deja aire arriba (y abajo si hay negativos). */
+function chartScale(all: number[]): { min: number; max: number; ticks: number[] } {
+  let lo = Math.min(0, ...all);
+  let hi = Math.max(...all, 1);
+  if (hi === lo) hi = lo + 1;
+  const span = hi - lo;
+  if (lo < 0) lo -= span * 0.05;
+  hi += span * 0.08;
+  return { min: lo, max: hi, ticks: [0, 0.5, 1].map((f) => lo + (hi - lo) * f) };
+}
+
 /**
  * Gráfico de líneas SVG propio (liviano, sin dependencias). Al tocar o pasar
  * el dedo muestra una línea guía con el valor de cada serie en ese punto.
@@ -224,17 +235,7 @@ export function LineChart({ series, labels, pointLabels, height = 150, format = 
   const padL = 46, padR = 8, padT = 10, padB = labels ? 20 : 8;
   const all = series.flatMap((s) => s.values);
   const [hover, setHover] = useState<number | null>(null);
-  const { min, max, ticks } = useMemo(() => {
-    let lo = Math.min(0, ...all);
-    let hi = Math.max(...all, 1);
-    if (hi === lo) hi = lo + 1;
-    const span = hi - lo;
-    if (lo < 0) lo -= span * 0.05;
-    hi += span * 0.08;
-    const t = [0, 0.5, 1].map((f) => lo + (hi - lo) * f);
-    return { min: lo, max: hi, ticks: t };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(all)]);
+  const { min, max, ticks } = chartScale(all);
   const n = Math.max(...series.map((s) => s.values.length));
   if (n < 2) return <Empty icon="📈">El gráfico aparece después del primer cierre de mes.</Empty>;
   const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR);
@@ -302,10 +303,6 @@ export function Legend({ series }: { series: Series[] }) {
       ))}
     </div>
   );
-}
-
-export function useRun() {
-  return store.run.bind(store);
 }
 
 /** Botón de acción con su explicación accesible (ⓘ). */

@@ -635,10 +635,6 @@ export function returnOver(s: Stock, n: number): number | null {
   return s.price / h[h.length - 1 - n].c - 1;
 }
 
-export function sectorLabel(s: Stock): string {
-  return SECTOR_NAMES[s.sector];
-}
-
 export function orderSummary(o: Order): string {
   const parts = [`${o.side === 'compra' ? 'Compra' : 'Venta'} ${o.qty} ${o.stockId}`, typeLabel(o.type)];
   if (o.limit) parts.push(`límite ${fmtMoney(o.limit)}`);
@@ -647,5 +643,4 @@ export function orderSummary(o: Order): string {
   return parts.join(' · ');
 }
 
-export { typeLabel as orderTypeLabel };
 export const _test = { stepStock, processOrders, split, bankrupt };

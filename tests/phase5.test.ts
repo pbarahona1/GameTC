@@ -268,7 +268,7 @@ describe('Fase 5 · insolvencia personal de punta a punta', () => {
     // Gasta la liquidez y renuncia: ya no hay ingresos.
     const cash = s.ledger.balances.checking - usd(50);
     if (cash > 0) post(s.ledger, { day: s.day, memo: 'Gasto grande', cf: 'operating', lines: [{ account: 'other_expense', debit: cash }, { account: 'checking', credit: cash }] });
-    s.ledger.balances.savings > 0 && post(s.ledger, { day: s.day, memo: 'Gasto grande', cf: 'operating', lines: [{ account: 'other_expense', debit: s.ledger.balances.savings }, { account: 'savings', credit: s.ledger.balances.savings }] });
+    if (s.ledger.balances.savings > 0) post(s.ledger, { day: s.day, memo: 'Gasto grande', cf: 'operating', lines: [{ account: 'other_expense', debit: s.ledger.balances.savings }, { account: 'savings', credit: s.ledger.balances.savings }] });
     quitJob(s);
     const scoreBefore = s.credit.score;
     expect(analyze(s).some((i) => i.id === 'personal-insolvency')).toBe(true);

@@ -47,7 +47,7 @@ function JurisdictionCard({ id }: { id: JurisdictionId }) {
 
 export function TaxesScreen() {
   const s = useGame();
-  const ui = useUI();
+  useUI();
   const [showReport, setShowReport] = useState(false);
   const j = residence(s);
   const proj = projectCurrentYear(s);
@@ -55,7 +55,6 @@ export function TaxesScreen() {
   const obligations = taxObligations(s, 365);
   const report = showReport ? accountantReport(s) : null;
   const capture = deductionCapture(s);
-  void ui;
   return (
     <>
       <section className="hero">

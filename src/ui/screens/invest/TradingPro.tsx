@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
+import type { GameState } from '../../../engine/state';
 import { navStore } from '../../nav';
 import { InfoButton, CardHead, Pill, Seg, NumInput, AmountInput, Act, LineChart, Legend, Money } from '../../components/common';
 import { CandleChart, IndicatorPanel, Overlay } from '../../components/charts';
@@ -111,9 +112,25 @@ function Compare({ a }: { a: string }) {
   );
 }
 
+/** Velas visibles e indicadores (calculados sobre todo el historial y recortados a la ventana). */
+function chartData(s: GameState, id: string, range: number, endOff: number, sma20: boolean, sma50: boolean, ema20: boolean, boll: boolean) {
+  const all = stockById(s, id)!.history;
+  const closes = all.map((c) => c.c);
+  const cut = <T,>(arr: T[]) => arr.slice(Math.max(0, arr.length - endOff - range), arr.length - endOff);
+  const overlays: Overlay[] = [];
+  if (sma20) overlays.push({ name: 'SMA 20', values: cut(sma(closes, 20)), color: 'var(--accent)' });
+  if (sma50) overlays.push({ name: 'SMA 50', values: cut(sma(closes, 50)), color: 'var(--info)' });
+  if (ema20) overlays.push({ name: 'EMA 20', values: cut(ema(closes, 20)), color: '#9a7fd1', dashed: true });
+  if (boll) {
+    const bb = bollinger(closes);
+    overlays.push({ name: 'Bollinger sup.', values: cut(bb.upper), color: 'var(--faint)', dashed: true }, { name: 'Bollinger inf.', values: cut(bb.lower), color: 'var(--faint)', dashed: true });
+  }
+  const m = macd(closes);
+  return { candles: cut(all), overlays, rsi: cut(rsi(closes)), macd: { macd: cut(m.macd), signal: cut(m.signal), hist: cut(m.hist) } };
+}
+
 export function TradingPro({ selected }: { selected: string | null }) {
   const s = useGame();
-  const ui = useUI();
   const id = selected && stockById(s, selected) ? selected : s.stocks.stocks[0].id;
   const st = stockById(s, id)!;
   const total = st.history.length;
@@ -136,21 +153,7 @@ export function TradingPro({ selected }: { selected: string | null }) {
   const endOff = Math.round(win.end);
   const [ov, setOv] = useState<Record<string, boolean>>({ sma20: true, sma50: false, ema20: false, boll: false });
   const [panel, setPanel] = useState<'rsi' | 'macd'>('rsi');
-  const data = useMemo(() => {
-    const all = st.history;
-    const closes = all.map((c) => c.c);
-    const cut = <T,>(arr: T[]) => arr.slice(Math.max(0, arr.length - endOff - range), arr.length - endOff);
-    const overlays: Overlay[] = [];
-    if (ov.sma20) overlays.push({ name: 'SMA 20', values: cut(sma(closes, 20)), color: 'var(--accent)' });
-    if (ov.sma50) overlays.push({ name: 'SMA 50', values: cut(sma(closes, 50)), color: 'var(--info)' });
-    if (ov.ema20) overlays.push({ name: 'EMA 20', values: cut(ema(closes, 20)), color: '#9a7fd1', dashed: true });
-    if (ov.boll) {
-      const bb = bollinger(closes);
-      overlays.push({ name: 'Bollinger sup.', values: cut(bb.upper), color: 'var(--faint)', dashed: true }, { name: 'Bollinger inf.', values: cut(bb.lower), color: 'var(--faint)', dashed: true });
-    }
-    const m = macd(closes);
-    return { candles: cut(all), overlays, rsi: cut(rsi(closes)), macd: { macd: cut(m.macd), signal: cut(m.signal), hist: cut(m.hist) } };
-  }, [st, range, endOff, ov, ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const data = useDerived(chartData, id, range, endOff, ov.sma20, ov.sma50, ov.ema20, ov.boll);
   const orders = s.stocks.orders.filter((o) => o.status === 'abierta');
   const closed = s.stocks.orders.filter((o) => o.status !== 'abierta').slice(-10).reverse();
   const risk = portfolioRisk(s);

@@ -16,15 +16,13 @@ import { fmtMoney, fmtPct } from '../../engine/format';
 export function ForecastPanel({ target, onResult, title = 'Proyección a 12 meses', compact = false }: { target: ForecastTarget; onResult?: (f: BusinessForecast) => void; title?: string; compact?: boolean }) {
   const s = useGame();
   const [running, setRunning] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult] = useState<BusinessForecast | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // El resultado (o error) pertenece a un objetivo: si el objetivo cambia, deja de mostrarse.
+  const [outcome, setOutcome] = useState<{ key: string; result?: BusinessForecast; error?: string } | null>(null);
   const [view, setView] = useState<'net' | 'cash' | 'revenue'>('net');
   const cancel = useRef(false);
   const key = JSON.stringify(target);
-  useEffect(() => {
-    setResult(null);
-    setError(null);
-  }, [key]);
+  const result = outcome?.key === key ? outcome.result ?? null : null;
+  const error = outcome?.key === key ? outcome.error ?? null : null;
   useEffect(() => () => {
     cancel.current = true;
   }, []);
@@ -32,8 +30,8 @@ export function ForecastPanel({ target, onResult, title = 'Proyección a 12 mese
   const runs = forecastRuns(s);
   const run = async () => {
     cancel.current = false;
-    setError(null);
-    setResult(null);
+    const forKey = key;
+    setOutcome(null);
     const base = deepClone(s);
     const samples: ForecastSample[] = [];
     setRunning({ done: 0, total: runs });
@@ -42,7 +40,7 @@ export function ForecastPanel({ target, onResult, title = 'Proyección a 12 mese
       if (cancel.current) return;
       const x = forecastSample(base, target, FORECAST_MONTHS, r);
       if ('error' in x) {
-        setError(x.error);
+        setOutcome({ key: forKey, error: x.error });
         setRunning(null);
         return;
       }
@@ -50,7 +48,7 @@ export function ForecastPanel({ target, onResult, title = 'Proyección a 12 mese
       setRunning({ done: r + 1, total: runs });
     }
     const f = summarizeForecast(base, target, samples);
-    setResult(f);
+    setOutcome({ key: forKey, result: f });
     setRunning(null);
     store.run((st) => recordForecastPractice(st, f), { toast: false });
     onResult?.(f);

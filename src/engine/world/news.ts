@@ -2,7 +2,6 @@ import type { GameState } from '../state';
 import type { NewsItem, NewsKind, NewsTopic } from './types';
 import type { SkillId } from '../../content/skills';
 import { chance, nextRandom, randNormal, randRange, RngHolder, seedFromString } from '../rng';
-import { addLog } from '../log';
 import { practice } from '../skills/skills';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtPct } from '../format';
@@ -163,8 +162,3 @@ export function analyzeNews(state: GameState, id: number): ActionResult {
   return OK(`Estimás que es cierta con ~${fmtPct(n.analysis.estimate, 0)} de probabilidad.${clueText}${xp ? ` (+${xp} XP)` : ''}`);
 }
 
-/** Aviso en el registro para noticias que afectan algo tuyo. */
-export function logNews(state: GameState, n: NewsItem | null, text: string): void {
-  if (!n || state.meta.projection) return;
-  addLog(state, 'info', '📰', text);
-}

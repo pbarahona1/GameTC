@@ -11,7 +11,6 @@ import { hashNormal } from '../rng';
 import { dateOf, isLastDayOfMonth } from '../time/calendar';
 import { stockMarketDrift } from '../economy/economy';
 import { practice } from '../skills/skills';
-import { addLog } from '../log';
 
 /**
  * GESTOR DE INVERSIONES (mandato de gestión).
@@ -458,6 +457,3 @@ export function mandateSummary(state: GameState, m: Mandate) {
   };
 }
 
-export function logMandateEvent(state: GameState, text: string): void {
-  addLog(state, 'info', '🧑‍💼', text);
-}

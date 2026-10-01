@@ -5,7 +5,7 @@ import { jurisdictionById } from '../../content/jurisdictions';
 import { Cents, clamp, roundCents, usd } from '../money';
 import { addMonths, dateOf, formatDate } from '../time/calendar';
 import { housingDrift, vacancyPressure, creditSpread, creditTightness } from '../economy/economy';
-import { chance, nextRandom, randInt, randNormal, randRange } from '../rng';
+import { chance, randInt, randNormal, randRange } from '../rng';
 import { post } from '../ledger/ledger';
 import { payExpense, canPayFromChecking, spendable } from '../finance/payments';
 import { coPay, coEquity } from '../business/common';
@@ -988,11 +988,6 @@ export function setUse(state: GameState, id: number, use: 'jugador' | number | n
   return OK('El inmueble quedó disponible para alquilar.');
 }
 
-/** ¿La empresa usa un inmueble propio como local? (no paga alquiler). */
-export function companyUsesOwnPremises(state: GameState, coId: number): boolean {
-  return (state.realEstate?.properties ?? []).some((p) => p.usedBy === coId);
-}
-
 export function prepayMortgage(state: GameState, id: number, amount: Cents): ActionResult {
   const m = state.realEstate.mortgages.find((x) => x.id === id && x.status === 'activa');
   if (!m) return FAIL('Hipoteca inexistente.');
@@ -1059,14 +1054,3 @@ export function propertyReport(state: GameState, p: Property): PropertyReport {
   };
 }
 
-export function personalProperties(state: GameState): Property[] {
-  return state.realEstate.properties.filter((p) => p.owner.kind === 'personal');
-}
-
-export function propertyTypeName(t: PropertyType): string {
-  return PROPERTY_TYPE_NAMES[t];
-}
-
-export function randomVacancyNoise(state: GameState): number {
-  return nextRandom(state);
-}

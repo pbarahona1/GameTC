@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
+import type { GameState } from '../../../engine/state';
 import { navStore } from '../../nav';
 import { Money, InfoButton, CardHead, Pill, Seg, LineChart, NumInput, Act, Learn } from '../../components/common';
 import { Sparkline } from '../../components/charts';
@@ -21,6 +22,15 @@ export function DayChange({ st }: { st: Stock }) {
   return <span className={`num small ${ch > 0 ? 'gain' : ch < 0 ? 'loss' : ''}`}>{ch > 0 ? '▲' : ch < 0 ? '▼' : ''} {fmtPct(Math.abs(ch), 2)}</span>;
 }
 
+/** Serie de precios de cierre para el gráfico: 3 meses, 1 año o todo (semanal + diario). */
+function priceSeries(s: GameState, id: string, range: '3m' | '1a' | 'max'): number[] {
+  const st = stockById(s, id)!;
+  const daily = st.history.map((c) => c.c);
+  if (range === '3m') return daily.slice(-63);
+  if (range === '1a') return daily.slice(-252);
+  return [...st.weekly.map((c) => c.c), ...daily];
+}
+
 function StockDetail({ st }: { st: Stock }) {
   const s = useGame();
   useUI();
@@ -30,12 +40,7 @@ function StockDetail({ st }: { st: Stock }) {
   const h = s.stocks.holdings[st.id];
   const buyQ = quoteMarket(s, st, 'compra', Math.max(1, qty));
   const sellQ = quoteMarket(s, st, 'venta', Math.max(1, qty));
-  const series = useMemo(() => {
-    const daily = st.history.map((c) => c.c);
-    if (range === '3m') return daily.slice(-63);
-    if (range === '1a') return daily.slice(-252);
-    return [...st.weekly.map((c) => c.c), ...daily];
-  }, [st, range, s.day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const series = useDerived(priceSeries, st.id, range);
   const risk = riskLabel(st);
   const ret = returnOver(st, range === '3m' ? 62 : range === '1a' ? 251 : st.history.length - 1);
   return (

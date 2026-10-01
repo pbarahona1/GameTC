@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../store';
+import { businessesOf } from '../derived';
 import { navStore, useNav } from '../nav';
 import { SECTORS, SECTOR_BY_ID, LEGAL_FORMS, LEGAL_FORM_BY_ID, BizSectorId, LegalForm } from '../../content/sectors';
 import { setupCosts, sectorRequirement, foundCompany, buyListing, foundHolding } from '../../engine/business/ownership';
 import { isHolding } from '../../engine/business/groups';
 import { JURISDICTIONS, JURISDICTION_BY_ID, type JurisdictionId } from '../../content/jurisdictions';
-import { consolidated, valuation, coMetrics, coIncomeStatement } from '../../engine/business/reports';
+import { valuation, coMetrics, coIncomeStatement } from '../../engine/business/reports';
 import { daysToBankruptcy } from '../../engine/business/finance';
 import { ForecastPanel } from '../components/ForecastPanel';
 import { attachForecast, type BusinessForecast } from '../../engine/advisor/businessForecast';
@@ -55,9 +56,8 @@ function CompanyCard({ co }: { co: Company }) {
 
 function Portfolio() {
   const s = useGame();
-  const ui = useUI();
   const open = s.companies.filter(isOpen);
-  const c = useMemo(() => consolidated(s, s.day - 29, s.day), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const c = useDerived(businessesOf);
   return (
     <>
       <ScreenIntro icon="business" title="Negocios" text="Fundá, comprá y dirigí empresas. Antes de invertir podés proyectar cómo le iría a cada negocio." term="proyeccion_negocios" />

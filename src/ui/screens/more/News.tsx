@@ -78,7 +78,7 @@ export function NewsScreen() {
   useEffect(() => {
     store.run((x) => markNewsRead(x), { toast: false });
     store.markSeen('noticias_rumores');
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
   const list = [...s.world.news].reverse().filter((n) => (filter === 'todas' || (filter === 'abiertas' ? n.status === 'abierta' : n.status !== 'abierta')) && (topic === 'todos' || n.topic === topic));
   const resolved = s.world.news.filter((n) => n.status === 'cumplida' || n.status === 'desmentida');
   const hit = resolved.filter((n) => n.status === 'cumplida').length;

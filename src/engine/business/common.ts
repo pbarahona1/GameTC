@@ -24,10 +24,6 @@ export function coLog(state: GameState, co: Company, kind: LogKind, icon: string
   state.log[state.log.length - 1].company = co.id;
 }
 
-export function coCash(co: Company): Cents {
-  return co.ledger.balances.cash;
-}
-
 export function coEquity(co: Company): Cents {
   let e = 0;
   for (const id of CO_ACCOUNT_IDS) {
@@ -118,11 +114,6 @@ export function hasManager(co: Company): boolean {
 export function managerSkill(co: Company): number {
   const m = co.employees.filter((e) => e.role === 'gerente');
   return m.length ? Math.max(...m.map((x) => x.skill)) : 0;
-}
-
-/** Efecto con rendimientos decrecientes de N personas de apoyo. */
-export function supportEffect(n: number, perHead: number, cap: number): number {
-  return Math.min(cap, n * perHead);
 }
 
 export function workingAssets(state: GameState, co: Company) {

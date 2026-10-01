@@ -1,11 +1,12 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../store';
+import { Fragment, useEffect, useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../store';
+import { incomeOf, cashFlowOf, taxProjectionOf } from '../derived';
 import { navStore, useNav } from '../nav';
-import { incomeStatement, balanceSheet, cashFlowStatement, transactions, ledgerCsv, IncomeStatement, Line } from '../../engine/reports/statements';
+import { balanceSheet, transactions, ledgerCsv, IncomeStatement, Line } from '../../engine/reports/statements';
 import { ACCOUNTS, ACCOUNT_IDS, AccountId } from '../../engine/ledger/accounts';
 import { startOfMonth, startOfYear, dateOf, dayOf, formatDate, formatMonth, addMonths } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
-import { projectCurrentYear, payTaxes } from '../../engine/tax/taxEngine';
+import { payTaxes } from '../../engine/tax/taxEngine';
 import { residence } from '../../engine/tax/taxEngine';
 import { practice } from '../../engine/skills/skills';
 import { Money, InfoButton, Tabs, Seg, LineChart, Legend, Pill, Empty, Learn } from '../components/common';
@@ -64,11 +65,12 @@ function TotalRow({ label, value, prev, term, strong }: { label: string; value: 
 
 function IS({ period }: { period: Period }) {
   const s = useGame();
-  const ui = useUI();
   const [from, to] = periodRange(s.day, period);
-  const is = useMemo(() => incomeStatement(s, from, to), [ui.version, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const is = useDerived(incomeOf, from, to);
   const pr = previousRange(from, to, period);
-  const prev: IncomeStatement | undefined = useMemo(() => (pr ? incomeStatement(s, pr[0], pr[1]) : undefined), [ui.version, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const prevRange = pr ?? [from, to];
+  const prevIs = useDerived(incomeOf, prevRange[0], prevRange[1]);
+  const prev: IncomeStatement | undefined = pr ? prevIs : undefined;
   return (
     <div className="card">
       <div className="card-head"><h2>Estado de resultados</h2><InfoButton term="estado_resultados" /></div>
@@ -119,9 +121,8 @@ function BS() {
 
 function CF({ period }: { period: Period }) {
   const s = useGame();
-  const ui = useUI();
   const [from, to] = periodRange(s.day, period);
-  const cf = useMemo(() => cashFlowStatement(s, from, to), [ui.version, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cf = useDerived(cashFlowOf, from, to);
   const block = (title: string, items: { label: string; amount: number }[], total: number, term?: string) => (
     <>
       <div className="row"><div className="grow eyebrow">{title} {term && <InfoButton term={term} />}</div></div>
@@ -187,8 +188,7 @@ function NW() {
 
 function Tax() {
   const s = useGame();
-  const ui = useUI();
-  const { toDate, projected } = useMemo(() => projectCurrentYear(s), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { toDate, projected } = useDerived(taxProjectionOf);
   const y = s.tax.ytd;
   return (
     <>

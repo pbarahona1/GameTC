@@ -95,11 +95,6 @@ export function missionProgress(s: GameState): { done: number; total: number } {
   return { done: list.filter((t) => isMissionDone(s, t)).length, total: list.length };
 }
 
-export function chapterOf(s: GameState): number {
-  const open = TUTORIAL.filter((t) => !t.future && !isMissionDone(s, t));
-  return open.length ? Math.min(...open.map((t) => t.chapter)) : CHAPTERS.length;
-}
-
 /**
  * Próxima misión sugerida: la primera sin hacer de los capítulos acordes a tu etapa
  * (si terminaste los de tu etapa, sigue con el siguiente capítulo).

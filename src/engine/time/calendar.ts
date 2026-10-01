@@ -61,17 +61,11 @@ export function monthKey(day: number): string {
 }
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-const MONTHS_LONG = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
 export function formatDate(day: number): string {
   const g = dateOf(day);
   return `${g.d} ${MONTHS[g.m - 1]} ${g.y}`;
-}
-
-export function formatDateLong(day: number): string {
-  const g = dateOf(day);
-  return `${WEEKDAYS[g.weekday]}, ${g.d} de ${MONTHS_LONG[g.m - 1]} de ${g.y}`;
 }
 
 export function formatMonth(day: number): string {

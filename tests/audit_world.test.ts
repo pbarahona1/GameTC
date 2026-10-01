@@ -139,7 +139,10 @@ function worldAction(s: GameState, bot: RngHolder): void {
     }
   } else if (r < 0.76) {
     const f = pickOne(bot, s.legal.fines.filter((x) => x.balance > 0));
-    if (f) nextRandom(bot) < 0.5 ? payFine(s, f.id) : finePlan(s, f.id);
+    if (f) {
+      if (nextRandom(bot) < 0.5) payFine(s, f.id);
+      else finePlan(s, f.id);
+    }
     const c = pickOne(bot, s.legal.cases.filter((x) => x.stage !== 'cerrado'));
     if (c) {
       const lawyer = s.pros.hires.find((h) => h.pro.kind === 'abogado');

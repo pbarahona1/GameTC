@@ -263,3 +263,32 @@ describe('Fase 3 · partidas y guardado automático', () => {
     }
   });
 });
+
+describe('Fase 5 · cálculos derivados', () => {
+  it('se calculan una vez por cambio de la partida y no con avisos, guardados ni ajustes', async () => {
+    const st = make();
+    await st.boot();
+    await st.startNewGame(NEW);
+    let calls = 0;
+    const derivation = (s: GameState, extra: number) => { calls++; return s.day + extra; };
+    expect(st.derive(derivation, [1])).toBe(1);
+    expect(st.derive(derivation, [1])).toBe(1);
+    expect(calls).toBe(1);
+    // Otro parámetro es otra entrada del caché.
+    expect(st.derive(derivation, [5])).toBe(5);
+    expect(calls).toBe(2);
+    // Un aviso, un guardado o un cambio de ajustes no recalculan.
+    st.toast('hola');
+    await st.save();
+    st.updateSettings({ successToasts: false });
+    st.derive(derivation, [1]);
+    expect(calls).toBe(2);
+    // Una acción o un día simulado, sí.
+    st.run((s) => { s.meta.seenTerms.push('x'); return { ok: true }; }, { toast: false });
+    st.derive(derivation, [1]);
+    expect(calls).toBe(3);
+    st.step(1);
+    expect(st.derive(derivation, [1])).toBe(2);
+    expect(calls).toBe(4);
+  });
+});
