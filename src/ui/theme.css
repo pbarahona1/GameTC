@@ -565,3 +565,7 @@ button.card:active, .menu-row:active, .news-mini:active { transform: scale(0.99)
 .slot-list .slot { flex-wrap: wrap; gap: 8px; }
 .slot-list .slot.on .title { color: var(--text); }
 .slot-list .pill { margin-left: 4px; }
+
+/* Resumen semanal del gerente delegado */
+.manager-report { background: var(--surface-2); border-radius: 10px; padding: 8px 12px; margin-top: 8px; }
+.manager-report ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }

@@ -17,6 +17,7 @@ const Finance = lazy(() => import('./screens/Finance').then((m) => ({ default: m
 const Career = lazy(() => import('./screens/Career').then((m) => ({ default: m.Career })));
 import { Money, Sheet, InfoButton } from './components/common';
 import { fmtMoney } from '../engine/format';
+import { spendable } from '../engine/finance/payments';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BootErrorScreen, SimErrorSheet } from './screens/Recovery';
 
@@ -51,7 +52,7 @@ function TopBar() {
         <div className="date-block">
           <div className="d">{formatDateShort(s.day)}</div>
           <div className="tiny muted">
-            Disponible <Money c={s.ledger.balances.checking + s.ledger.balances.savings + s.ledger.balances.cash_wallet} />
+            Disponible <Money c={spendable(s)} />
           </div>
         </div>
         <button className="icon-btn" aria-label={`Noticias${unread ? ` (${unread} nuevas)` : ''}`} onClick={() => navStore.go('more', 'news')}>

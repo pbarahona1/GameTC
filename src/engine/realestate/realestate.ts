@@ -7,7 +7,7 @@ import { addMonths, dateOf, formatDate } from '../time/calendar';
 import { housingDrift, vacancyPressure, creditSpread, creditTightness } from '../economy/economy';
 import { chance, nextRandom, randInt, randNormal, randRange } from '../rng';
 import { post } from '../ledger/ledger';
-import { payExpense, canPayFromChecking } from '../finance/payments';
+import { payExpense, canPayFromChecking, spendable } from '../finance/payments';
 import { coPay, coEquity } from '../business/common';
 import { coPost } from '../business/companyLedger';
 import type { Company } from '../business/types';
@@ -53,6 +53,11 @@ export function buyerWeeklyChance(state: GameState, price: Cents, appraisal: Cen
   if (state.macro.phase === 'recesion') prob *= 0.55;
   if (state.macro.phase === 'auge') prob *= 1.3;
   return clamp(prob, 0.005, 0.7);
+}
+
+/** Costo de reparar un vicio oculto ya detectado (lo paga el comprador al escriturar). */
+export function knownRepairCost(p: Property): Cents {
+  return p.hiddenDefect?.discovered ? p.hiddenDefect.cost : 0;
 }
 
 /** Precio que cobra la venta rápida (hoy, sin esperar comprador). */
@@ -236,7 +241,7 @@ function ownerIncome(state: GameState, p: Property, amount: Cents, memo: string)
 }
 
 export function ownerCash(state: GameState, owner: PropertyOwner): Cents {
-  if (owner.kind === 'personal') return state.ledger.balances.checking + (state.bank.overdraftSweep ? state.ledger.balances.savings : 0);
+  if (owner.kind === 'personal') return spendable(state);
   return ownerCompany(state, owner)?.ledger.balances.cash ?? 0;
 }
 
@@ -432,7 +437,7 @@ function startEviction(state: GameState, p: Property): void {
   const days = lawyer ? clamp(Math.round(75 - lawyer.quality * 0.4), 30, 75) : 90;
   const cost = usd((lawyer ? 400 : 1500) * state.macro.priceIndex);
   ownerExpense(state, p, 'legal', cost, `Juicio de desalojo en ${p.name}`);
-  addLog(state, 'danger', '⚖️', `${p.name}: iniciaste el desalojo de ${p.lease.tenant} por falta de pago. Durará unos ${days} días${lawyer ? ` (con ${lawyer.name})` : ''}.`, cost);
+  addLog(state, 'danger', '⚖️', `${p.name}: iniciaste el desalojo de ${p.lease.tenant} por falta de pago. Durará unos ${days} días${lawyer ? ` (con ${lawyer.name})` : ''}.`, cost, 'legal');
   p.lease = null;
   p.evictionUntil = state.day + days;
   p.listedForRent = true;
@@ -529,10 +534,14 @@ function processMortgagePayment(state: GameState, m: Mortgage): void {
   // Hipoteca variable: la tasa se revisa en cada aniversario.
   if (m.rateType === 'variable' && m.paymentsMade > 0 && m.paymentsMade % 12 === 0) {
     const newApr = Math.round((state.macro.policyRate + m.spread + creditSpread(state)) * 10000) / 10000;
-    if (Math.abs(newApr - m.apr) >= 0.0005) {
+    const oldApr = m.apr;
+    if (Math.abs(newApr - oldApr) >= 0.0005) {
+      const oldPayment = m.payment;
       m.apr = newApr;
       m.payment = amortizedPayment(m.balance, m.apr, m.termMonths - m.paymentsMade);
-      addLog(state, newApr > m.apr ? 'warning' : 'info', '🏦', `Tu hipoteca variable se ajustó al ${fmtPct(newApr, 2)}: nueva cuota ${fmtMoney(m.payment)}.`);
+      const up = newApr > oldApr;
+      const p = state.realEstate.properties.find((x) => x.id === m.propertyId);
+      addLog(state, up ? 'warning' : 'info', '🏦', `La hipoteca variable de ${p?.name ?? 'tu inmueble'} ${up ? 'subió' : 'bajó'} del ${fmtPct(oldApr, 2)} al ${fmtPct(newApr, 2)}: la cuota pasa de ${fmtMoney(oldPayment)} a ${fmtMoney(m.payment)}.`);
     }
   }
   const interest = roundCents((m.balance * m.apr) / 12);
@@ -647,7 +656,7 @@ function foreclose(state: GameState, p: Property, m: Mortgage): void {
     }
   }
   removeProperty(state, p);
-  addLog(state, 'danger', '🔨', `EMBARGO: el banco remató ${p.name} por ${fmtMoney(price)}. ${surplus ? `Recibiste el sobrante de ${fmtMoney(surplus)}.` : ''}${deficiency ? (m.recourse ? ` Seguís debiendo ${fmtMoney(deficiency)} (hipoteca con recurso).` : ` La diferencia de ${fmtMoney(deficiency)} la asume el banco (sin recurso).`) : ''}`);
+  addLog(state, 'danger', '🔨', `EMBARGO: el banco remató ${p.name} por ${fmtMoney(price)}. ${surplus ? `Recibiste el sobrante de ${fmtMoney(surplus)}.` : ''}${deficiency ? (m.recourse ? ` Seguís debiendo ${fmtMoney(deficiency)} (hipoteca con recurso).` : ` La diferencia de ${fmtMoney(deficiency)} la asume el banco (sin recurso).`) : ''}`, undefined, 'peligro');
 }
 
 function removeProperty(state: GameState, p: Property): void {
@@ -683,6 +692,7 @@ export function closingCosts(_state: GameState, price: Cents, jurisdictionId: st
 export function inspectListing(state: GameState, listingId: number): ActionResult {
   const l = state.realEstate.listings.find((x) => x.id === listingId);
   if (!l) return FAIL('El inmueble ya no está en venta.');
+  if (l.property.hiddenDefect?.discovered) return FAIL('Ya inspeccionaste este inmueble: el vicio oculto está detectado.');
   const lawyer = hiredPro(state, 'abogado', 'personal');
   const cost = lawyer ? 0 : usd(400 * state.macro.priceIndex);
   if (cost && !canPayFromChecking(state, cost)) return FAIL(`La inspección cuesta ${fmtMoney(cost)}.`);
@@ -690,14 +700,15 @@ export function inspectListing(state: GameState, listingId: number): ActionResul
   practice(state, 'inspection', 'realEstate', 40);
   const d = l.property.hiddenDefect;
   if (!d) return OK(`Inspección sin hallazgos relevantes en ${l.property.name}.`);
+  // Inspeccionar INFORMA: el vicio sigue ahí y, si comprás igual, la reparación se paga al escriturar.
   d.discovered = true;
   if (lawyer) {
-    const cut = d.cost;
+    // Con abogado, una sola consecuencia: rebaja equivalente al costo de reparar.
+    const cut = Math.min(d.cost, l.askPrice - 1);
     l.askPrice = Math.max(1, l.askPrice - cut);
-    l.property.hiddenDefect = null;
-    return OK(`${lawyer.name} detectó un vicio oculto y negoció una rebaja de ${fmtMoney(cut)}: el vendedor lo reparará a su cargo.`);
+    return OK(`${lawyer.name} detectó un vicio oculto y negoció una rebaja de ${fmtMoney(cut)}, lo que cuesta repararlo. Si comprás, la reparación se paga al escriturar.`);
   }
-  return OK(`La inspección encontró un vicio oculto: reparar costaría ${fmtMoney(d.cost)}. Tenelo en cuenta en tu oferta.`);
+  return OK(`La inspección encontró un vicio oculto: repararlo cuesta ${fmtMoney(d.cost)} y, si comprás, se paga al escriturar. Tenelo en cuenta en tu oferta.`);
 }
 
 export function buyProperty(state: GameState, listingId: number, o: BuyOptions): ActionResult {
@@ -726,9 +737,11 @@ export function buyProperty(state: GameState, listingId: number, o: BuyOptions):
   }
   const fee = quote?.fee ?? 0;
   const cashNeeded = price - loan + cc.total + fee;
-  if (ownerCash(state, o.owner) < cashNeeded) return FAIL(`Se necesitan ${fmtMoney(cashNeeded)} (anticipo ${fmtMoney(price - loan)} + gastos de escritura e impuestos ${fmtMoney(cc.total)}${fee ? ` + comisión hipotecaria ${fmtMoney(fee)}` : ''}).`);
+  // Un vicio oculto ya detectado se repara al escriturar, a cargo del comprador.
+  const repair = knownRepairCost(p);
+  if (ownerCash(state, o.owner) < cashNeeded + repair) return FAIL(`Se necesitan ${fmtMoney(cashNeeded + repair)} (anticipo ${fmtMoney(price - loan)} + gastos de escritura e impuestos ${fmtMoney(cc.total)}${fee ? ` + comisión hipotecaria ${fmtMoney(fee)}` : ''}${repair ? ` + reparación del vicio oculto ${fmtMoney(repair)}` : ''}).`);
   if (o.owner.kind === 'personal') {
-    if (!canPayFromChecking(state, cashNeeded)) return FAIL('Fondos insuficientes en la cuenta corriente.');
+    if (!canPayFromChecking(state, cashNeeded + repair)) return FAIL('Fondos insuficientes en la cuenta corriente.');
     post(state.ledger, {
       day: state.day, memo: `Compra de ${p.name}`, cf: 'investing', tag: 'property:buy',
       lines: [
@@ -774,9 +787,13 @@ export function buyProperty(state: GameState, listingId: number, o: BuyOptions):
   }
   re.properties.push(p);
   re.listings = re.listings.filter((x) => x.id !== listingId);
+  if (repair > 0) {
+    ownerExpense(state, p, 'expense', repair, `Reparación del vicio oculto de ${p.name}`);
+    p.hiddenDefect = null;
+  }
   practice(state, 'buy_property', 'realEstate', 200);
-  addLog(state, 'success', '🏠', `${o.owner.kind === 'personal' ? 'Compraste' : `${ownerLabel(state, o.owner)} compró`} ${p.name} por ${fmtMoney(price)}${loan ? ` con una hipoteca de ${fmtMoney(loan)}` : ''}.`, cashNeeded);
-  return OK(`Compra escriturada: ${p.name}. Pagaste ${fmtMoney(cashNeeded)} en total.`);
+  addLog(state, 'success', '🏠', `${o.owner.kind === 'personal' ? 'Compraste' : `${ownerLabel(state, o.owner)} compró`} ${p.name} por ${fmtMoney(price)}${loan ? ` con una hipoteca de ${fmtMoney(loan)}` : ''}${repair ? ` y pagaste ${fmtMoney(repair)} para reparar el vicio oculto` : ''}.`, cashNeeded + repair);
+  return OK(`Compra escriturada: ${p.name}. Pagaste ${fmtMoney(cashNeeded + repair)} en total${repair ? ' (incluye la reparación del vicio oculto)' : ''}.`);
 }
 
 /** Venta: rápida (QUICK_SALE_RATIO de la tasación, inmediata) o publicada a un precio (espera comprador). */

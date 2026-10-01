@@ -1,6 +1,6 @@
 import type { GameState } from '../state';
 import type { RivalGroup, RivalIntent, IntentKind, PoachOffer } from './types';
-import { SECTORS, SECTOR_BY_ID, BizSectorId } from '../../content/sectors';
+import { SECTOR_BY_ID, BizSectorId } from '../../content/sectors';
 import { EVENT_CATALOG, EconEvent, stockSectorDrift } from '../economy/economy';
 import { chance, nextRandom, randInt, randNormal, randRange, seedFromString } from '../rng';
 import { clamp, Cents, roundCents, usd } from '../money';
@@ -8,6 +8,7 @@ import { addLog } from '../log';
 import { fmtMoney, fmtPct } from '../format';
 import { formatDate } from '../time/calendar';
 import { publish, publishCandidate, resolveNews, expireNews, wrng } from './news';
+import type { NewsDraft } from './news';
 import { difficultyOf } from '../economy/difficulty';
 import { ActionResult, FAIL, OK } from '../result';
 import { isOpen } from '../business/common';
@@ -57,24 +58,29 @@ const playerSectors = (state: GameState) => new Set(state.companies.filter((c) =
 
 // ------------------------------------------------------------------ economía: anticipos de eventos
 
+/**
+ * Anticipo de un evento económico. El verdadero y su candidato falso usan el
+ * MISMO formato (tipo, texto, plazos): lo único que los distingue es si ocurre.
+ */
+function macroDraft(state: GameState, e: Pick<EconEvent, 'kind' | 'name' | 'icon' | 'description'>, startDay: number, truth: boolean): NewsDraft {
+  const weeks = Math.max(1, Math.round((startDay - state.day) / 7));
+  return {
+    kind: 'anticipo', topic: 'economia', icon: e.icon, title: `Se anticipa: ${e.name.toLowerCase()}`,
+    body: `${e.description} Podría empezar en unas ${weeks} semanas.`, reliability: 0, truth,
+    resolveDay: startDay, ref: { eventKind: e.kind },
+  };
+}
+
 /** Programa un evento económico con anticipación y (a veces) lo anticipa en las noticias. */
 export function announceMacroEvent(state: GameState, ev: EconEvent): void {
-  const lead = ev.startDay - state.day;
-  const n = publishCandidate(state, true, () => ({
-    kind: 'anticipo', topic: 'economia', icon: ev.icon, title: `Se anticipa: ${ev.name.toLowerCase()}`,
-    body: `${ev.description} Podría empezar en unas ${Math.max(1, Math.round(lead / 7))} semanas.`, reliability: 0, truth: true,
-    resolveDay: ev.startDay, ref: { eventKind: ev.kind },
-  }));
-  void n;
-  // Candidato falso equivalente: un evento que NO va a ocurrir.
-  const pool = EVENT_CATALOG.filter((e) => e.kind !== ev.kind);
+  publishCandidate(state, true, () => macroDraft(state, ev, ev.startDay, true));
+  // Candidato falso equivalente: un evento posible en esta fase que NO va a ocurrir.
+  const scheduled = new Set(state.macro.events.filter((e) => e.endDay >= state.day).map((e) => e.kind));
+  const pool = EVENT_CATALOG.filter((e) => !scheduled.has(e.kind) && (!e.phases || e.phases.includes(state.macro.phase)));
+  if (!pool.length) return;
   const fake = pool[Math.floor(nextRandom(wrng(state)) * pool.length)];
-  const fakeLead = randInt(wrng(state), 20, 50);
-  publishCandidate(state, false, () => ({
-    kind: 'rumor', topic: 'economia', icon: fake.icon, title: `Se anticipa: ${fake.name.toLowerCase()}`,
-    body: `${fake.description} Podría empezar en unas ${Math.round(fakeLead / 7)} semanas.`, reliability: 0, truth: false,
-    resolveDay: state.day + fakeLead, ref: { eventKind: fake.kind },
-  }));
+  const fakeStart = state.day + randInt(wrng(state), 20, 50);
+  publishCandidate(state, false, () => macroDraft(state, fake, fakeStart, false));
 }
 
 /** Día de inicio de un evento programado: aviso en el registro y cierre de sus anticipos. */
@@ -83,7 +89,11 @@ function startEvents(state: GameState): void {
     if (e.startDay !== state.day) continue;
     const months = Math.round((e.endDay - e.startDay) / 30);
     addLog(state, 'warning', e.icon, `${e.name}: ${e.description} (duración estimada: ${months} meses)`);
-    for (const n of state.world.news) if (n.status === 'abierta' && n.ref?.eventKind === e.kind) resolveNews(state, n, n.truth, 'Se confirmó.');
+    for (const n of state.world.news) {
+      if (n.status !== 'abierta' || n.ref?.eventKind !== e.kind) continue;
+      n.truth = true; // un anticipo que coincide con lo que pasó se cumplió, aunque haya nacido como candidato falso
+      resolveNews(state, n, true, 'Se confirmó.');
+    }
     publish(state, { kind: 'hecho', topic: 'economia', icon: e.icon, title: `Comenzó: ${e.name.toLowerCase()}`, body: `${e.description} Duración estimada: ${months} meses.`, reliability: 1, truth: true, resolveDay: null, source: 'Comunicado oficial', sourceTypical: 0.97, ref: { eventKind: e.kind } });
   }
 }
@@ -143,6 +153,19 @@ function rivalFor(state: GameState, sector: BizSectorId | null, styles?: RivalGr
   return pool.length ? pool[Math.floor(nextRandom(wrng(state)) * pool.length)] : undefined;
 }
 
+/** Día de ejecución de una intención de compra: antes de que venza el aviso. */
+function purchaseDay(state: GameState, min: number, max: number, expiresDay: number): number {
+  return state.day + randInt(wrng(state), min, Math.max(min, Math.min(max, expiresDay - state.day - 2)));
+}
+
+function businessDraft(r: RivalGroup, l: GameState['listings'][number], executeDay: number, truth: boolean): NewsDraft {
+  return {
+    kind: 'rumor', topic: 'empresas', icon: r.icon, title: `${r.name} negocia comprar ${l.company.name}`,
+    body: `Fuentes del sector dicen que ${r.name} ofrecería cerca de ${fmtMoney(l.askPrice, { decimals: false })} por ${l.company.name}. Si te interesa, tendrías que moverte antes.`,
+    reliability: 0, truth, resolveDay: executeDay + 1, ref: { listingId: l.id, rivalId: r.id, sector: l.company.sector },
+  };
+}
+
 function planBusinessPurchase(state: GameState): void {
   const free = state.listings.filter((l) => !state.world.intents.some((i) => i.listingId === l.id) && l.expiresDay > state.day + 12);
   if (!free.length) return;
@@ -150,60 +173,74 @@ function planBusinessPurchase(state: GameState): void {
   const r = rivalFor(state, l.company.sector);
   if (!r || l.askPrice > r.capital * 0.25) return;
   const it = newIntent(state, r, 'comprar_empresa', [10, Math.min(28, l.expiresDay - state.day - 2)], { listingId: l.id });
-  const n = publishCandidate(state, true, () => ({
-    kind: 'rumor', topic: 'empresas', icon: r.icon, title: `${r.name} negocia comprar ${l.company.name}`,
-    body: `Fuentes del sector dicen que ${r.name} ofrecería cerca de ${fmtMoney(l.askPrice, { decimals: false })} por ${l.company.name}. Si te interesa, tendrías que moverte antes.`,
-    reliability: 0, truth: true, resolveDay: it.executeDay + 1, ref: { listingId: l.id, rivalId: r.id, sector: l.company.sector },
-  }));
+  const n = publishCandidate(state, true, () => businessDraft(r, l, it.executeDay, true));
   it.newsId = n?.id ?? null;
-  // Candidato falso: otra empresa en venta que nadie planea comprar.
+  // Candidato falso: otra empresa en venta (que el rival podría pagar) que nadie planea comprar.
   const other = free.filter((x) => x !== l);
-  if (other.length) {
-    const f = other[Math.floor(nextRandom(wrng(state)) * other.length)];
-    const fr = rivalFor(state, f.company.sector) ?? r;
-    publishCandidate(state, false, () => ({
-      kind: 'rumor', topic: 'empresas', icon: fr.icon, title: `${fr.name} negocia comprar ${f.company.name}`,
-      body: `Fuentes del sector dicen que ${fr.name} estaría interesado en ${f.company.name}.`, reliability: 0, truth: false,
-      resolveDay: state.day + randInt(wrng(state), 15, 30), ref: { listingId: f.id, rivalId: fr.id, sector: f.company.sector },
-    }));
-  }
+  if (!other.length) return;
+  const f = other[Math.floor(nextRandom(wrng(state)) * other.length)];
+  const fr = rivalFor(state, f.company.sector) ?? r;
+  publishCandidate(state, false, () => businessDraft(fr, f, purchaseDay(state, 10, 28, f.expiresDay), false));
 }
 
-function planPropertyPurchase(state: GameState): void {
+function propertyDraft(r: RivalGroup, l: GameState['realEstate']['listings'][number], executeDay: number, truth: boolean): NewsDraft {
+  return {
+    kind: 'rumor', topic: 'inmuebles', icon: '🏠', title: `${r.name} quiere comprar ${l.property.name}`,
+    body: `Se publica por ${fmtMoney(l.askPrice, { decimals: false })}, por debajo de su tasación. ${r.name} ya lo habría visitado.`,
+    reliability: 0, truth, resolveDay: executeDay + 1, ref: { propertyListingId: l.id, rivalId: r.id },
+  };
+}
+
+/** Un rival planea comprar un inmueble barato (exportada para pruebas). */
+export function planPropertyPurchase(state: GameState): void {
   const cheap = state.realEstate.listings.filter((l) => l.askPrice <= l.property.appraisal * 0.97 && !state.world.intents.some((i) => i.propertyListingId === l.id) && l.expiresDay > state.day + 10);
   if (!cheap.length) return;
   const l = cheap[Math.floor(nextRandom(wrng(state)) * cheap.length)];
   const r = rivalFor(state, null, ['oportunista', 'paciente']);
   if (!r) return;
   const it = newIntent(state, r, 'comprar_inmueble', [7, Math.min(21, l.expiresDay - state.day - 2)], { propertyListingId: l.id });
-  const n = publishCandidate(state, true, () => ({
-    kind: 'rumor', topic: 'inmuebles', icon: '🏠', title: `${r.name} quiere comprar ${l.property.name}`,
-    body: `Se publica por ${fmtMoney(l.askPrice, { decimals: false })}, por debajo de su tasación. ${r.name} ya lo habría visitado.`,
-    reliability: 0, truth: true, resolveDay: it.executeDay + 1, ref: { propertyListingId: l.id, rivalId: r.id },
-  }));
+  const n = publishCandidate(state, true, () => propertyDraft(r, l, it.executeDay, true));
   it.newsId = n?.id ?? null;
+  // Candidato falso: otro inmueble barato que nadie planea comprar.
+  const other = cheap.filter((x) => x !== l);
+  if (!other.length) return;
+  const f = other[Math.floor(nextRandom(wrng(state)) * other.length)];
+  const fr = rivalFor(state, null, ['oportunista', 'paciente']) ?? r;
+  publishCandidate(state, false, () => propertyDraft(fr, f, purchaseDay(state, 7, 21, f.expiresDay), false));
+}
+
+function competitorDraft(r: RivalGroup, sector: BizSectorId, executeDay: number, truth: boolean): NewsDraft {
+  return {
+    kind: 'rumor', topic: 'empresas', icon: '🆕', title: `${r.name} planea entrar fuerte en ${SECTOR_BY_ID[sector].name.toLowerCase()}`,
+    body: 'Estaría por abrir un local grande con precios agresivos. Si pasa, vas a perder clientes: reforzá calidad, marketing o fidelización antes.',
+    reliability: 0, truth, resolveDay: executeDay + 1, ref: { sector, rivalId: r.id },
+  };
 }
 
 function planCompetitor(state: GameState, sector: BizSectorId): void {
-  const r = rivalFor(state, sector, ['agresivo', 'oportunista', 'paciente']);
+  const styles: RivalGroup['style'][] = ['agresivo', 'oportunista', 'paciente'];
+  const r = rivalFor(state, sector, styles);
   if (!r || state.world.intents.some((i) => i.kind === 'abrir_competidor' && i.sector === sector)) return;
   if ((state.markets[sector]?.competitors.filter((c) => c.active).length ?? 0) >= 6) return;
   const it = newIntent(state, r, 'abrir_competidor', [30, 50], { sector });
-  const sec = SECTOR_BY_ID[sector];
-  const n = publishCandidate(state, true, () => ({
-    kind: 'rumor', topic: 'empresas', icon: '🆕', title: `${r.name} planea entrar fuerte en ${sec.name.toLowerCase()}`,
-    body: `Estaría por abrir un local grande con precios agresivos. Si pasa, vas a perder clientes: reforzá calidad, marketing o fidelización antes.`,
-    reliability: 0, truth: true, resolveDay: it.executeDay + 1, ref: { sector, rivalId: r.id },
-  }));
+  const n = publishCandidate(state, true, () => competitorDraft(r, sector, it.executeDay, true));
   it.newsId = n?.id ?? null;
-  // Candidato falso para otro sector.
-  const others = SECTORS.filter((s) => s.id !== sector);
-  const fs = others[Math.floor(nextRandom(wrng(state)) * others.length)];
-  const fr = rivalFor(state, fs.id) ?? r;
-  publishCandidate(state, false, () => ({
-    kind: 'rumor', topic: 'empresas', icon: '🆕', title: `${fr.name} planea entrar fuerte en ${fs.name.toLowerCase()}`,
-    body: 'Estaría por abrir un local grande con precios agresivos.', reliability: 0, truth: false, resolveDay: state.day + randInt(wrng(state), 30, 50), ref: { sector: fs.id, rivalId: fr.id },
-  }));
+  // Candidato falso en un sector donde también operás (si no hay otro, el mismo con otro grupo):
+  // así un rumor sobre "tu" sector no delata que es cierto.
+  const mine = [...playerSectors(state)].filter((x) => x !== sector);
+  const fs = mine.length ? mine[Math.floor(nextRandom(wrng(state)) * mine.length)] : sector;
+  const pool = state.world.rivals.filter((x) => x.sectors.includes(fs) && styles.includes(x.style) && (fs !== sector || x.id !== r.id));
+  if (!pool.length) return;
+  const fr = pool[Math.floor(nextRandom(wrng(state)) * pool.length)];
+  publishCandidate(state, false, () => competitorDraft(fr, fs, state.day + randInt(wrng(state), 30, 50), false));
+}
+
+function exclusivityDraft(r: RivalGroup, sector: BizSectorId, sup: { name: string }, executeDay: number, truth: boolean): NewsDraft {
+  return {
+    kind: 'rumor', topic: 'proveedores', icon: '📦', title: `${r.name} busca exclusividad con ${sup.name}`,
+    body: `Si lo logra, ${sup.name} le daría prioridad y subiría sus precios al resto por varios meses. Podés adelantar compras (si el producto no vence) o probar otro proveedor.`,
+    reliability: 0, truth, resolveDay: executeDay + 1, ref: { sector, rivalId: r.id },
+  };
 }
 
 function planExclusivity(state: GameState, sector: BizSectorId): void {
@@ -214,20 +251,12 @@ function planExclusivity(state: GameState, sector: BizSectorId): void {
   const r = rivalFor(state, sector);
   if (!r) return;
   const it = newIntent(state, r, 'exclusividad', [14, 30], { sector, supplierId: sup.id });
-  const n = publishCandidate(state, true, () => ({
-    kind: 'rumor', topic: 'proveedores', icon: '📦', title: `${r.name} busca exclusividad con ${sup.name}`,
-    body: `Si lo logra, ${sup.name} le daría prioridad y subiría sus precios al resto por varios meses. Podés adelantar compras (si el producto no vence) o probar otro proveedor.`,
-    reliability: 0, truth: true, resolveDay: it.executeDay + 1, ref: { sector, rivalId: r.id },
-  }));
+  const n = publishCandidate(state, true, () => exclusivityDraft(r, sector, sup, it.executeDay, true));
   it.newsId = n?.id ?? null;
   const others = sec.suppliers.filter((s) => s.id !== sup.id);
-  if (others.length) {
-    const f = others[Math.floor(nextRandom(wrng(state)) * others.length)];
-    publishCandidate(state, false, () => ({
-      kind: 'rumor', topic: 'proveedores', icon: '📦', title: `${r.name} busca exclusividad con ${f.name}`,
-      body: `Si lo logra, ${f.name} subiría sus precios al resto por varios meses.`, reliability: 0, truth: false, resolveDay: state.day + randInt(wrng(state), 15, 30), ref: { sector, rivalId: r.id },
-    }));
-  }
+  if (!others.length) return;
+  const f = others[Math.floor(nextRandom(wrng(state)) * others.length)];
+  publishCandidate(state, false, () => exclusivityDraft(r, sector, f, state.day + randInt(wrng(state), 14, 30), false));
 }
 
 // ------------------------------------------------------------------ ejecución
@@ -314,7 +343,7 @@ function offerForCompany(state: GameState, co: Company): void {
   const price = roundCents(v * k);
   co.saleOffer = { price, expires: state.day + 15, from: r.name };
   move(state, r, `Ofertó por ${co.name}`, price);
-  addLog(state, 'info', '💼', `${r.name} ofrece ${fmtMoney(price)} por ${co.name} (${k >= 1 ? '+' : ''}${fmtPct(k - 1, 0)} frente a su valoración). Válida 15 días: aceptala o dejala vencer en Negocios → ${co.name} → Gestión.`);
+  addLog(state, 'info', '💼', `${r.name} ofrece ${fmtMoney(price)} por ${co.name} (${k >= 1 ? '+' : ''}${fmtPct(k - 1, 0)} frente a su valoración). Válida 15 días: aceptala o dejala vencer en Negocios → ${co.name} → Gestión.`, undefined, 'ofertas');
   state.log[state.log.length - 1].company = co.id;
 }
 
@@ -328,7 +357,7 @@ function poachEmployee(state: GameState, co: Company): void {
   const offer: PoachOffer = { id: state.meta.nextId++, companyId: co.id, employeeId: e.id, employeeName: e.name, rivalId: r.id, wage, expires: state.day + 10, status: 'abierta' };
   state.world.poach.push(offer);
   move(state, r, `Tentó a ${e.name} (${co.name})`);
-  addLog(state, 'warning', '🧲', `${r.name} le ofreció a ${e.name} (${co.name}) un sueldo de ${fmtMoney(wage)}. Tenés 10 días para igualarlo o dejarlo ir.`);
+  addLog(state, 'warning', '🧲', `${r.name} le ofreció a ${e.name} (${co.name}) un sueldo de ${fmtMoney(wage)}. Tenés 10 días para igualarlo o dejarlo ir.`, undefined, 'ofertas');
   state.log[state.log.length - 1].company = co.id;
 }
 

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import type { GameState, LogItem } from '../engine/state';
+import type { GameState, LogItem, LogCategory } from '../engine/state';
+import { logCategory } from '../engine/log';
 import { newGame, NewGameOptions } from '../engine/state';
 import type { ActionResult } from '../engine/result';
 import { advanceDaySafe, simulateDaysSafe, lastLogIdOf, SimReport, DayFailure } from '../engine/simulation';
@@ -17,7 +18,7 @@ import { APP_VERSION } from '../version';
 export type Speed = 0 | 1 | 2 | 4 | 8;
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
-export type PauseCategory = 'peligro' | 'ofertas' | 'logros' | 'legal' | 'inversiones';
+export type PauseCategory = LogCategory;
 
 export interface Settings {
   theme: ThemeChoice;
@@ -135,15 +136,8 @@ export const BOOT_TIMEOUTS = { storage: 15000, load: 30000 };
 
 type Listener = () => void;
 
-/** Categoría de pausa de un evento del registro (null = no pausa). */
-export function pauseCategory(l: LogItem): PauseCategory | null {
-  if (['⚖️', '🔒', '🚨', '⛓️', '🚔', '🕵️', '🔨', '📋'].includes(l.icon) && l.kind !== 'success' && l.kind !== 'info') return 'legal';
-  if (l.kind === 'danger') return 'peligro';
-  if (l.icon === '📩' || l.icon === '🧲' || l.icon === '💼') return 'ofertas';
-  if (l.icon === '🏆' || l.icon === '🚀') return 'logros';
-  if (['📉', '💥', '🏚️'].includes(l.icon) && l.kind === 'warning') return 'inversiones';
-  return null;
-}
+/** Categoría de pausa de un evento del registro (null = no pausa). Es la del motor: explícita, no por ícono. */
+export const pauseCategory = logCategory;
 
 export interface StoreOptions {
   /** Cómo se simula un día (las pruebas lo reemplazan para provocar fallas). */

@@ -239,7 +239,7 @@ function openCase(state: GameState, acts: IllegalAct[], kind: 'fiscal' | 'penal'
   if (existing) {
     existing.acts.push(...acts.map((a) => a.id));
     existing.prosecution = clamp(existing.prosecution + acts.reduce((s, a) => s + a.evidence * 0.3, 0), 0, 100);
-    addLog(state, 'danger', '🕵️', `La investigación en curso se amplió: ${acts.map((a) => a.label).join('; ')}.`);
+    addLog(state, 'danger', '🕵️', `La investigación en curso se amplió: ${acts.map((a) => a.label).join('; ')}.`, undefined, 'legal');
     return existing;
   }
   const c: LegalCase = {
@@ -250,7 +250,7 @@ function openCase(state: GameState, acts: IllegalAct[], kind: 'fiscal' | 'penal'
   state.legal.cases.push(c);
   state.legal.heat = clamp(state.legal.heat + 10, 0, 100);
   state.player.attributes.stress = Math.min(100, state.player.attributes.stress + 12);
-  addLog(state, 'danger', '🚨', `Se abrió una investigación ${kind === 'fiscal' ? 'fiscal' : 'penal'} en tu contra (${c.title}). Origen: ${origin}`);
+  addLog(state, 'danger', '🚨', `Se abrió una investigación ${kind === 'fiscal' ? 'fiscal' : 'penal'} en tu contra (${c.title}). Origen: ${origin}`, undefined, 'legal');
   note(state, `Caso ${c.id} abierto: ${origin}`);
   return c;
 }
@@ -321,7 +321,7 @@ export function legalDay(state: GameState): void {
         act.evidence = 85;
         openCase(state, [act], 'penal', 'Allanamiento policial durante la operación.');
       }
-      addLog(state, 'danger', '🚔', `Allanamiento: se incautó todo el capital de la operación clandestina (${fmtMoney(v.invested)}).`);
+      addLog(state, 'danger', '🚔', `Allanamiento: se incautó todo el capital de la operación clandestina (${fmtMoney(v.invested)}).`, undefined, 'legal');
       continue;
     }
     const ret = roundCents(v.invested * (1 + v.expected + randRange(state, -0.25, 0.25)));
@@ -431,14 +431,14 @@ function advanceCase(state: GameState, c: LegalCase): void {
     c.nextStepDay = state.day + randInt(state, 30, 60);
     const s = sentenceFor(state, c);
     c.plea = { fine: roundCents((s.fine + s.restitution) * 0.7), prisonMonths: Math.max(0, Math.round(s.prisonMonths * 0.4)), expires: c.nextStepDay };
-    addLog(state, 'danger', '⚖️', `Fuiste imputado formalmente (${c.title}). La fiscalía ofrece un acuerdo: ${fmtMoney(c.plea.fine)} de multa y restitución${c.plea.prisonMonths ? ` y ${c.plea.prisonMonths} meses de prisión (probablemente en suspenso)` : ''}. Si no lo aceptás, habrá juicio el ${formatDate(c.nextStepDay)}.`);
+    addLog(state, 'danger', '⚖️', `Fuiste imputado formalmente (${c.title}). La fiscalía ofrece un acuerdo: ${fmtMoney(c.plea.fine)} de multa y restitución${c.plea.prisonMonths ? ` y ${c.plea.prisonMonths} meses de prisión (probablemente en suspenso)` : ''}. Si no lo aceptás, habrá juicio el ${formatDate(c.nextStepDay)}.`, undefined, 'legal');
     return;
   }
   if (c.stage === 'imputacion') {
     c.stage = 'juicio';
     c.plea = null;
     c.nextStepDay = state.day + randInt(state, 45, 100);
-    addLog(state, 'warning', '⚖️', `Comenzó el juicio (${c.title}). Sentencia estimada: ${formatDate(c.nextStepDay)}.`);
+    addLog(state, 'warning', '⚖️', `Comenzó el juicio (${c.title}). Sentencia estimada: ${formatDate(c.nextStepDay)}.`, undefined, 'legal');
     return;
   }
   if (c.stage === 'juicio') {
@@ -450,7 +450,7 @@ function advanceCase(state: GameState, c: LegalCase): void {
     } else {
       closeCase(state, c, { day: state.day, verdict: 'absuelto', fine: 0, restitution: 0, seized: 0, prisonMonths: 0, suspended: false, text: `Absuelto: el tribunal consideró insuficientes las pruebas (probabilidad de condena estimada: ${fmtPct(p, 0)}).` });
       for (const a of acts) a.status = 'juzgado';
-      addLog(state, 'success', '⚖️', `¡Absuelto en el juicio por ${c.title}!`);
+      addLog(state, 'success', '⚖️', `¡Absuelto en el juicio por ${c.title}!`, undefined, 'legal');
     }
   }
 }
@@ -472,7 +472,7 @@ function applySentence(state: GameState, c: LegalCase, fine: Cents, restitution:
       co.suspendedUntil = state.day + 30 * Math.min(3, a.severity);
       co.irregular = { inflatedBooks: 0, underreport: 0 };
       co.reputation = Math.max(0, co.reputation - 20);
-      addLog(state, 'danger', '⛔', `${co.name}: licencia suspendida hasta el ${formatDate(co.suspendedUntil)} por la condena.`);
+      addLog(state, 'danger', '⛔', `${co.name}: licencia suspendida hasta el ${formatDate(co.suspendedUntil)} por la condena.`, undefined, 'legal');
     }
   }
   state.player.attributes.reputation = Math.max(0, state.player.attributes.reputation - 10 - acts.length * 3);
@@ -501,7 +501,7 @@ function goToPrison(state: GameState, c: LegalCase, months: number): void {
   }
   for (const o of state.stocks.orders) if (o.status === 'abierta') o.status = 'cancelada';
   state.player.attributes.stress = Math.min(100, state.player.attributes.stress + 30);
-  addLog(state, 'danger', '⛓️', `Ingresaste a prisión por ${months} meses (hasta el ${formatDate(state.legal.prison.until)}). Perdiste tu empleo; tus empresas quedan en manos de sus gerentes (o en piloto automático). El tiempo sigue corriendo.`);
+  addLog(state, 'danger', '⛓️', `Ingresaste a prisión por ${months} meses (hasta el ${formatDate(state.legal.prison.until)}). Perdiste tu empleo; tus empresas quedan en manos de sus gerentes (o en piloto automático). El tiempo sigue corriendo.`, undefined, 'legal');
 }
 
 function releaseFromPrison(state: GameState, early: boolean): void {
@@ -560,7 +560,7 @@ function processFines(state: GameState): void {
     }
     if (!f.garnishing) {
       f.garnishing = true;
-      addLog(state, 'danger', '🔨', `EMBARGO: venció "${f.label}" sin pagar. Se embargarán tus cuentas y, si no alcanza, tus inversiones.`);
+      addLog(state, 'danger', '🔨', `EMBARGO: venció "${f.label}" sin pagar. Se embargarán tus cuentas y, si no alcanza, tus inversiones.`, undefined, 'legal');
       recordLate(state);
       refreshCreditScore(state);
     }
@@ -602,7 +602,7 @@ function garnish(state: GameState, f: Fine): void {
     withdrawMandate(state, m.id, Math.min(f.balance, Math.round(mandateValue(state, m))), 'embargo judicial');
     take('checking', Math.min(f.balance, state.ledger.balances.checking - before));
   }
-  if (f.balance > 0) addLog(state, 'danger', '🔨', `El embargo no alcanzó a cubrir "${f.label}": quedan ${fmtMoney(f.balance)}. Se seguirá embargando cada mes.`);
+  if (f.balance > 0) addLog(state, 'danger', '🔨', `El embargo no alcanzó a cubrir "${f.label}": quedan ${fmtMoney(f.balance)}. Se seguirá embargando cada mes.`, undefined, 'legal');
 }
 
 // ------------------------------------------------------------ Inspecciones (con opción de pagar, impugnar o sobornar)
@@ -618,7 +618,7 @@ function inspections(state: GameState): void {
     const reasons = ['falta de habilitación de un depósito', 'incumplimientos de seguridad e higiene', 'documentación laboral incompleta', 'cartelería obligatoria faltante'];
     const reason = reasons[randInt(state, 0, reasons.length - 1)];
     state.legal.inspections.push({ id: state.meta.nextId++, companyId: co.id, fine, reason, dueDay: state.day + 30, resolved: false });
-    addLog(state, 'warning', '📋', `${co.name}: una inspección detectó ${reason}. Multa de ${fmtMoney(fine)}: podés pagarla o impugnarla con un abogado (vence en 30 días).`);
+    addLog(state, 'warning', '📋', `${co.name}: una inspección detectó ${reason}. Multa de ${fmtMoney(fine)}: podés pagarla o impugnarla con un abogado (vence en 30 días).`, undefined, 'legal');
   }
   for (const i of state.legal.inspections) {
     if (i.resolved || state.day < i.dueDay) continue;
@@ -626,7 +626,7 @@ function inspections(state: GameState): void {
     i.resolved = true;
     if (co) {
       coPay(state, co, 'fines', i.fine * 2, { memo: 'Multa de inspección vencida (duplicada)', tag: 'inspection', kind: 'otros' });
-      addLog(state, 'danger', '📋', `${co.name}: la multa de inspección venció y se duplicó.`);
+      addLog(state, 'danger', '📋', `${co.name}: la multa de inspección venció y se duplicó.`, undefined, 'legal');
     }
   }
   state.legal.inspections = state.legal.inspections.filter((i) => !i.resolved || state.day - i.dueDay < 120);

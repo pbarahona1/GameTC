@@ -123,14 +123,14 @@ export function updateProgression(state: GameState): void {
   if (current > state.progression.stage) {
     state.progression.stage = current;
     const st = STAGES[current - 1];
-    addLog(state, 'success', '🏆', `Nueva etapa: ${st.name}. Desbloquea: ${st.unlocks}`);
+    addLog(state, 'success', '🏆', `Nueva etapa: ${st.name}. Desbloquea: ${st.unlocks}`, undefined, 'logros');
   }
   rewardMissions(state);
   for (const a of ACHIEVEMENTS) {
     if (state.progression.achievements[a.id] !== undefined || !a.check) continue;
     if (a.check(state, m)) {
       state.progression.achievements[a.id] = state.day;
-      addLog(state, 'success', a.icon, `Logro desbloqueado: ${a.name}.`);
+      addLog(state, 'success', a.icon, `Logro desbloqueado: ${a.name}.`, undefined, 'logros');
     }
   }
 }

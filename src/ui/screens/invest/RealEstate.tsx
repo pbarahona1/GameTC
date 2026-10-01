@@ -4,7 +4,7 @@ import { navStore } from '../../nav';
 import { InfoButton, CardHead, Pill, NumInput, Act, Learn, LineChart, Money, Seg, AmountInput, ConfirmButton, Empty, Stat, Bar, GuardedAct } from '../../components/common';
 import {
   buyProperty, inspectListing, allMortgageQuotes, sellProperty, setRent, setManagement, renovate, developLand, setUse, prepayMortgage,
-  propertyReport, marketRent, closingCosts, ownerLabel, ownerCash, monthlyEconomics, zoneState, marketVacancy, SALE_COMMISSION, quickSalePrice, buyerWeeklyChance, tenantWeeklyChance, rentNoFasterBelow,
+  propertyReport, marketRent, closingCosts, ownerLabel, ownerCash, monthlyEconomics, zoneState, marketVacancy, SALE_COMMISSION, quickSalePrice, buyerWeeklyChance, tenantWeeklyChance, rentNoFasterBelow, knownRepairCost,
 } from '../../../engine/realestate/realestate';
 import { ZONES, ZONE_BY_ID, PROPERTY_TYPE_NAMES, PROPERTY_TYPE_ICONS, BUILD_COST } from '../../../content/realestate';
 import { jurisdictionById } from '../../../content/jurisdictions';
@@ -277,7 +277,8 @@ function ListingDetail({ l }: { l: PropertyListing }) {
   const quotes = finance ? allMortgageQuotes(s, owner, price, loan, years, rateType, p.type, expRent) : [];
   const chosen = quotes.find((q) => q.bank.id === bankId && q.approved) ?? quotes.find((q) => q.approved) ?? null;
   const fee = finance && chosen ? chosen.fee : 0;
-  const cashNeeded = price - (finance && chosen ? loan : 0) + cc.total + fee;
+  const repair = knownRepairCost(p);
+  const cashNeeded = price - (finance && chosen ? loan : 0) + cc.total + fee + repair;
   const avail = ownerCash(s, owner);
   const gross = p.appraisal > 0 ? (expRent * 12) / l.askPrice : 0;
   const j = jurisdictionById(p.jurisdiction);
@@ -301,7 +302,7 @@ function ListingDetail({ l }: { l: PropertyListing }) {
         <dt>Vacancia de la zona <InfoButton term="vacancia" /></dt><dd>{fmtPct(marketVacancy(s, p.zoneId, p.type), 0)}</dd>
         <dt>Gastos de escritura <InfoButton term="impuesto_transferencia" /></dt><dd>{fmtMoney(cc.total)} (transferencia {fmtPct(j.transferTaxRate, 1)} + escribano 1 %)</dd>
         <dt>Impuesto inmobiliario anual</dt><dd>{fmtPct(j.propertyTaxRate, 2)} ≈ {fmtMoney(Math.round(p.appraisal * j.propertyTaxRate), { decimals: false })}</dd>
-        <dt>Vicios ocultos <InfoButton term="vicio_oculto" /></dt><dd>{p.hiddenDefect?.discovered ? <span className="loss">Detectado: {fmtMoney(p.hiddenDefect.cost)}</span> : 'Desconocido (inspeccioná antes de comprar)'}</dd>
+        <dt>Vicios ocultos <InfoButton term="vicio_oculto" /></dt><dd>{p.hiddenDefect?.discovered ? <span className="loss">Detectado: reparación {fmtMoney(p.hiddenDefect.cost)}, a cargo del comprador al escriturar</span> : 'Desconocido (inspeccioná antes de comprar)'}</dd>
         <dt>Publicación vence</dt><dd>{formatDate(l.expiresDay)}</dd>
       </div>
       <Act label="Inspección técnica" help="accion_inspeccion" className="btn sm" disabled={!!p.hiddenDefect?.discovered} onClick={() => store.run((x) => inspectListing(x, l.id))} />
@@ -351,7 +352,7 @@ function ListingDetail({ l }: { l: PropertyListing }) {
         help="accion_comprar_inmueble"
         className="btn primary"
         disabled={!(offer > 0) || (finance && (!chosen || !(loan > 0)))}
-        detail={<>Precio {fmtMoney(price)} + gastos {fmtMoney(cc.total + fee)}{finance && chosen ? ` · hipoteca ${fmtMoney(loan)} con ${chosen.bank.name}` : ''}. Comprador: {os.find((o) => o.id === ownerId)?.label}.</>}
+        detail={<>Precio {fmtMoney(price)} + gastos {fmtMoney(cc.total + fee)}{repair ? ` + reparación del vicio oculto ${fmtMoney(repair)}` : ''}{finance && chosen ? ` · hipoteca ${fmtMoney(loan)} con ${chosen.bank.name}` : ''}. Comprador: {os.find((o) => o.id === ownerId)?.label}.</>}
         onConfirm={() => store.run((x) => {
           const r = buyProperty(x, l.id, { owner, offer: offer < l.askPrice ? offer : undefined, financing: finance && chosen ? { bankId: chosen.bank.id, amount: loan, years, rateType } : null });
           if (r.ok) navStore.setSub('invest', `realestate:prop:${p.id}`);

@@ -12,6 +12,7 @@ import { attachForecast, type BusinessForecast } from '../../engine/advisor/busi
 import { isOpen } from '../../engine/business/common';
 import { formatDate } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
+import { spendable } from '../../engine/finance/payments';
 import { usd, Cents } from '../../engine/money';
 import { Money, InfoButton, Pill, Empty, AmountInput, ConfirmButton, LineChart, CardHead, Act, Stat, Learn, Seg, ScreenIntro } from '../components/common';
 import { CompanyView } from './business/CompanyView';
@@ -117,7 +118,7 @@ function Found({ parentId }: { parentId: number | null }) {
   const total = capital + partner;
   const working = total - costs.total;
   const monthly = costs.firstMonthFixed + costs.firstMonthPayroll;
-  const personalLiquid = parent ? parent.ledger.balances.cash : s.ledger.balances.checking + (s.bank.overdraftSweep ? s.ledger.balances.savings : 0);
+  const personalLiquid = parent ? parent.ledger.balances.cash : spendable(s);
   return (
     <>
       <button className="btn ghost sm" onClick={() => navStore.setSub('business', parent ? `co:${parent.id}:group` : 'portfolio')}>← Volver</button>
@@ -365,7 +366,7 @@ function NewHolding() {
       </div>
       <div className="card">
         <CardHead title="Capital inicial" term="capital_aportado" />
-        <AmountInput id="h-cap" value={capital} onChange={setCapital} max={s.ledger.balances.checking} />
+        <AmountInput id="h-cap" value={capital} onChange={setCapital} max={spendable(s)} />
         <p className="tiny muted">Incluye los trámites de constitución ({fmtMoney(usd(lf.setupCost * s.macro.priceIndex), { decimals: false })}). El resto queda como caja de la holding para fundar o comprar subsidiarias.</p>
         <ConfirmButton label="Crear holding" help="accion_fundar_holding" className="btn primary block" detail={<>Se transferirán {fmtMoney(capital)} de tu cuenta corriente.</>}
           onConfirm={() => {

@@ -16,6 +16,7 @@ import { LIFESTYLES } from '../../content/lifestyle';
 import { incomeStatement } from '../../engine/reports/statements';
 import { addMonths, formatDate, startOfMonth, formatMonth } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
+import { spendable } from '../../engine/finance/payments';
 import { usd } from '../../engine/money';
 import type { Loan, PaymentMethod } from '../../engine/state';
 import { Money, InfoButton, Tabs, Seg, AmountInput, ConfirmButton, Pill, Bar, LineChart, Learn, ScreenIntro } from '../components/common';
@@ -230,7 +231,7 @@ function LoanCard({ l }: { l: Loan }) {
         <dt>Próximo vencimiento</dt><dd>{formatDate(l.nextDueDay)}</dd>
         <dt>Intereses pagados</dt><dd>{fmtMoney(l.interestPaid)}</dd>
       </div>
-      <AmountInput id={`prepay-${l.id}`} label={`Amortizar el préstamo de ${BANK_BY_ID[l.bankId].name}`} value={prepay} onChange={setPrepay} max={Math.min(l.balance, s.ledger.balances.checking)} />
+      <AmountInput id={`prepay-${l.id}`} label={`Amortizar el préstamo de ${BANK_BY_ID[l.bankId].name}`} value={prepay} onChange={setPrepay} max={Math.min(l.balance, spendable(s))} />
       <span className="act"><button className="btn sm dark" disabled={prepay <= 0} onClick={() => { const r = store.run((st) => prepayLoan(st, l.id, prepay)); if (r.ok) setPrepay(0); }}>Amortizar anticipadamente</button><InfoButton term="accion_amortizar" /></span>
     </div>
   );
@@ -383,7 +384,7 @@ function Budget() {
         <div className="card" style={{ borderColor: 'var(--loss)' }}>
           <div className="card-head"><h2>Pagos vencidos</h2><InfoButton term="mora" /></div>
           <div className="big num loss" style={{ fontSize: 22 }}>{fmtMoney(arrears)}</div>
-          <AmountInput id="arr-pay" value={pay} onChange={setPay} max={Math.min(arrears, s.ledger.balances.checking)} />
+          <AmountInput id="arr-pay" value={pay} onChange={setPay} max={Math.min(arrears, spendable(s))} />
           <span className="act"><button className="btn primary" disabled={pay <= 0} onClick={() => { const r = store.run((st) => payArrears(st, pay)); if (r.ok) setPay(0); }}>Pagar atrasos</button><InfoButton term="accion_pagar_atrasos" /></span>
         </div>
       )}

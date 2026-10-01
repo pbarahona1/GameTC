@@ -444,6 +444,14 @@ function Staff({ co }: { co: Company }) {
             {co.delegation.autoPricing && (
               <div className="inline-form small"><span>Margen objetivo sobre el costo</span><NumInput id={`markup-${co.id}`} value={Math.round(co.delegation.targetMarkup * 100)} onChange={(n) => runCo(co.id, (_st, c) => { c.delegation.targetMarkup = Math.max(1, n / 100); })} suffix="%" /></div>
             )}
+            {co.managerReport && (
+              <div className="manager-report">
+                <div className="title small">Resumen semanal del gerente · {formatDate(co.managerReport.day)}</div>
+                {co.managerReport.items.length
+                  ? <ul className="small">{co.managerReport.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                  : <p className="small muted">Esta semana no hizo cambios: todo seguía dentro de lo previsto.</p>}
+              </div>
+            )}
           </>
         )}
         <p className="tiny muted">Empleados de apoyo en la empresa: {['contador', 'vendedor', 'marketing', 'rrhh', 'soporte', 'logistica', 'investigador'].map((r) => `${roleDef(sec, r).name} ${countRole(co, r)}`).join(' · ')}.</p>

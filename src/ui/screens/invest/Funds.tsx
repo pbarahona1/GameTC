@@ -4,6 +4,7 @@ import { InfoButton, CardHead, Pill, NumInput, Act, Learn, LineChart, AmountInpu
 import { buyFund, sellFund, fundReturn } from '../../../engine/invest/funds';
 import { FUND_DEFS } from '../../../content/funds';
 import { fmtMoney, fmtPct } from '../../../engine/format';
+import { spendable } from '../../../engine/finance/payments';
 import { usd } from '../../../engine/money';
 
 function FundCard({ id }: { id: string }) {
@@ -46,7 +47,7 @@ function FundCard({ id }: { id: string }) {
           <p className="small"><strong>Riesgos:</strong> {d.risks}</p>
           <div className="field">
             <label htmlFor={`fund-amt-${id}`}>Monto a invertir</label>
-            <AmountInput id={`fund-amt-${id}`} value={amount} onChange={setAmount} max={s.ledger.balances.checking} />
+            <AmountInput id={`fund-amt-${id}`} value={amount} onChange={setAmount} max={spendable(s)} />
           </div>
           <Act label="Invertir" help="accion_invertir_fondo" className="btn primary" onClick={() => store.run((x) => buyFund(x, id, amount))} />
           {h && (

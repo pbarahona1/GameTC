@@ -6,7 +6,7 @@ import { analyze } from '../../engine/advisor/advisor';
 import { cashFlowStatement, incomeStatement } from '../../engine/reports/statements';
 import { startOfMonth, formatMonth, formatDate } from '../../engine/time/calendar';
 import { STAGES, professionalLevel } from '../../engine/progression/progression';
-import { TUTORIAL, nextMission, CHAPTERS } from '../../engine/progression/tutorial';
+import { nextMission, CHAPTERS, missionProgress } from '../../engine/progression/tutorial';
 import { Icon, IconName } from '../icons';
 import { imageScore, imageLabel } from '../../engine/lifestyle/effects';
 import { unreadNews, TOPIC_NAMES } from '../../engine/world/news';
@@ -52,8 +52,7 @@ export function Home() {
   const prof = professionalLevel(s);
   const job = s.career.job ? JOB_BY_ID[s.career.job.jobId] : null;
   const tutorialOpen = !s.tutorial.dismissed;
-  const tutDone = TUTORIAL.filter((t) => !t.future && t.done(s)).length; // eslint-disable-line
-  const tutTotal = TUTORIAL.filter((t) => !t.future).length;
+  const { done: tutDone, total: tutTotal } = missionProgress(s);
   const nextStep = nextMission(s);
   const img = imageScore(s);
   const unread = unreadNews(s);
@@ -103,7 +102,7 @@ export function Home() {
 
       <div className="month-strip" role="group" aria-label="Tu mes">
         <button className="ms-cell" onClick={() => navStore.go('finance', 'accounts')}>
-          <span className="tiny muted">Disponible <InfoButton term="liquidez" /></span>
+          <span className="tiny muted">Liquidez <InfoButton term="liquidez" /></span>
           <strong className="num">{fmtMoney(m.liquid, { decimals: false })}</strong>
           <span className="tiny faint">{m.runwayMonths !== null ? `alcanza ~${m.runwayMonths.toFixed(1)} meses` : 'te sobra cada mes'}</span>
         </button>

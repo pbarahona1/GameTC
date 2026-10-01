@@ -10,6 +10,7 @@ import { rivalsAttraction } from '../../../engine/business/market';
 import { expectedShare, refPrice, companyAttraction, effectivePrice } from '../../../engine/business/operations';
 import { distributableProfit, isOpen } from '../../../engine/business/common';
 import { fmtMoney, fmtPct } from '../../../engine/format';
+import { spendable } from '../../../engine/finance/payments';
 import { formatDate, startOfMonth, startOfYear, addMonths } from '../../../engine/time/calendar';
 import { Cents, usd } from '../../../engine/money';
 import { Money, InfoButton, Pill, AmountInput, ConfirmButton, CardHead, Act, Seg, NumInput, Learn } from '../../components/common';
@@ -229,7 +230,7 @@ export function FinanceTab({ co }: { co: Company }) {
       </div>
       <div className="card">
         <CardHead title="Aportar capital" term="accion_aportar" />
-        <AmountInput id={`inj-${co.id}`} value={inject} onChange={setInject} max={s.ledger.balances.checking} />
+        <AmountInput id={`inj-${co.id}`} value={inject} onChange={setInject} max={spendable(s)} />
         <ConfirmButton label="Aportar" className="btn dark" help="accion_aportar" disabled={inject <= 0} confirmLabel="Transferir" detail={<>Pasan {fmtMoney(inject)} de tu cuenta corriente a la caja de {co.name}.</>} onConfirm={() => { const r = runCo(co.id, (st, c) => injectCapital(st, c, inject)); if (r.ok) setInject(0); }} />
       </div>
       <div className="card">

@@ -282,7 +282,7 @@ function liquidateAsset(state: GameState, a: MogulAsset, reason: string): void {
     revalueInvestments(state, ['mogul']);
     const gross = roundCents(h.qty * perUnit);
     bookSell(state, 'mogul', a.id, h.qty, gross, 0, `Liquidación de ${a.name} (Mogul Exchange)`);
-    addLog(state, 'danger', '🧩', `${a.name} fue liquidado en Mogul Exchange (${reason}). Recuperaste ${fmtMoney(gross)}.`, gross);
+    addLog(state, 'danger', '🧩', `${a.name} fue liquidado en Mogul Exchange (${reason}). Recuperaste ${fmtMoney(gross)}.`, gross, 'inversiones');
   }
 }
 

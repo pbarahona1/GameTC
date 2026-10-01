@@ -24,6 +24,38 @@ function cardAvailable(state: GameState): Cents {
   return Math.max(0, c.limit - cardUsed(state));
 }
 
+/**
+ * LIQUIDEZ PERSONAL: la única definición de "cuánto dinero tenés disponible".
+ * Toda pantalla y toda validación de compra usa esta función, así el número que
+ * ves arriba es el mismo con el que se decide si te alcanza.
+ */
+export interface Liquidity {
+  checking: Cents;
+  savings: Cents;
+  wallet: Cents;
+  /**
+   * Lo que podés pagar hoy desde tu cuenta: la cuenta corriente más el ahorro
+   * cuando el barrido automático está activado. Es lo que usan las compras,
+   * inversiones, inmuebles, empresas y cuotas.
+   */
+  spendable: Cents;
+  /** Todo tu dinero líquido (corriente + ahorro + efectivo): base de la autonomía en meses. */
+  total: Cents;
+}
+
+export function liquidity(state: GameState): Liquidity {
+  const b = state.ledger.balances;
+  const checking = b.checking;
+  const savings = b.savings;
+  const wallet = b.cash_wallet;
+  return { checking, savings, wallet, spendable: checking + (state.bank.overdraftSweep ? savings : 0), total: checking + savings + wallet };
+}
+
+/** Dinero que podés usar ya para pagar desde tu cuenta (ver Liquidity.spendable). */
+export function spendable(state: GameState): Cents {
+  return liquidity(state).spendable;
+}
+
 /** Asegura fondos en la cuenta corriente transfiriendo desde ahorro si está permitido. */
 export function sweepToChecking(state: GameState, needed: Cents): void {
   const checking = state.ledger.balances.checking;
@@ -112,6 +144,7 @@ export function payExpense(state: GameState, account: AccountId, amount: Cents, 
  * llamador decide la consecuencia (mora del préstamo, etc.).
  */
 export function canPayFromChecking(state: GameState, amount: Cents): boolean {
+  if (spendable(state) < amount) return false;
   sweepToChecking(state, amount);
   return state.ledger.balances.checking >= amount;
 }

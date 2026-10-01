@@ -595,7 +595,7 @@ export function liquidate(state: GameState, co: Company, mode: 'voluntary' | 'ba
   if (mode === 'bankruptcy') {
     state.player.attributes.reputation = Math.max(0, state.player.attributes.reputation - (parent ? 6 : 15));
     state.player.attributes.stress = Math.min(100, state.player.attributes.stress + (parent ? 8 : 20));
-    addLog(state, 'danger', '⚖️', `${co.name} fue declarada en QUIEBRA y liquidada. ${lf.limitedLiability ? `Por ser de responsabilidad limitada, ${parent ? `${parent.name} perdió` : 'perdiste'} solo la inversión` : `Por ser ${lf.name.toLowerCase()}, respondiste con tu patrimonio personal (${fmtMoney(personalPaid)})`}${guaranteed && lf.limitedLiability ? ` y pagaste ${fmtMoney(personalPaid)} de préstamos que garantizaste` : ''}.`);
+    addLog(state, 'danger', '⚖️', `${co.name} fue declarada en QUIEBRA y liquidada. ${lf.limitedLiability ? `Por ser de responsabilidad limitada, ${parent ? `${parent.name} perdió` : 'perdiste'} solo la inversión` : `Por ser ${lf.name.toLowerCase()}, respondiste con tu patrimonio personal (${fmtMoney(personalPaid)})`}${guaranteed && lf.limitedLiability ? ` y pagaste ${fmtMoney(personalPaid)} de préstamos que garantizaste` : ''}.`, undefined, 'peligro');
   } else {
     addLog(state, 'info', '🔒', `Cerraste ${co.name} de forma ordenada.${personalPaid ? ` Tuviste que cubrir ${fmtMoney(personalPaid)} de deudas con tu dinero.` : ''}`);
   }
@@ -701,16 +701,17 @@ function forcedSaleOfSubsidiary(state: GameState, parent: Company, sub: Company)
   const price = roundCents(v * 0.6 * sub.ownership);
   revalue(state, sub);
   const gain = price - sub.carrying;
-  coPost(parent.ledger, {
-    day: state.day, memo: `Venta forzada de ${sub.name} por la quiebra de la matriz`, cf: 'investing', tag: 'subsidiary:sale',
-    lines: [...(price ? [{ account: 'cash' as const, debit: price }] : []), ...(sub.carrying ? [{ account: 'subsidiaries' as const, credit: sub.carrying }] : []), ...(gain > 0 ? [{ account: 'gain_on_sale' as const, credit: gain }] : []), ...(gain < 0 ? [{ account: 'liquidation_loss' as const, debit: -gain }] : [])],
-  });
+  const lines = [...(price ? [{ account: 'cash' as const, debit: price }] : []), ...(sub.carrying ? [{ account: 'subsidiaries' as const, credit: sub.carrying }] : []), ...(gain > 0 ? [{ account: 'gain_on_sale' as const, credit: gain }] : []), ...(gain < 0 ? [{ account: 'liquidation_loss' as const, debit: -gain }] : [])];
+  // Una subsidiaria sin valor (precio 0 y valor contable 0) se entrega sin asiento: no hay nada que registrar.
+  if (lines.length >= 2) {
+    coPost(parent.ledger, { day: state.day, memo: `Venta forzada de ${sub.name} por la quiebra de la matriz`, cf: 'investing', tag: 'subsidiary:sale', lines });
+  }
   sub.carrying = 0;
   sub.status = 'sold';
   for (const c of groupMembers(state, sub)) detachCompanyAssets(state, c);
   const gone = new Set(groupMembers(state, sub).map((c) => c.id));
   state.companies = state.companies.filter((c) => !gone.has(c.id));
-  addLog(state, 'warning', '⚖️', `${sub.name} fue vendida por ${fmtMoney(price)} para pagar a los acreedores de ${parent.name}.`);
+  addLog(state, 'warning', '⚖️', price > 0 ? `${sub.name} fue vendida por ${fmtMoney(price)} para pagar a los acreedores de ${parent.name}.` : `${sub.name} no tenía valor y se entregó a los acreedores de ${parent.name} sin pago.`, undefined, 'peligro');
 }
 
 export function companySummaryLine(co: Company): string {

@@ -7,7 +7,7 @@ import { DIFFICULTIES, DIFFICULTY_BY_ID } from '../engine/economy/difficulty';
 import type { PauseCategory } from './store';
 import { runScenario, ScenarioInput, ScenarioResult } from '../engine/advisor/scenarios';
 import { STAGES, ACHIEVEMENTS, evaluateStage } from '../engine/progression/progression';
-import { TUTORIAL, CHAPTERS, nextMission } from '../engine/progression/tutorial';
+import { TUTORIAL, CHAPTERS, nextMission, isMissionDone, missionProgress } from '../engine/progression/tutorial';
 import { SKILL_BY_ID } from '../content/skills';
 import { LIFESTYLES } from '../content/lifestyle';
 import { BANKS } from '../content/banks';
@@ -511,8 +511,7 @@ function TutorialView() {
   const s = useGame();
   useUI();
   const next = nextMission(s);
-  const total = TUTORIAL.filter((t) => !t.future).length;
-  const done = TUTORIAL.filter((t) => !t.future && t.done(s)).length;
+  const { done, total } = missionProgress(s);
   return (
     <Sheet title="Misiones">
       <div className="card">
@@ -522,7 +521,7 @@ function TutorialView() {
       </div>
       {CHAPTERS.map((ch) => {
         const list = TUTORIAL.filter((t) => t.chapter === ch.n);
-        const chDone = list.filter((t) => t.done(s)).length;
+        const chDone = list.filter((t) => isMissionDone(s, t)).length;
         const early = s.progression.stage < ch.stage;
         return (
           <div key={ch.n} className="stack" style={{ gap: 6 }}>
@@ -530,7 +529,7 @@ function TutorialView() {
             <div className="card" style={{ paddingBlock: 4 }}>
               <div className="rows">
                 {list.map((t) => {
-                  const ok = t.done(s);
+                  const ok = isMissionDone(s, t);
                   return (
                     <div key={t.id} className={`row mission ${ok ? 'done' : ''} ${next?.id === t.id ? 'next' : ''}`}>
                       <span className={`m-check ${ok ? 'on' : ''}`} aria-hidden>{ok ? <Icon name="check" size={14} /> : null}</span>

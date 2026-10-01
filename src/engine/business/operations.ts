@@ -375,6 +375,11 @@ export function buyEquipment(state: GameState, co: Company, equipId: string): Ac
 export function sellEquipment(state: GameState, co: Company, assetId: number): ActionResult {
   const a = co.assets.find((x) => x.id === assetId);
   if (!a) return FAIL('Equipo inexistente.');
+  if (a.bookValue <= 0) {
+    // Totalmente amortizado: se da de baja sin asiento (no tiene valor en libros ni de reventa).
+    co.assets = co.assets.filter((x) => x.id !== assetId);
+    return OK(`${equipDef(co, a.equipId).name} dado de baja: ya estaba totalmente amortizado.`);
+  }
   const price = roundCents(a.bookValue * 0.6 * (0.5 + a.condition / 200));
   const loss = a.bookValue - price;
   coPost(co.ledger, {

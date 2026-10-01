@@ -5,7 +5,7 @@ import { chance, randInt, randNormal, randRange } from '../rng';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtMoney, fmtPct } from '../format';
 import { addLog } from '../log';
-import { payExpense } from '../finance/payments';
+import { payExpense, spendable } from '../finance/payments';
 import { coPay, isOpen, sectorOf } from '../business/common';
 import { coPost, CO_CHART } from '../business/companyLedger';
 import { gAudit } from '../ledger/core';
@@ -200,7 +200,7 @@ export function accountantReport(state: GameState): AccountantReport {
   const checks: Array<{ ok: boolean; text: string }> = [];
   if (acc) {
     const due = obligations.filter((o) => o.amount !== null && o.amount > 0 && o.day - state.day <= 60).reduce((s, o) => s + (o.amount ?? 0), 0);
-    const liquid = state.ledger.balances.checking + state.ledger.balances.savings;
+    const liquid = spendable(state);
     checks.push({ ok: liquid >= due, text: `Pagos fiscales en los próximos 60 días: ${fmtMoney(due)}. Liquidez disponible: ${fmtMoney(liquid)}.` });
     checks.push({ ok: state.ledger.balances.taxes_payable === 0, text: state.ledger.balances.taxes_payable ? `Tenés ${fmtMoney(state.ledger.balances.taxes_payable)} de impuestos personales pendientes.` : 'No hay impuestos personales vencidos.' });
     const unreal = positions(state, 'stocks').filter((p) => p.unrealized < 0).reduce((s, p) => s + p.unrealized, 0);
@@ -350,7 +350,7 @@ export function embezzlementMonth(state: GameState): void {
       if (acc && chance(state, 0.15 + acc.quality / 200)) {
         const total = co.embezzlement.total;
         co.embezzlement = null;
-        addLog(state, 'warning', '🕵️', `${co.name}: tu contador ${acc.name} detectó un desfalco de ${fmtMoney(total)} y el empleado fue despedido.`);
+        addLog(state, 'warning', '🕵️', `${co.name}: tu contador ${acc.name} detectó un desfalco de ${fmtMoney(total)} y el empleado fue despedido.`, undefined, 'peligro');
         const idx = co.employees.findIndex((e) => e.role !== 'gerente');
         if (idx >= 0) co.employees.splice(idx, 1);
       }

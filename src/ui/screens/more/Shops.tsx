@@ -7,6 +7,7 @@ import { imageScore, imageLabel, treatment, storeImage } from '../../../engine/l
 import { cardAvailable } from '../../../engine/finance/creditCard';
 import { cardTier } from '../../../engine/finance/cardRewards';
 import { fmtMoney, fmtPct } from '../../../engine/format';
+import { spendable } from '../../../engine/finance/payments';
 import { Pill, Seg, Tabs, InfoButton, Act, ScreenIntro, Empty } from '../../components/common';
 import { Avatar, avatarOf } from '../../components/Avatar';
 import { Icon, IconName } from '../../icons';
@@ -42,7 +43,7 @@ function BuyPanel({ item, onDone }: { item: ItemDef; onDone: () => void }) {
   const [n, setN] = useState(3);
   const opts = installmentOptions(s, item, q.final);
   const quote = opts.find((o) => o.n === n) ?? opts[0];
-  const checking = s.ledger.balances.checking + (s.bank.overdraftSweep ? s.ledger.balances.savings : 0);
+  const checking = spendable(s);
   const avail = cardAvailable(s);
   const can = method === 'debito' ? checking >= q.final : method === 'efectivo' ? s.ledger.balances.cash_wallet >= q.final : avail >= q.final;
   return (

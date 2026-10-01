@@ -6,7 +6,7 @@ import { addLog } from './log';
 import { fmtPct } from './format';
 import { chance, randInt } from './rng';
 import { indexBudget, hasEmployerInsurance } from './finance/budget';
-import { payExpense } from './finance/payments';
+import { payExpense, liquidity } from './finance/payments';
 import { LIFESTYLE_BY_ID } from '../content/lifestyle';
 import { JOB_BY_ID } from '../content/jobs';
 import { studyHoursPerWeek } from './skills/education';
@@ -50,7 +50,7 @@ export function monthlyAttributes(state: GameState): void {
   if (income > 0 && monthlyDebtPayments(state) / income > 0.4) pressure += 4;
   if (state.ledger.balances.arrears > 0) pressure += 5;
   if (!job) {
-    const liquid = state.ledger.balances.checking + state.ledger.balances.savings + state.ledger.balances.cash_wallet;
+    const liquid = liquidity(state).total;
     if (liquid < usd(1500)) pressure += 4;
   }
   a.stress = clamp(Math.round(a.stress + pressure - (a.stress - 15) * 0.2), 0, 100);

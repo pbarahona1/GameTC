@@ -8,6 +8,7 @@ import {
 import { hirePro, firePro, trainPro, trainingCost, proMarketByKind, describeQuality, feeLabel, nextRefresh, TRAINING_COOLDOWN_DAYS } from '../../../engine/pros/pros';
 import { FUND_BY_ID } from '../../../content/funds';
 import { fmtMoney, fmtPct } from '../../../engine/format';
+import { spendable } from '../../../engine/finance/payments';
 import { formatDate } from '../../../engine/time/calendar';
 import type { ProHire } from '../../../engine/pros/types';
 import type { MandateProfile } from '../../../engine/invest/types';
@@ -78,7 +79,7 @@ function MandateCard({ h }: { h: ProHire }) {
           )}
           <div className="field">
             <label htmlFor={`dep-${m.id}`}>Darle más dinero</label>
-            <AmountInput id={`dep-${m.id}`} value={amount} onChange={setAmount} max={s.ledger.balances.checking} />
+            <AmountInput id={`dep-${m.id}`} value={amount} onChange={setAmount} max={spendable(s)} />
           </div>
           <Act label="Aportar" help="accion_gestor_aportar" className="btn primary" disabled={!(amount > 0)} onClick={() => store.run((x) => depositMandate(x, m.id, amount))} />
           <div className="field">
@@ -98,7 +99,7 @@ function MandateCard({ h }: { h: ProHire }) {
           <p className="small">Todavía no le diste dinero. Elegí cuánto y con qué perfil de riesgo: lo invertirá en acciones y fondos del mercado del juego.</p>
           <div className="field">
             <label htmlFor={`open-${h.id}`}>Monto a entregar (mínimo {fmtMoney(minMandate(s), { decimals: false })})</label>
-            <AmountInput id={`open-${h.id}`} value={amount} onChange={setAmount} max={s.ledger.balances.checking} />
+            <AmountInput id={`open-${h.id}`} value={amount} onChange={setAmount} max={spendable(s)} />
           </div>
           <Seg items={PROFILES} value={profile} onChange={setProfile} />
           <p className="tiny muted">{PROFILE_INFO[profile].description} Acciones {fmtPct(PROFILE_INFO[profile].stocks, 0)} · bonos {fmtPct(PROFILE_INFO[profile].bonds, 0)} · liquidez {fmtPct(PROFILE_INFO[profile].money, 0)}.</p>

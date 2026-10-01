@@ -1,5 +1,5 @@
 import { SECTOR_BY_ID, SectorDef, roleDef, EMPLOYER_PAYROLL_RATE, LEGAL_FORM_BY_ID } from '../../content/sectors';
-import type { GameState, LogKind } from '../state';
+import type { GameState, LogCategory, LogKind } from '../state';
 import type { Company, Arrear } from './types';
 import { Cents, clamp, roundCents, usd, applyRate } from '../money';
 import { coPost, CoAccountId, CO_ACCOUNT_IDS, CO_CHART } from './companyLedger';
@@ -17,10 +17,10 @@ export function px(state: GameState, dollars: number): Cents {
   return usd(dollars * state.macro.priceIndex);
 }
 
-export function coLog(state: GameState, co: Company, kind: LogKind, icon: string, text: string, amount?: Cents): void {
+export function coLog(state: GameState, co: Company, kind: LogKind, icon: string, text: string, amount?: Cents, cat?: LogCategory): void {
   if (state.meta.projection || co.status === 'sold') return;
   if (state.listings.some((l) => l.company === co)) return;
-  addLog(state, kind, icon, `${co.name}: ${text}`, amount);
+  addLog(state, kind, icon, `${co.name}: ${text}`, amount, cat);
   state.log[state.log.length - 1].company = co.id;
 }
 

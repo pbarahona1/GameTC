@@ -74,8 +74,9 @@ export function processRecurring(state: GameState): void {
     payExpense(state, 'health', insuranceCost(state), { memo: 'Seguro médico privado', tag: 'insurance', method: 'checking' });
   }
   // Desalojo: si los atrasos superan dos alquileres, se fuerza el estilo austero.
+  // Solo si pagás alquiler: viviendo en una casa propia no hay a quién deberle el alquiler.
   const rent = state.budget.items.find((i) => i.key === 'rent');
-  if (g.d === 2 && rent && state.ledger.balances.arrears > rent.amount * 2 && state.budget.lifestyle !== 'austero') {
+  if (g.d === 2 && rent && rent.amount > 0 && !livesInOwnHome(state) && state.ledger.balances.arrears > rent.amount * 2 && state.budget.lifestyle !== 'austero') {
     applyLifestyle(state, 'austero');
     addLog(state, 'danger', '🏚️', 'Desalojo: por acumular atrasos mayores a dos alquileres tuviste que mudarte a una habitación compartida.');
     state.player.attributes.stress = Math.min(100, state.player.attributes.stress + 15);
@@ -162,7 +163,7 @@ export function payArrears(state: GameState, amount: Cents): ActionResult {
   if (owed <= 0) return FAIL('No tenés pagos vencidos.');
   const pay = Math.min(amount, owed);
   if (pay <= 0) return FAIL('Monto inválido.');
-  if (state.ledger.balances.checking < pay) return FAIL('Fondos insuficientes en la cuenta corriente.');
+  if (!canPayFromChecking(state, pay)) return FAIL('Fondos insuficientes en la cuenta corriente.');
   post(state.ledger, {
     day: state.day,
     memo: 'Pago de atrasos',
