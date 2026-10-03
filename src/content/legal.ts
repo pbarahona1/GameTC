@@ -16,8 +16,8 @@ export const LEGAL = {
    * contacto (aparecen en las páginas públicas). Los completa el dueño del juego:
    * `npm run legal` no genera las páginas mientras falten.
    */
-  developer: '',
-  contact: '',
+  developer: 'Paolo Barahona',
+  contact: 'paolobaraho415@gmail.com',
   country: 'El Salvador',
   updated: '2026-10-02',
 };
