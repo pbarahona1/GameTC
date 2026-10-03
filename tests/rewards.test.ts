@@ -71,3 +71,37 @@ describe('Recompensas por anuncio', () => {
     expect(adRewardsLeft(s, 'study', '2026-10-02')).toBe(1);
   });
 });
+
+describe('Recompensa: reducir un préstamo con 3 anuncios', () => {
+  it('con el tercer anuncio el saldo baja a la mitad por el libro mayor, una sola vez por préstamo', async () => {
+    const { takeLoan } = await import('../src/engine/finance/loans');
+    const { BANKS } = await import('../src/content/banks');
+    const { reducibleLoans, debtCutAmount, DEBT_ADS_NEEDED } = await import('../src/engine/rewards');
+    const s = rich('ad-debt');
+    forceHire(s, JOBS[0].id);
+    s.credit.score = 760;
+    let ok = false;
+    for (const b of BANKS) if (!ok) ok = takeLoan(s, b.id, usd(4000), 24).ok;
+    expect(ok).toBe(true);
+    const loan = s.bank.loans[s.bank.loans.length - 1];
+    const before = loan.balance;
+    for (let i = 1; i < DEBT_ADS_NEEDED; i++) {
+      expect(grantAdReward(s, 'debt', '2026-10-02', { loanId: loan.id }).ok).toBe(true);
+      expect(loan.balance).toBe(before);
+    }
+    const cut = debtCutAmount(s, before);
+    expect(grantAdReward(s, 'debt', '2026-10-02', { loanId: loan.id }).ok).toBe(true);
+    expect(loan.balance).toBe(before - cut);
+    expect(cut).toBe(Math.round(before / 2));
+    expect(s.ledger.balances.personal_loans).toBe(s.bank.loans.filter((l) => l.status === 'active').reduce((a, l) => a + l.balance, 0));
+    expect(reducibleLoans(s).some((l) => l.id === loan.id)).toBe(false);
+    expectConsistent(s);
+  });
+
+  it('la reducción tiene tope y se renueva el cupo al otro día real', async () => {
+    const { debtCutAmount, DEBT_CUT_CAP_USD } = await import('../src/engine/rewards');
+    const s = rich('ad-debt-cap');
+    expect(debtCutAmount(s, usd(1_000_000))).toBe(usd(DEBT_CUT_CAP_USD * s.macro.priceIndex));
+    expect(adRewardsLeft(s, 'debt', '2026-10-05')).toBe(AD_REWARDS.debt.perDay);
+  });
+});

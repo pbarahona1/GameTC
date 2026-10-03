@@ -12,7 +12,7 @@ import { sectionsFromStage } from '../engine/progression/unlocks';
 import { TUTORIAL, CHAPTERS, nextMission, isMissionDone, missionProgress } from '../engine/progression/tutorial';
 import { SKILL_BY_ID } from '../content/skills';
 import { LIFESTYLES } from '../content/lifestyle';
-import { BANKS } from '../content/banks';
+import { BANKS, BANK_BY_ID } from '../content/banks';
 import { fmtMoney } from '../engine/format';
 import { usd } from '../engine/money';
 import { formatDate } from '../engine/time/calendar';
@@ -24,7 +24,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
 import { LEGAL, PRIVACY, TERMS, LICENSES } from '../content/legal';
-import { AD_REWARDS, STUDY_SKIP_DAYS, adRewardsLeft, cashRewardAmount, grantAdReward, skippableCourses, type AdRewardKind } from '../engine/rewards';
+import { AD_REWARDS, STUDY_SKIP_DAYS, DEBT_ADS_NEEDED, adRewardsLeft, cashRewardAmount, debtCutAmount, grantAdReward, reducibleLoans, skippableCourses, type AdRewardKind } from '../engine/rewards';
 import { COURSE_BY_ID } from '../content/courses';
 import { showRewardedAd, todayKey, ADS_LIVE } from './ads';
 import { applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
@@ -598,11 +598,16 @@ function RewardsView() {
   const [courseId, setCourseId] = useState<string>('');
   const today = todayKey();
   const courses = skippableCourses(s);
+  const loans = reducibleLoans(s);
+  const progress = s.meta.ads?.debtProgress;
+  const [loanPick, setLoanPick] = useState<number | null>(null);
+  const loanId = loanPick ?? progress?.loanId ?? loans[0]?.id;
+  const loan = loans.find((l) => l.id === loanId);
   const watch = async (kind: AdRewardKind) => {
     setBusy(kind);
     const outcome = await showRewardedAd();
     setBusy(null);
-    if (outcome === 'rewarded') store.run((x) => grantAdReward(x, kind, todayKey(), { courseId: courseId || courses[0]?.courseId }));
+    if (outcome === 'rewarded') store.run((x) => grantAdReward(x, kind, todayKey(), { courseId: courseId || courses[0]?.courseId, loanId }));
     else if (outcome === 'closed') store.toast('Cerraste el anuncio antes de terminar: no hay recompensa.', 'info');
     else store.toast('No hay un anuncio disponible ahora. Probá en un rato (hace falta internet).', 'error');
   };
@@ -610,6 +615,13 @@ function RewardsView() {
     { kind: 'cash', detail: `Recibís ${fmtMoney(cashRewardAmount(s))} (una semana de tu sueldo, o $100 sin empleo). Tributa como otros ingresos.` },
     { kind: 'news', detail: 'Tu próximo análisis de una noticia tiene la mitad del error. Nunca da certeza.', disabled: s.meta.ads?.newsBoost ? 'Ya tenés uno pendiente' : undefined },
     { kind: 'study', detail: `Adelanta hasta ${STUDY_SKIP_DAYS / 30} meses un curso en curso. Las matrículas de esos meses se pagan igual.`, disabled: courses.length ? undefined : 'No tenés cursos en curso' },
+    {
+      kind: 'debt',
+      detail: loan
+        ? `Con ${DEBT_ADS_NEEDED} anuncios el saldo baja ${fmtMoney(debtCutAmount(s, loan.balance))} (la mitad, con tope). La cuota no cambia: terminás antes. Una vez por préstamo. Llevás ${progress?.loanId === loan.id ? progress.watched : 0} de ${DEBT_ADS_NEEDED}.`
+        : 'Reduce a la mitad el saldo de un préstamo personal (con tope), una vez por préstamo.',
+      disabled: loan ? undefined : 'No tenés préstamos para reducir',
+    },
   ];
   return (
     <Sheet title="Recompensas">
@@ -623,6 +635,11 @@ function RewardsView() {
             {r.kind === 'study' && courses.length > 1 && (
               <select className="input" aria-label="Curso a adelantar" value={courseId || courses[0].courseId} onChange={(e) => setCourseId(e.target.value)}>
                 {courses.map((a) => <option key={a.courseId} value={a.courseId}>{COURSE_BY_ID[a.courseId].name}</option>)}
+              </select>
+            )}
+            {r.kind === 'debt' && loans.length > 1 && (
+              <select className="input" aria-label="Préstamo a reducir" value={loanId} onChange={(e) => setLoanPick(Number(e.target.value))}>
+                {loans.map((l) => <option key={l.id} value={l.id}>{BANK_BY_ID[l.bankId]?.name ?? 'Préstamo'} · saldo {fmtMoney(l.balance)}</option>)}
               </select>
             )}
             <button className="btn primary" disabled={!!busy || left === 0 || !!r.disabled} onClick={() => void watch(r.kind)}>
