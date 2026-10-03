@@ -13,18 +13,25 @@ Revisado el 2026-10-02 contra la documentación de Google Play. Esto **no es ase
 | Cuestionario de clasificación (IARC) | Guía abajo |
 | Cuentas personales nuevas: prueba cerrada con **12 testers durante 14 días seguidos** antes de producción | Pendiente (se hace en Play Console) |
 | Público objetivo | 13+ (no apto para el programa de Familias) |
-| Permisos | Solo internet (búsqueda de actualizaciones) |
+| Permisos | Internet; el SDK de AdMob agrega el del ID de publicidad (`AD_ID`) |
+| Anuncios | Solo recompensados, opcionales, con consentimiento UMP en EEE/Reino Unido/Suiza; anuncios de prueba fuera de `main` |
 
 ## Seguridad de los datos (Data safety)
 
-Con la versión actual (sin anuncios, sin compras, sin analíticas):
+La app tiene **anuncios recompensados opcionales de Google AdMob** (solo si el jugador toca «Ver anuncio»). Respuestas, según la guía de AdMob para el formulario:
 
-- ¿La app recopila o comparte datos de los usuarios? **No.** Las partidas quedan en el dispositivo; la consulta de actualizaciones a GitHub no envía datos del usuario.
-- ¿Los datos se cifran en tránsito? Sí (HTTPS).
-- ¿Se pueden borrar los datos? No hay datos en servidores; el usuario borra partidas en Ajustes o desinstalando.
-- Cuenta de usuario: la app no tiene cuentas (no aplica el requisito de borrado de cuenta).
+- En «Configuración de la app → Anuncios»: **Sí, contiene anuncios.**
+- ¿Recopila o comparte datos? **Sí** (lo hace el SDK de Google Mobile Ads).
+- Datos y fines (recopilados **y** compartidos con Google; no se venden):
+  - **ID del dispositivo u otros IDs** (ID de publicidad): publicidad o marketing, análisis, prevención de fraude.
+  - **Ubicación aproximada** (derivada de la IP): publicidad o marketing, análisis, prevención de fraude.
+  - **Actividad en la app → interacciones con la app**: publicidad o marketing, análisis.
+  - **Información y rendimiento de la app → registros de fallos y diagnósticos**: análisis, prevención de fraude.
+- Datos cifrados en tránsito: **sí**. Se pueden solicitar borrados: el desarrollador no guarda datos; los del SDK los gestiona Google (enlazar su política).
+- Partidas: quedan en el dispositivo, no se recopilan.
+- La app no tiene cuentas (no aplica el borrado de cuenta).
 
-**Si se agregan anuncios (AdMob):** hay que declarar que se recopilan y comparten el ID de publicidad, datos de uso de la app e información del dispositivo con fines de publicidad y análisis, agregar el permiso `AD_ID`, mostrar el formulario de consentimiento (UMP) a usuarios del EEE, Reino Unido y Suiza, y actualizar la política de privacidad **antes** de publicar.
+Revisar la guía vigente de Google antes de enviar: <https://support.google.com/admob/answer/11994880>.
 
 ## Clasificación de contenido (IARC)
 
@@ -33,7 +40,7 @@ Responder con la verdad (una respuesta falsa puede hacer que retiren la app):
 - Violencia, sexo, lenguaje vulgar, drogas: no.
 - Referencias a actividades delictivas: **sí, ficticias y opcionales** (sobornos, evasión, lavado, contrabando, una casa de apuestas clandestina como negocio). Están desactivadas al empezar y tienen castigos.
 - Apuestas simuladas (que el jugador apueste): **no**. Hay una bolsa de valores ficticia sin dinero real.
-- Compras dentro de la app / anuncios: no (cambia si se agregan).
+- Anuncios: **sí** (recompensados y opcionales). Compras dentro de la app: no.
 - Se espera una clasificación para adolescentes (p. ej. PEGI 12–16 / ESRB Teen); la decide el cuestionario.
 
 ## Monetización: lo que hay que saber

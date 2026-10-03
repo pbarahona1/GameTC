@@ -3,10 +3,10 @@
  * de la app y para las páginas públicas (docs/legal/, `npm run legal`), que son las
  * que se enlazan en Google Play.
  *
- * Describen lo que la app hace HOY: sin cuentas, sin anuncios, sin compras, sin
- * analíticas y sin enviar datos personales. Si se agregan anuncios o compras, estos
- * textos (y el formulario de Seguridad de los datos de Play Console) deben cambiar
- * ANTES de publicar esa versión.
+ * Describen lo que la app hace HOY: sin cuentas, sin compras ni analíticas propias;
+ * anuncios recompensados de Google AdMob solo cuando el jugador elige verlos. Si eso
+ * cambia, estos textos (y el formulario de Seguridad de los datos de Play Console)
+ * deben cambiar ANTES de publicar esa versión.
  */
 export const LEGAL = {
   app: 'Ultimate Realistic Tycoon',
@@ -39,7 +39,7 @@ export const PRIVACY: LegalSection[] = [
   {
     title: 'Resumen',
     paragraphs: [
-      `${LEGAL.app} es un juego de simulación que funciona sin conexión. No pide crear una cuenta, no muestra anuncios, no tiene compras, no usa analíticas ni herramientas de seguimiento y no envía tus datos personales a nadie, ni al desarrollador.`,
+      `${LEGAL.app} es un juego de simulación que funciona sin conexión. No pide crear una cuenta, no tiene compras y no usa analíticas propias. El desarrollador no recibe tus datos personales. Los únicos anuncios son opcionales: aparecen solo si tocás «Ver anuncio» para ganar una recompensa, y los sirve Google AdMob (ver abajo).`,
     ],
   },
   {
@@ -52,7 +52,14 @@ export const PRIVACY: LegalSection[] = [
   {
     title: 'Conexión a internet',
     paragraphs: [
-      'La app solo se conecta a internet para buscar actualizaciones del juego, descargándolas de GitHub (servicio de GitHub, Inc.). En esa consulta no se envía ningún dato de tu partida ni datos personales; como en cualquier conexión, GitHub recibe datos técnicos como la dirección IP, que trata según su propia política de privacidad. Podés desactivar la búsqueda automática en Ajustes → Actualizaciones.',
+      'La app se conecta a internet para buscar actualizaciones del juego, descargándolas de GitHub (servicio de GitHub, Inc.), y para cargar un anuncio cuando elegís verlo. En la búsqueda de actualizaciones no se envía ningún dato de tu partida ni datos personales; como en cualquier conexión, GitHub recibe datos técnicos como la dirección IP, que trata según su propia política de privacidad. Podés desactivar la búsqueda automática en Ajustes → Actualizaciones.',
+    ],
+  },
+  {
+    title: 'Anuncios (Google AdMob)',
+    paragraphs: [
+      'Si elegís ver un anuncio a cambio de una recompensa, el anuncio lo muestra Google AdMob (Google LLC). Para mostrarlo, medirlo y evitar fraudes, Google puede recopilar y usar el identificador de publicidad del dispositivo, la dirección IP, información del dispositivo y de la app, y datos sobre la interacción con el anuncio, según la política de privacidad de Google (https://policies.google.com/privacy) y cómo usa Google la información de los sitios y apps que usan sus servicios (https://policies.google.com/technologies/partner-sites).',
+      'Si vivís en el Espacio Económico Europeo, el Reino Unido o Suiza, antes del primer anuncio se te pide el consentimiento para anuncios personalizados. Podés restablecer o limitar el identificador de publicidad en la configuración de Android (Google → Anuncios). Si nunca tocás «Ver anuncio», la app no carga anuncios.',
     ],
   },
   {
@@ -64,7 +71,7 @@ export const PRIVACY: LegalSection[] = [
   },
   {
     title: 'Permisos',
-    paragraphs: ['La app solo usa el permiso de acceso a internet (para las actualizaciones). No accede a tu ubicación, contactos, cámara, micrófono, fotos ni a otras apps.'],
+    paragraphs: ['La app usa el acceso a internet (actualizaciones y anuncios opcionales) y el permiso del identificador de publicidad que agrega el SDK de Google AdMob. No accede a tu ubicación, contactos, cámara, micrófono, fotos ni a otras apps.'],
   },
   {
     title: 'Niñas, niños y adolescentes',
@@ -87,7 +94,7 @@ export const PRIVACY: LegalSection[] = [
   {
     title: 'Cambios en esta política',
     paragraphs: [
-      'Si una versión futura cambia cómo se tratan los datos (por ejemplo, si se agregaran anuncios o compras), esta política se actualizará antes de publicar esa versión y la fecha de arriba cambiará.',
+      'Si una versión futura cambia cómo se tratan los datos (por ejemplo, si se agregaran compras), esta política se actualizará antes de publicar esa versión y la fecha de arriba cambiará.',
     ],
   },
   {
@@ -118,6 +125,12 @@ export const TERMS: LegalSection[] = [
     title: 'Actividades ilegales ficticias',
     paragraphs: [
       'El juego puede simular, solo si las activás, actividades ilegales ficticias (por ejemplo, sobornos o evasión) con riesgos y castigos dentro de la partida. Existen para mostrar sus consecuencias, no para promoverlas. No contienen instrucciones aplicables a la vida real. En la vida real esas conductas son delitos.',
+    ],
+  },
+  {
+    title: 'Anuncios y recompensas',
+    paragraphs: [
+      'Ver anuncios es opcional. Las recompensas son ventajas dentro de la partida, sin valor fuera del juego, y tienen un límite por día. Si un anuncio no carga o lo cerrás antes de terminar, no hay recompensa. Podemos cambiar las recompensas o dejar de ofrecer anuncios.',
     ],
   },
   {
@@ -166,4 +179,6 @@ export const LICENSES: LicenseNotice[] = [
   { name: 'Manrope (tipografía)', license: 'SIL Open Font License 1.1', url: 'https://github.com/sharanda/manrope' },
   { name: 'IBM Plex Mono (tipografía)', license: 'SIL Open Font License 1.1', url: 'https://github.com/IBM/plex' },
   { name: 'Fontsource (empaquetado de tipografías)', license: 'MIT', url: 'https://fontsource.org' },
+  { name: '@capacitor-community/admob', license: 'MIT', url: 'https://github.com/capacitor-community/admob' },
+  { name: 'Google Mobile Ads SDK', license: 'Términos de Google', url: 'https://developers.google.com/admob/terms' },
 ];

@@ -12,7 +12,8 @@ export type SheetSpec =
   | { kind: 'tutorial' }
   | { kind: 'update' }
   | { kind: 'whatsnew' }
-  | { kind: 'legal'; tab?: 'privacy' | 'terms' | 'licenses' };
+  | { kind: 'legal'; tab?: 'privacy' | 'terms' | 'licenses' }
+  | { kind: 'rewards' };
 
 interface NavState {
   tab: Tab;

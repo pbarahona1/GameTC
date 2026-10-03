@@ -139,12 +139,14 @@ describe('Fase 8 · montos enormes no se salen de la pantalla', () => {
 });
 
 describe('Privacidad y términos: lo que dicen coincide con lo que hace la app', () => {
-  it('la app solo pide el permiso de internet y no incluye SDK de anuncios, analíticas ni compras', () => {
+  it('la app solo declara el permiso de internet; el único SDK de terceros es AdMob (declarado en la política), sin analíticas ni compras', async () => {
     const manifest = readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
     const perms = [...manifest.matchAll(/uses-permission android:name="([^"]+)"/g)].map((m) => m[1]);
     expect(perms).toEqual(['android.permission.INTERNET']);
     const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { dependencies: Record<string, string> };
-    expect(Object.keys(pkg.dependencies).filter((d) => /admob|ads|analytics|firebase|billing|purchase|sentry|amplitude|mixpanel/i.test(d))).toEqual([]);
+    expect(Object.keys(pkg.dependencies).filter((d) => /admob|ads|analytics|firebase|billing|purchase|sentry|amplitude|mixpanel/i.test(d))).toEqual(['@capacitor-community/admob']);
+    const { PRIVACY } = await import('../src/content/legal');
+    expect(PRIVACY.map((s) => s.title)).toContain('Anuncios (Google AdMob)');
   });
 
   it('la única conexión de red es la búsqueda de actualizaciones en GitHub', async () => {

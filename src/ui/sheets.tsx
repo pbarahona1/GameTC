@@ -24,6 +24,9 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
 import { LEGAL, PRIVACY, TERMS, LICENSES } from '../content/legal';
+import { AD_REWARDS, STUDY_SKIP_DAYS, adRewardsLeft, cashRewardAmount, grantAdReward, skippableCourses, type AdRewardKind } from '../engine/rewards';
+import { COURSE_BY_ID } from '../content/courses';
+import { showRewardedAd, todayKey, ADS_LIVE } from './ads';
 import { applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
 import { useOta } from './useOta';
 import { LogRow } from './screens/Home';
@@ -588,6 +591,51 @@ function WhatsNewSheet() {
   );
 }
 
+/** Recompensas opcionales por ver un anuncio (solo Android). */
+function RewardsView() {
+  const s = useGame();
+  const [busy, setBusy] = useState<AdRewardKind | null>(null);
+  const [courseId, setCourseId] = useState<string>('');
+  const today = todayKey();
+  const courses = skippableCourses(s);
+  const watch = async (kind: AdRewardKind) => {
+    setBusy(kind);
+    const outcome = await showRewardedAd();
+    setBusy(null);
+    if (outcome === 'rewarded') store.run((x) => grantAdReward(x, kind, todayKey(), { courseId: courseId || courses[0]?.courseId }));
+    else if (outcome === 'closed') store.toast('Cerraste el anuncio antes de terminar: no hay recompensa.', 'info');
+    else store.toast('No hay un anuncio disponible ahora. Probá en un rato (hace falta internet).', 'error');
+  };
+  const rows: Array<{ kind: AdRewardKind; detail: string; disabled?: string }> = [
+    { kind: 'cash', detail: `Recibís ${fmtMoney(cashRewardAmount(s))} (una semana de tu sueldo, o $100 sin empleo). Tributa como otros ingresos.` },
+    { kind: 'news', detail: 'Tu próximo análisis de una noticia tiene la mitad del error. Nunca da certeza.', disabled: s.meta.ads?.newsBoost ? 'Ya tenés uno pendiente' : undefined },
+    { kind: 'study', detail: `Adelanta hasta ${STUDY_SKIP_DAYS / 30} meses un curso en curso. Las matrículas de esos meses se pagan igual.`, disabled: courses.length ? undefined : 'No tenés cursos en curso' },
+  ];
+  return (
+    <Sheet title="Recompensas">
+      <p className="small muted">Opcional: mirá un anuncio corto y elegí una ayuda. El juego nunca te obliga a ver anuncios ni los muestra solo.</p>
+      {rows.map((r) => {
+        const left = adRewardsLeft(s, r.kind, today);
+        return (
+          <div className="card" key={r.kind}>
+            <div className="card-head"><h2 style={{ flex: 1 }}>{AD_REWARDS[r.kind].title}</h2><span className="tiny muted">{left} de {AD_REWARDS[r.kind].perDay} hoy</span></div>
+            <p className="small muted">{r.detail}</p>
+            {r.kind === 'study' && courses.length > 1 && (
+              <select className="input" aria-label="Curso a adelantar" value={courseId || courses[0].courseId} onChange={(e) => setCourseId(e.target.value)}>
+                {courses.map((a) => <option key={a.courseId} value={a.courseId}>{COURSE_BY_ID[a.courseId].name}</option>)}
+              </select>
+            )}
+            <button className="btn primary" disabled={!!busy || left === 0 || !!r.disabled} onClick={() => void watch(r.kind)}>
+              <Icon name="play" size={15} /> {busy === r.kind ? 'Cargando anuncio…' : r.disabled ?? (left === 0 ? 'Volvé mañana' : 'Ver anuncio')}
+            </button>
+          </div>
+        );
+      })}
+      {!ADS_LIVE && <p className="tiny faint">Versión de prueba: se muestran anuncios de prueba de Google.</p>}
+    </Sheet>
+  );
+}
+
 /** Privacidad, términos y licencias (el mismo texto que las páginas públicas). */
 function LegalView({ initial }: { initial: 'privacy' | 'terms' | 'licenses' }) {
   const [tab, setTab] = useState(initial);
@@ -627,6 +675,7 @@ function render(spec: SheetSpec) {
     case 'update': return <UpdateSheet />;
     case 'whatsnew': return <WhatsNewSheet />;
     case 'legal': return <LegalView initial={spec.tab ?? 'privacy'} />;
+    case 'rewards': return <RewardsView />;
   }
 }
 

@@ -68,7 +68,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - run: npm run build
+      - name: Compilación web
+        env:
+          # Anuncios reales solo en lo que se publica (push a main); en el resto, anuncios de prueba.
+          VITE_ADS_LIVE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: npm run build
       - name: Prueba de punta a punta (Playwright)
         run: |
           npx playwright install --with-deps chromium
@@ -170,6 +174,7 @@ jobs:
         if: env.HAS_OTA_KEY == 'true'
         env:
           URT_OTA_SIGNING_KEY: ${{ secrets.URT_OTA_SIGNING_KEY }}
+          VITE_ADS_LIVE: 'true'
         run: |
           npm ci
           BUILD=$(node -p "const [a,b,c]=require('./package.json').version.split(/[.-]/).map(Number); a*10000+b*100+c")
