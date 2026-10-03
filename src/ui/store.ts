@@ -14,7 +14,7 @@ import { balanceSheet } from '../engine/reports/statements';
 import { offlineDays, DEFAULT_OFFLINE } from '../persistence/offline';
 import { createStorage, exportToFile } from '../persistence/platformStorage';
 import { APP_VERSION } from '../version';
-import { syncSystemBars } from './systemBars';
+import { syncSystemBars, syncThemeColor } from './systemBars';
 
 export type Speed = 0 | 1 | 2 | 4 | 8;
 export type PlaySpeed = Exclude<Speed, 0>;
@@ -48,6 +48,8 @@ export interface Settings {
   autoUpdate: boolean;
   /** Velocidad con la que se reanuda el tiempo (la última elegida). */
   playSpeed: PlaySpeed;
+  /** Hasta cuándo no recordar exportar la partida (ms reales). */
+  exportReminderSnoozedUntil: number;
 }
 
 const SETTINGS_KEY = 'urt.settings';
@@ -56,7 +58,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: 'system', learningMode: true, autoPause: true, offlineMaxDays: 30,
   alertCategories: ['liquidez', 'deuda', 'credito', 'ahorro', 'impuestos', 'carrera', 'bienestar', 'empresa', 'inversiones', 'inmuebles', 'legal', 'economia'],
   msPerDay: 2000, pauseOn: ['peligro', 'ofertas', 'logros', 'legal'], successToasts: true,
-  fontScale: 1, highContrast: false, reduceMotion: false, colorblind: false, density: 'comoda', showAllSections: false, autoUpdate: true, playSpeed: 1,
+  fontScale: 1, highContrast: false, reduceMotion: false, colorblind: false, density: 'comoda', showAllSections: false, autoUpdate: true, playSpeed: 1, exportReminderSnoozedUntil: 0,
 };
 
 /** Milisegundos reales por día de juego a velocidad 1× (valor por defecto). */
@@ -246,6 +248,8 @@ export class GameStore {
         if (document.visibilityState === 'hidden') void this.save();
       });
       window.addEventListener('pagehide', () => void this.save());
+      // Con el tema "Sistema", seguir al teléfono si cambia entre claro y oscuro.
+      window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => syncThemeColor());
     }
   }
 
@@ -685,7 +689,7 @@ export class GameStore {
         netWorth = null;
       }
       try {
-        await this.setRegistry(upsertSlot(this.registry, { id: active, name: s.player.name, day: s.day, netWorth, savedAt: now, createdAt: prev?.createdAt ?? now }));
+        await this.setRegistry(upsertSlot(this.registry, { id: active, name: s.player.name, day: s.day, netWorth, savedAt: now, createdAt: prev?.createdAt ?? now, exportedAt: prev?.exportedAt }));
       } catch {
         /* el índice se reconstruye desde las copias si hiciera falta */
       }
@@ -737,6 +741,19 @@ export class GameStore {
     const safe = this.ui.state.player.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'partida';
     const r = await exportToFile(text, `urt-${safe}-dia-${this.ui.state.day}.json`);
     this.toast(r.message, r.ok ? 'ok' : 'error');
+    const meta = this.registry.slots.find((x) => x.id === this.ui.activeSlot);
+    if (r.ok && meta) {
+      try {
+        await this.setRegistry(upsertSlot(this.registry, { ...meta, exportedAt: Date.now() }));
+      } catch {
+        /* solo afecta al recordatorio */
+      }
+    }
+  }
+
+  /** Metadatos de la partida abierta (para el recordatorio de exportar). */
+  activeSlotMeta(): SlotMeta | undefined {
+    return this.ui.slots.find((x) => x.id === this.ui.activeSlot);
   }
 
   /**
@@ -822,6 +839,7 @@ export class GameStore {
     flag('data-density', st.density === 'compacta', 'compact');
     root.style.setProperty('--ui-zoom', String(st.fontScale || 1));
     void syncSystemBars(t);
+    syncThemeColor();
   }
 
   toast(text: string, tone: Toast['tone'] = 'info') {

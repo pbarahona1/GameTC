@@ -640,3 +640,4 @@ details.advanced[open] > summary::after { transform: rotate(-135deg); }
 .chips button { min-height: 36px; padding: 6px 12px; position: relative; }
 .chips button::before { content: ''; position: absolute; inset: -4px 0; }
 .swatch { width: 36px; height: 36px; }
+.export-reminder { border-color: color-mix(in srgb, var(--info) 45%, var(--line)); }

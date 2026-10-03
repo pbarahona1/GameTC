@@ -7,7 +7,7 @@ import globals from 'globals';
 import { defineConfig } from 'eslint/config';
 
 export default defineConfig(
-  { ignores: ['dist/', 'dist-single/', 'android/', 'ota/', 'node_modules/', 'public/'] },
+  { ignores: ['dist/', 'dist-single/', 'android/', 'ota/', 'node_modules/', 'public/', 'playwright-report/', 'test-results/'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {
@@ -21,7 +21,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['scripts/**/*.mjs', 'vite.config.ts', 'capacitor.config.ts', 'eslint.config.js'],
+    files: ['scripts/**/*.mjs', 'vite.config.ts', 'capacitor.config.ts', 'eslint.config.js', 'playwright.config.ts', 'e2e/**/*.ts'],
     languageOptions: { globals: { ...globals.node } },
   },
 );

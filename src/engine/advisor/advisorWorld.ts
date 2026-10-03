@@ -19,7 +19,7 @@ const H = (label: string, value: string): DataPoint => ({ label, value, kind: 'h
 const E = (label: string, value: string): DataPoint => ({ label, value, kind: 'estimación' });
 
 /**
- * Asesor IA avanzado (Fase 4): analiza inversiones, inmuebles, obligaciones
+ * Asesor avanzado: analiza inversiones, inmuebles, obligaciones
  * fiscales, riesgos legales, insolvencia personal y el ciclo económico. Todas
  * las cifras salen de la partida; las estimaciones dicen qué suponen.
  */

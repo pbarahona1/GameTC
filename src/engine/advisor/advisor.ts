@@ -13,7 +13,7 @@ import { analyzeCompany, portfolioInsights } from '../business/advisor';
 import { analyzeWorld } from './advisorWorld';
 
 /**
- * Asesor IA basado en reglas verificables. Cada recomendación separa:
+ * Asesor basado en reglas verificables. Cada recomendación separa:
  * - HECHOS: cifras leídas del libro mayor y del estado actual.
  * - ESTIMACIONES: proyecciones calculadas con supuestos explícitos.
  * - RECOMENDACIONES: opciones con ventajas, riesgos y qué pasa si no hacés nada.

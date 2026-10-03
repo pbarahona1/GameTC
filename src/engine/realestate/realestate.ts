@@ -1,5 +1,5 @@
 import type { GameState } from '../state';
-import type { Property, PropertyType, PropertyOwner, Mortgage, Lease, ZoneState } from './types';
+import type { Property, PropertyType, PropertyOwner, Mortgage, Lease, ZoneState, PropertyListing } from './types';
 import { ZONES, ZONE_BY_ID, ZoneDef, PROPERTY_TYPE_NAMES, MORTGAGE_BANKS, MORTGAGE_BANK_BY_ID, MortgageBank, BUILD_COST, TENANT_NAMES } from '../../content/realestate';
 import { jurisdictionById } from '../../content/jurisdictions';
 import { Cents, clamp, roundCents, usd } from '../money';
@@ -104,6 +104,17 @@ export function marketRent(state: GameState, p: Pick<Property, 'zoneId' | 'type'
   const z = zoneDef(p.zoneId);
   const zs = zoneState(state, p.zoneId);
   return roundCents(p.m2 * z.rent[p.type] * zs.rentIndex * gradeMult(p.grade) * (p.type === 'terreno' ? 1 : condMult(p.condition)) * 100);
+}
+
+/** Alquiler mensual de referencia de una publicación: el del contrato vigente o el de mercado (los terrenos no rentan). */
+export function listingRent(state: GameState, l: PropertyListing): Cents {
+  const p = l.property;
+  return p.lease?.rent ?? (p.type === 'terreno' ? 0 : marketRent(state, p));
+}
+
+/** Rendimiento bruto anual de una publicación al precio pedido (alquiler × 12 / precio). */
+export function listingGrossYield(state: GameState, l: PropertyListing): number {
+  return l.askPrice > 0 ? (listingRent(state, l) * 12) / l.askPrice : 0;
 }
 
 /** Vacancia esperada del mercado para ese tipo en esa zona. */

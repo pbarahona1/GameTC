@@ -17,6 +17,7 @@ import type { LogItem } from '../../engine/state';
 import { phaseInfo } from '../../engine/economy/economy';
 import { fmtPct } from '../../engine/format';
 import { logIcon, PHASE_ICON, NEWS_TOPIC_ICON } from '../contentIcons';
+import { ExportReminder } from '../components/Slots';
 
 export function LogRow({ l }: { l: LogItem }) {
   return (
@@ -84,6 +85,7 @@ export function Home() {
           <button className="btn sm primary" onClick={() => store.togglePlay()}><Icon name="play" size={14} /> Reanudar a {ui.settings.playSpeed}×</button>
         </div>
       )}
+      <ExportReminder />
       {tutorialOpen && nextStep && (
         <div className="card next-step">
           <div className="card-head">
@@ -161,7 +163,7 @@ export function Home() {
               </div>
             </button>
           ))}
-          {insights.length > 2 && <button className="btn sm ghost" onClick={() => { store.markSeen('asesor'); navStore.open({ kind: 'advisor' }); }}>Ver {insights.length - 2} alertas más en el Asesor IA</button>}
+          {insights.length > 2 && <button className="btn sm ghost" onClick={() => { store.markSeen('asesor'); navStore.open({ kind: 'advisor' }); }}>Ver {insights.length - 2} alertas más en el Asesor</button>}
         </div>
       )}
 

@@ -19,7 +19,7 @@ import { formatDate } from '../engine/time/calendar';
 import { Sheet, SheetLayer, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton, Switch } from './components/common';
 import { Icon, IconName } from './icons';
 import { Avatar, avatarOf } from './components/Avatar';
-import { SlotList, SavedAgo, agoText, useNow } from './components/Slots';
+import { SlotList, SavedAgo, agoText, useNow, LastExport } from './components/Slots';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
@@ -411,6 +411,7 @@ function SettingsView() {
           <span className="act"><button className="btn sm dark" onClick={() => void store.exportFile()}><Icon name="upload" size={15} /> Exportar a archivo</button><InfoButton term="accion_exportar" /></span>
           <span className="act"><button className="btn sm" onClick={() => setAudit(store.audit())}>Auditar contabilidad</button><InfoButton term="accion_auditar" /></span>
         </div>
+        <LastExport />
         {audit && (audit.length === 0 ? <p className="small gain"><Icon name="check" size={14} /> {s?.ledger.entries.length} asientos verificados: todo cuadra.</p> : <ul className="small loss">{audit.map((a) => <li key={a}>{a}</li>)}</ul>)}
         <span className="eyebrow">Copias de seguridad de esta partida</span>
         <p className="tiny muted">La copia 1 tiene como mucho 10 minutos; la 2, entre 10 y 70 minutos; la 3, de una hora a un día. Así un error reciente no alcanza a todas. Restaurar guarda antes la partida actual en «Antes de restaurar».</p>

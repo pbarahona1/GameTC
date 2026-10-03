@@ -460,7 +460,7 @@ const BASE_GLOSSARY: GlossaryEntry[] = [
     impact: 'Tu estilo de vida define los gastos fijos del presupuesto.',
   },
   {
-    id: 'asesor', term: 'Asesor IA', category: 'Acciones del juego',
+    id: 'asesor', term: 'Asesor', category: 'Acciones del juego',
     short: 'Analiza tu partida y te avisa de riesgos y oportunidades con cálculos verificables.',
     purpose: 'Te ayuda a decidir; nunca actúa por vos.',
     example: '"Te quedarías sin efectivo en 2.3 meses (entre 2.0 y 2.6)".',

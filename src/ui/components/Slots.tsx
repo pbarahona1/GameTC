@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { store, useUI } from '../store';
 import { navStore } from '../nav';
-import { MAX_SLOTS } from '../../persistence/slots';
+import { MAX_SLOTS, EXPORT_REMINDER, needsExportReminder } from '../../persistence/slots';
 import { formatDate } from '../../engine/time/calendar';
 import { fmtMoney } from '../../engine/format';
 import { ConfirmButton } from './common';
@@ -69,6 +69,36 @@ export function SlotList({ onOpened }: { onOpened?: () => void }) {
         );
       })}
       <p className="tiny muted">{ui.slots.length} de {MAX_SLOTS} partidas. Cada una tiene su guardado automático y sus propias copias de seguridad.</p>
+    </div>
+  );
+}
+
+/** Cuándo se exportó por última vez la partida abierta. */
+export function LastExport() {
+  const ui = useUI();
+  const now = useNow(60000);
+  const meta = ui.slots.find((x) => x.id === ui.activeSlot);
+  if (!meta) return null;
+  return <p className="tiny muted">{meta.exportedAt ? `Última exportación a archivo: ${agoText(Math.max(0, now - meta.exportedAt))}.` : 'Todavía no exportaste esta partida a un archivo.'} Guardá el archivo en Drive o en una PC: protege tu partida si cambiás o perdés el teléfono.</p>;
+}
+
+/** Recordatorio suave de exportar (una semana de juego real sin copia externa reciente). */
+export function ExportReminder() {
+  const ui = useUI();
+  const now = useNow(60000);
+  const meta = ui.slots.find((x) => x.id === ui.activeSlot);
+  if (!needsExportReminder(meta, now, ui.settings.exportReminderSnoozedUntil)) return null;
+  return (
+    <div className="card export-reminder" role="note">
+      <div className="card-head">
+        <Icon name="disk" size={18} />
+        <h2 style={{ flex: 1 }}>{meta!.exportedAt ? 'Hace más de un mes que no exportás tu partida' : 'Tu partida solo está en este dispositivo'}</h2>
+      </div>
+      <p className="small muted">Un archivo exportado (en Drive, el correo o una PC) te permite recuperarla si cambiás de teléfono o desinstalás la app.</p>
+      <div className="btn-row">
+        <button className="btn sm dark" onClick={() => void store.exportFile()}><Icon name="upload" size={15} /> Exportar ahora</button>
+        <button className="btn sm ghost" onClick={() => store.updateSettings({ exportReminderSnoozedUntil: Date.now() + EXPORT_REMINDER.snoozeMs })}>Más tarde</button>
+      </div>
     </div>
   );
 }

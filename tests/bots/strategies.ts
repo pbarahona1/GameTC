@@ -162,8 +162,6 @@ export function runBot(style: BotStyle, background: BackgroundId, seed: string, 
     if (!dressed && liquid(s) > usd(1500)) {
       dressed = buyItem(s, 'camisa_oxford', 'debito').ok && buyItem(s, 'chino', 'debito').ok;
     }
-    const m = computeMetrics(s);
-    void m;
     if (style === 'ejecutivo') {
       studyStep(s, 0.35);
       const free = savingsStep(s, 4);

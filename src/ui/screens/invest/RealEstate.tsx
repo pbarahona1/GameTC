@@ -4,7 +4,7 @@ import { navStore } from '../../nav';
 import { InfoButton, CardHead, Pill, NumInput, Act, Learn, LineChart, Money, Seg, AmountInput, ConfirmButton, Empty, Stat, Bar, GuardedAct } from '../../components/common';
 import {
   buyProperty, inspectListing, allMortgageQuotes, sellProperty, setRent, setManagement, renovate, developLand, setUse, prepayMortgage,
-  propertyReport, marketRent, closingCosts, ownerLabel, ownerCash, monthlyEconomics, zoneState, marketVacancy, SALE_COMMISSION, quickSalePrice, buyerWeeklyChance, tenantWeeklyChance, rentNoFasterBelow, knownRepairCost,
+  propertyReport, marketRent, listingRent, listingGrossYield, closingCosts, ownerLabel, ownerCash, monthlyEconomics, zoneState, marketVacancy, SALE_COMMISSION, quickSalePrice, buyerWeeklyChance, tenantWeeklyChance, rentNoFasterBelow, knownRepairCost,
 } from '../../../engine/realestate/realestate';
 import { ZONES, ZONE_BY_ID, PROPERTY_TYPE_NAMES, BUILD_COST } from '../../../content/realestate';
 import { jurisdictionById } from '../../../content/jurisdictions';
@@ -374,7 +374,15 @@ function Market({ selected }: { selected: number | null }) {
   useUI();
   const [type, setType] = useState<'todos' | PropertyType>('todos');
   const [zone, setZone] = useState('todas');
-  const list = s.realEstate.listings.filter((l) => (type === 'todos' || l.property.type === type) && (zone === 'todas' || l.property.zoneId === zone)).sort((a, b) => a.askPrice - b.askPrice);
+  const [order, setOrder] = useState<'precio' | 'rendimiento' | 'tasacion'>('precio');
+  const rank: Record<typeof order, (l: PropertyListing) => number> = {
+    precio: (l) => l.askPrice,
+    rendimiento: (l) => -listingGrossYield(s, l),
+    tasacion: (l) => l.askPrice / l.property.appraisal,
+  };
+  const list = s.realEstate.listings
+    .filter((l) => (type === 'todos' || l.property.type === type) && (zone === 'todas' || l.property.zoneId === zone))
+    .sort((a, b) => rank[order](a) - rank[order](b) || a.askPrice - b.askPrice);
   const sel = selected !== null ? s.realEstate.listings.find((l) => l.id === selected) : null;
   return (
     <>
@@ -388,17 +396,21 @@ function Market({ selected }: { selected: number | null }) {
       <div className="chips">
         {[{ id: 'todas', name: 'Todas las zonas' }, ...ZONES].map((z) => <button key={z.id} onClick={() => setZone(z.id)} style={zone === z.id ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{z.name}</button>)}
       </div>
+      <div className="inline-form">
+        <span className="tiny muted">Ordenar por</span>
+        <Seg items={[{ id: 'precio', label: 'Precio' }, { id: 'rendimiento', label: 'Rendimiento' }, { id: 'tasacion', label: 'Vs. tasación' }]} value={order} onChange={setOrder} />
+      </div>
       {list.length === 0 && <Empty icon="search">No hay publicaciones con esos filtros. El mercado se renueva cada mes.</Empty>}
       <div className="card" style={{ paddingBlock: 4 }}>
         <div className="rows">
           {list.map((l) => {
             const p = l.property;
-            const rent = p.lease?.rent ?? (p.type === 'terreno' ? 0 : marketRent(s, p));
+            const rent = listingRent(s, l);
             return (
               <button key={l.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { navStore.setSub('invest', `realestate:list:${l.id}`); window.scrollTo({ top: 0 }); }}>
                 <div className="grow">
                   <div className="title small"><Icon name={PROPERTY_ICON[p.type]} size={15} /> {p.name}</div>
-                  <div className="meta">{ZONE_BY_ID[p.zoneId]?.name} · {p.m2} m² · {p.lease ? 'con inquilino' : 'libre'}{rent ? ` · renta bruta ${fmtPct((rent * 12) / l.askPrice, 1)}` : ''}</div>
+                  <div className="meta">{ZONE_BY_ID[p.zoneId]?.name} · {p.m2} m² · {p.lease ? 'con inquilino' : 'libre'}{rent ? ` · renta bruta ${fmtPct(listingGrossYield(s, l), 1)}` : ''}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div className="amt small">{fmtMoney(l.askPrice, { decimals: false })}</div>

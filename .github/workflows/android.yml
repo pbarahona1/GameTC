@@ -1,6 +1,7 @@
 # Verificación, compilación Android y publicación.
 #
-# - En CUALQUIER rama y en pull requests: tipos, lint, pruebas, compilación web y APK.
+# - En CUALQUIER rama y en pull requests: tipos, lint, pruebas, compilación web, prueba
+#   de punta a punta (Playwright) y APK.
 #   Nada se publica.
 # - Solo en push a main (job "publicar"):
 #     · Release v<versión> con la APK (y el AAB/APK de publicación si hay llave de firma)
@@ -68,6 +69,17 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - name: Prueba de punta a punta (Playwright)
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+      - name: Informe de Playwright (solo si falla)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
       - run: npx cap sync android
 
       - name: SDK de Android preinstalado

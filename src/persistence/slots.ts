@@ -23,6 +23,23 @@ export interface SlotMeta {
   /** Fecha real del último guardado (ms). */
   savedAt: number;
   createdAt: number;
+  /** Fecha real de la última exportación a archivo (ms). Falta si nunca se exportó. */
+  exportedAt?: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Recordatorio de exportar: partidas con al menos una semana real y sin copia externa reciente. */
+export const EXPORT_REMINDER = { minAgeMs: 7 * DAY_MS, everyMs: 30 * DAY_MS, snoozeMs: 14 * DAY_MS };
+
+/**
+ * ¿Conviene recordar exportar esta partida? Las copias de seguridad viven en el
+ * mismo dispositivo: un archivo en Drive o en una PC protege ante perder o cambiar
+ * el teléfono.
+ */
+export function needsExportReminder(meta: SlotMeta | undefined, now: number, snoozedUntil: number): boolean {
+  if (!meta || now < snoozedUntil) return false;
+  if (now - meta.createdAt < EXPORT_REMINDER.minAgeMs) return false;
+  return meta.exportedAt === undefined || now - meta.exportedAt >= EXPORT_REMINDER.everyMs;
 }
 
 export interface SlotRegistry {

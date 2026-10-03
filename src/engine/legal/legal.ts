@@ -227,6 +227,7 @@ export function voluntaryDisclosure(state: GameState, actId: number): ActionResu
   const f = addFine(state, null, `Regularización voluntaria: ${a.label}`, due, 60);
   a.status = 'regularizado';
   state.legal.heat = clamp(state.legal.heat - 10, 0, 100);
+  if (f.balance === 0) return OK('Regularizaste la situación: no había impuesto omitido, así que no debés nada y no hay proceso penal.');
   return OK(`Regularizaste la situación: debés ${fmtMoney(f.balance)} (impuesto + 20 % + intereses), sin proceso penal.`);
 }
 
@@ -412,6 +413,11 @@ function advanceCase(state: GameState, c: LegalCase): void {
       const l = lawyerOf(state, c);
       const penalty = roundCents(s.restitution * 0.5 * (l ? 1 - l.quality / 300 : 1));
       const total = s.restitution + penalty;
+      if (total <= 0) {
+        closeCase(state, c, { day: state.day, verdict: 'archivado', fine: 0, restitution: 0, seized: 0, prisonMonths: 0, suspended: false, text: 'La autoridad fiscal no encontró impuestos omitidos: el caso se cerró sin multa.' });
+        for (const a of acts) a.status = 'juzgado';
+        return;
+      }
       const f = addFine(state, c.id, `Resolución fiscal: ${c.title}`, total, 60);
       closeCase(state, c, { day: state.day, verdict: 'condenado', fine: penalty, restitution: s.restitution, seized: 0, prisonMonths: 0, suspended: false, text: `La autoridad fiscal determinó impuestos omitidos de ${fmtMoney(s.restitution)} más una multa de ${fmtMoney(penalty)}. Total: ${fmtMoney(f.balance)}, vence el ${formatDate(f.dueDay)}.` });
       for (const a of acts) a.status = 'juzgado';
@@ -511,7 +517,12 @@ function releaseFromPrison(state: GameState, early: boolean): void {
 
 // ------------------------------------------------------------ Multas y embargos
 
+/**
+ * Registra una multa a pagar. Un importe de cero (por ejemplo, una evasión cuyo
+ * impuesto omitido resultó nulo) no genera asiento ni deuda: queda saldada.
+ */
 function addFine(state: GameState, caseId: number | null, label: string, amount: Cents, days: number): Fine {
+  if (amount <= 0) return { id: state.meta.nextId++, caseId, label, balance: 0, original: 0, dueDay: state.day, installment: null, garnishing: false };
   post(state.ledger, { day: state.day, memo: label, cf: 'internal', tag: 'legal:fine', lines: [{ account: 'fines', debit: amount }, { account: 'fines_payable', credit: amount }] });
   const f: Fine = { id: state.meta.nextId++, caseId, label, balance: amount, original: amount, dueDay: state.day + days, installment: null, garnishing: false };
   state.legal.fines.push(f);
@@ -535,9 +546,10 @@ export function finePlan(state: GameState, id: number): ActionResult {
   if (!f) return FAIL('Multa inexistente o pagada.');
   if (f.installment) return FAIL('Ya tiene un plan de pagos.');
   const extra = roundCents(f.balance * 0.1);
-  post(state.ledger, { day: state.day, memo: `Recargo por plan de pagos: ${f.label}`, cf: 'internal', tag: 'legal:fine', lines: [{ account: 'fines', debit: extra }, { account: 'fines_payable', credit: extra }] });
+  // En saldos de pocos centavos el recargo redondea a cero: no hay asiento.
+  if (extra > 0) post(state.ledger, { day: state.day, memo: `Recargo por plan de pagos: ${f.label}`, cf: 'internal', tag: 'legal:fine', lines: [{ account: 'fines', debit: extra }, { account: 'fines_payable', credit: extra }] });
   f.balance += extra;
-  f.installment = roundCents(f.balance / 12);
+  f.installment = Math.max(1, roundCents(f.balance / 12));
   f.garnishing = false;
   f.dueDay = state.day + 30;
   return OK(`Plan aprobado: 12 cuotas de ${fmtMoney(f.installment)}.`);

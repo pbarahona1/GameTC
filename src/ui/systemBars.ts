@@ -15,3 +15,15 @@ export async function syncSystemBars(theme: ThemeChoice): Promise<void> {
     /* sin barras del sistema (web o versión nativa vieja): no hace falta nada */
   }
 }
+
+/**
+ * Color de la barra del navegador / multitarea (<meta name="theme-color">): el
+ * fondo del tema que se ve en pantalla (claro, oscuro o el del sistema).
+ */
+export function syncThemeColor(): void {
+  if (typeof document === 'undefined') return;
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) return;
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  if (bg) meta.content = bg;
+}

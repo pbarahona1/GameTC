@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 o superior: copia en la nube y traspaso a otro teléfono, solo de las partidas. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="saves/" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="saves/" />
+    </device-transfer>
+</data-extraction-rules>
