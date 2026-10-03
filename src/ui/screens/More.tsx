@@ -100,6 +100,7 @@ export function More() {
         { icon: 'log', title: 'Registro de actividad', sub: 'Todo lo que pasó en tu partida', onClick: () => navStore.open({ kind: 'log' }) },
         { icon: 'glossary', title: 'Glosario', sub: 'Cada concepto explicado con ejemplos', onClick: () => navStore.open({ kind: 'glossary' }) },
         { icon: 'settings', title: 'Ajustes', sub: 'Partida, apariencia, guardado y actualizaciones', onClick: () => navStore.open({ kind: 'settings' }) },
+        { icon: 'shield', title: 'Privacidad y términos', sub: 'Qué datos guarda el juego, términos de uso y licencias', onClick: () => navStore.open({ kind: 'legal' }) },
       ],
     },
   ];

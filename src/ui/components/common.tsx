@@ -1,15 +1,27 @@
 import { Icon, isIconName, IconName } from '../icons';
 import { ReactNode, createContext, useContext, useEffect, useId, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Cents } from '../../engine/money';
-import { fmtMoney, fmtCompact, fmtAmountInput, fmtNumber, parseMoney, parseQuantity } from '../../engine/format';
+import { fmtMoney, fmtMoneyFit, fmtCompact, fmtAmountInput, fmtNumber, parseMoney, parseQuantity } from '../../engine/format';
 import { GLOSSARY_BY_ID } from '../../content/glossary';
 import { navStore } from '../nav';
 import { useUI } from '../store';
 
-export function Money({ c, compact, sign, colored, className = '' }: { c: Cents; compact?: boolean; sign?: boolean; colored?: boolean; className?: string }) {
+/** Monto. `fit`: abrevia si el número completo pasa de 12 caracteres (filas y celdas angostas). */
+export function Money({ c, compact, sign, colored, fit, className = '' }: { c: Cents; compact?: boolean; sign?: boolean; colored?: boolean; fit?: boolean; className?: string }) {
   const cls = colored ? (c > 0 ? 'gain' : c < 0 ? 'loss' : '') : '';
   const arrow = colored && c !== 0 ? (c > 0 ? '▲ ' : '▼ ') : '';
-  return <span className={`num ${cls} ${className}`}>{arrow}{compact ? fmtCompact(c) : fmtMoney(c, { sign })}</span>;
+  const text = compact ? fmtCompact(c, { sign }) : fit ? fmtMoneyFit(c, { sign }) : fmtMoney(c, { sign });
+  const full = fmtMoney(c, { sign });
+  return <span className={`num ${cls} ${className}`} title={text !== full ? full : undefined} aria-label={text !== full ? full : undefined}>{arrow}{text}</span>;
+}
+
+/**
+ * Cifra principal de una tarjeta: muestra el monto completo y achica la letra según
+ * su largo para que nunca se salga de la pantalla (la tipografía es monoespaciada).
+ */
+export function BigAmount({ c, className = '' }: { c: Cents; className?: string }) {
+  const text = fmtMoney(c);
+  return <div className={`big big-fit ${className}`} style={{ ['--chars' as string]: text.length }}>{text}</div>;
 }
 
 /**

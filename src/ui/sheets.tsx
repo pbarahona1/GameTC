@@ -23,6 +23,7 @@ import { SlotList, SavedAgo, agoText, useNow, LastExport } from './components/Sl
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
+import { LEGAL, PRIVACY, TERMS, LICENSES } from '../content/legal';
 import { applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
 import { useOta } from './useOta';
 import { LogRow } from './screens/Home';
@@ -435,7 +436,8 @@ function SettingsView() {
         <UpdatesPanel />
         <Switch checked={st.autoUpdate} onChange={() => store.updateSettings({ autoUpdate: !st.autoUpdate })} label="Buscar actualizaciones al abrir la app" sub="Solo consulta si hay una versión nueva; nunca instala sin que lo confirmes." term="actualizaciones" />
       </SettingsSection>
-      <p className="tiny faint" style={{ textAlign: 'center' }}>Ultimate Realistic Tycoon · versión {APP_VERSION} · simulación ficticia sin anuncios ni compras.</p>
+      <button className="btn sm ghost" onClick={() => navStore.open({ kind: 'legal' })}><Icon name="shield" size={15} /> Privacidad, términos y licencias</button>
+      <p className="tiny faint" style={{ textAlign: 'center' }}>Ultimate Realistic Tycoon · versión {APP_VERSION} · simulación ficticia.</p>
     </Sheet>
   );
 }
@@ -586,6 +588,33 @@ function WhatsNewSheet() {
   );
 }
 
+/** Privacidad, términos y licencias (el mismo texto que las páginas públicas). */
+function LegalView({ initial }: { initial: 'privacy' | 'terms' | 'licenses' }) {
+  const [tab, setTab] = useState(initial);
+  const sections = tab === 'privacy' ? PRIVACY : TERMS;
+  return (
+    <Sheet title="Privacidad y términos">
+      <Seg items={[{ id: 'privacy', label: 'Privacidad' }, { id: 'terms', label: 'Términos' }, { id: 'licenses', label: 'Licencias' }]} value={tab} onChange={setTab} />
+      <p className="tiny muted">Actualizado el {LEGAL.updated}.</p>
+      {tab !== 'licenses' && sections.map((sec) => (
+        <section key={sec.title} className="stack" style={{ gap: 4 }}>
+          <h3 className="small" style={{ margin: 0 }}>{sec.title}</h3>
+          {sec.paragraphs.map((p) => <p key={p} className="small" style={{ margin: 0 }}>{p}</p>)}
+        </section>
+      ))}
+      {tab === 'licenses' && (
+        <div className="rows">
+          {LICENSES.map((l) => (
+            <div className="row" key={l.name}>
+              <div className="grow"><div className="title small">{l.name}</div><div className="meta">{l.license} · {l.url}</div></div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 function render(spec: SheetSpec) {
   switch (spec.kind) {
     case 'term': return <TermView key={spec.id} id={spec.id} />;
@@ -597,6 +626,7 @@ function render(spec: SheetSpec) {
     case 'tutorial': return <TutorialView />;
     case 'update': return <UpdateSheet />;
     case 'whatsnew': return <WhatsNewSheet />;
+    case 'legal': return <LegalView initial={spec.tab ?? 'privacy'} />;
   }
 }
 

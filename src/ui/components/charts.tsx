@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
 import type { Candle } from '../../engine/invest/types';
-import { fmtCompact, fmtMoney } from '../../engine/format';
+import { fmtCompact, fmtMoney, fmtMoneyFit } from '../../engine/format';
 import { formatDate } from '../../engine/time/calendar';
 
 /**
@@ -236,7 +236,7 @@ export function Donut({ parts, size = 132 }: { parts: Array<{ label: string; val
             <span style={{ width: 10, height: 10, borderRadius: 3, background: p.color, flex: 'none' }} />
             <span style={{ flex: 1 }}>{p.label}</span>
             <span className="num">{Math.round((p.value / total) * 100)} %</span>
-            <span className="num faint">{fmtMoney(p.value, { decimals: false })}</span>
+            <span className="num faint">{fmtMoneyFit(p.value, { decimals: false, max: 10 })}</span>
           </div>
         ))}
       </div>

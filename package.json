@@ -12,6 +12,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint . --max-warnings 0",
     "e2e": "playwright test",
+    "legal": "vite-node scripts/legal.ts",
     "chaos": "URT_CHAOS_SEEDS=50 URT_CHAOS_YEARS=20 vitest run tests/audit_world.test.ts",
     "cap:sync": "npm run build && npx cap sync android",
     "ota:sign": "node scripts/ota.mjs sign --out ota-dist",

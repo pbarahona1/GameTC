@@ -60,7 +60,7 @@ function TopBar() {
         <div className="date-block">
           <div className="d">{formatDateShort(s.day)}</div>
           <div className="tiny muted">
-            Disponible <Money c={spendable(s)} />
+            Disponible <Money c={spendable(s)} fit />
           </div>
         </div>
         <button className={`time-btn ${running ? 'on' : ''}`} aria-label={running ? 'Pausar el tiempo' : `Reanudar el tiempo a ${speed}×`} aria-pressed={running} onClick={() => store.togglePlay()}>
