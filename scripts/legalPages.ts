@@ -2,8 +2,8 @@
  * Genera las páginas públicas de privacidad y términos (docs/legal/) desde
  * src/content/legal.ts, la misma fuente que usa la app. Con GitHub Pages activado
  * (rama main, carpeta /docs) quedan en:
- *   https://pbarahona1.github.io/gametc/legal/privacidad.html
- *   https://pbarahona1.github.io/gametc/legal/terminos.html
+ *   https://pbarahona12.github.io/gametc/legal/privacidad.html
+ *   https://pbarahona12.github.io/gametc/legal/terminos.html
  * Uso: npm run legal (scripts/legal.ts).
  */
 import { LEGAL, PRIVACY, TERMS, LICENSES, type LegalSection } from '../src/content/legal';

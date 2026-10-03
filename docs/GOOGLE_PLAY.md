@@ -62,7 +62,7 @@ Responder con la verdad (una respuesta falsa puede hacer que retiren la app):
 1. Completar `developer` y `contact` en `src/content/legal.ts`.
 2. `npm run legal` → genera `docs/legal/privacidad.html` y `docs/legal/terminos.html`; commit y push a `main`.
 3. En GitHub: Settings → Pages → Deploy from a branch → `main` / `/docs`.
-4. URL para Play Console: `https://pbarahona1.github.io/gametc/legal/privacidad.html`.
+4. URL para Play Console: `https://pbarahona12.github.io/gametc/legal/privacidad.html`.
 
 ## Fuentes
 

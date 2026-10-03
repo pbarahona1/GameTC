@@ -59,7 +59,7 @@ openssl pkey -in urt-ota-signing-key.pem -pubout -outform DER | base64 -w0   # c
 
 ## 4. Actualizaciones por internet (sin reinstalar)
 
-La app lee `https://raw.githubusercontent.com/pbarahona1/gametc/ota-channel/manifest.json`. Es un **sobre firmado** (`format: urt-ota-signed`): el manifiesto va en base64 y la firma ECDSA P-256 (SHA-256) cubre ese texto exacto. El manifiesto incluye tamaño y huella SHA-256 del archivo, así que la firma protege también la página. La app verifica la firma con WebCrypto y la clave pública embebida; si no es válida, no ofrece nada.
+La app lee `https://raw.githubusercontent.com/pbarahona12/gametc/ota-channel/manifest.json`. Es un **sobre firmado** (`format: urt-ota-signed`): el manifiesto va en base64 y la firma ECDSA P-256 (SHA-256) cubre ese texto exacto. El manifiesto incluye tamaño y huella SHA-256 del archivo, así que la firma protege también la página. La app verifica la firma con WebCrypto y la clave pública embebida; si no es válida, no ofrece nada.
 
 Si hay una versión mayor y compatible con la APK (`minNativeCode`), al aceptar:
 
