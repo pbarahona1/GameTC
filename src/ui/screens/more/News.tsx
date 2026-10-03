@@ -8,6 +8,7 @@ import { formatDate } from '../../../engine/time/calendar';
 import { fmtPct } from '../../../engine/format';
 import { Pill, Seg, Act, ScreenIntro, Empty, InfoButton } from '../../components/common';
 import { Icon } from '../../icons';
+import { NEWS_TOPIC_ICON } from '../../contentIcons';
 
 const KIND: Record<NewsItem['kind'], string> = { rumor: 'Rumor', anticipo: 'Anticipo', oficial: 'Oficial', hecho: 'Hecho' };
 
@@ -43,7 +44,7 @@ function NewsCard({ n }: { n: NewsItem }) {
   return (
     <article className={`card news-card ${n.status}`}>
       <div className="news-head">
-        <span className="news-icon" aria-hidden>{n.icon}</span>
+        <span className="news-icon" aria-hidden><Icon name={NEWS_TOPIC_ICON[n.topic]} size={18} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <strong className="news-title">{n.title}</strong>
           <div className="tiny muted">{formatDate(n.day)} · {TOPIC_NAMES[n.topic]} · {n.source}{n.kind !== 'hecho' ? ` (suele acertar ~${fmtPct(n.sourceTypical, 0)})` : ''}</div>
@@ -63,7 +64,7 @@ function NewsCard({ n }: { n: NewsItem }) {
       <div className="btn-row" style={{ alignItems: 'center' }}>
         {canAnalyze && <Act label={n.analysis ? 'Reanalizar' : 'Analizar'} help="accion_analizar_noticia" className="btn sm dark" onClick={() => store.run((x) => analyzeNews(x, n.id))} />}
         {n.status === 'abierta' && n.kind !== 'hecho' && !canAnalyze && n.analysis && <span className="tiny muted">Podrás reanalizarla con {sk.name} nivel {n.analysis.skill + 10}.</span>}
-        {n.status === 'abierta' && n.kind !== 'hecho' && !n.analysis && <span className="tiny muted">Habilidad: {sk.icon} {sk.name} {skill}</span>}
+        {n.status === 'abierta' && n.kind !== 'hecho' && !n.analysis && <span className="tiny muted">Habilidad: {sk.name} {skill}</span>}
       </div>
       <Related n={n} />
     </article>
@@ -78,7 +79,7 @@ export function NewsScreen() {
   useEffect(() => {
     store.run((x) => markNewsRead(x), { toast: false });
     store.markSeen('noticias_rumores');
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
   const list = [...s.world.news].reverse().filter((n) => (filter === 'todas' || (filter === 'abiertas' ? n.status === 'abierta' : n.status !== 'abierta')) && (topic === 'todos' || n.topic === topic));
   const resolved = s.world.news.filter((n) => n.status === 'cumplida' || n.status === 'desmentida');
   const hit = resolved.filter((n) => n.status === 'cumplida').length;
@@ -96,7 +97,7 @@ export function NewsScreen() {
           <button key={t} className={topic === t ? 'on' : ''} onClick={() => setTopic(t)}>{t === 'todos' ? 'Todos los temas' : TOPIC_NAMES[t]}</button>
         ))}
       </div>
-      {list.length === 0 && <Empty icon="📰">{filter === 'abiertas' ? 'No hay rumores abiertos. Avanzá el tiempo: las noticias llegan solas.' : 'Todavía no hay noticias.'}</Empty>}
+      {list.length === 0 && <Empty icon="news">{filter === 'abiertas' ? 'No hay rumores abiertos. Avanzá el tiempo: las noticias llegan solas.' : 'Todavía no hay noticias.'}</Empty>}
       {list.slice(0, 40).map((n) => <NewsCard key={n.id} n={n} />)}
     </>
   );

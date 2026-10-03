@@ -1,22 +1,26 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../store';
+import { businessesOf } from '../derived';
 import { navStore, useNav } from '../nav';
 import { SECTORS, SECTOR_BY_ID, LEGAL_FORMS, LEGAL_FORM_BY_ID, BizSectorId, LegalForm } from '../../content/sectors';
 import { setupCosts, sectorRequirement, foundCompany, buyListing, foundHolding } from '../../engine/business/ownership';
 import { isHolding } from '../../engine/business/groups';
 import { JURISDICTIONS, JURISDICTION_BY_ID, type JurisdictionId } from '../../content/jurisdictions';
-import { consolidated, valuation, coMetrics, coIncomeStatement } from '../../engine/business/reports';
+import { valuation, coMetrics, coIncomeStatement } from '../../engine/business/reports';
 import { daysToBankruptcy } from '../../engine/business/finance';
 import { ForecastPanel } from '../components/ForecastPanel';
 import { attachForecast, type BusinessForecast } from '../../engine/advisor/businessForecast';
 import { isOpen } from '../../engine/business/common';
 import { formatDate } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
+import { spendable } from '../../engine/finance/payments';
 import { usd, Cents } from '../../engine/money';
 import { Money, InfoButton, Pill, Empty, AmountInput, ConfirmButton, LineChart, CardHead, Act, Stat, Learn, Seg, ScreenIntro } from '../components/common';
 import { CompanyView } from './business/CompanyView';
 import { SoftGate } from '../components/Gate';
 import type { Company } from '../../engine/business/types';
+import { SECTOR_ICON } from '../contentIcons';
+import { Icon } from '../icons';
 
 const COLORS = ['#d2a94f', '#4cc093', '#7fb2e0', '#ee7a66', '#b59be0', '#e6d27a'];
 
@@ -34,7 +38,7 @@ function CompanyCard({ co }: { co: Company }) {
   return (
     <button className="card" style={{ textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer', borderColor: co.status === 'insolvent' ? 'var(--loss)' : undefined }} onClick={() => navStore.setSub('business', `co:${co.id}:summary`)}>
       <div className="co-head">
-        <div className="co-logo" style={{ background: co.color }} aria-hidden>{sec.icon}</div>
+        <div className="co-logo" style={{ background: co.color }} aria-hidden><Icon name={SECTOR_ICON[co.sector]} size={20} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <strong>{co.name}</strong>
           <div className="tiny muted">{sec.name} · {LEGAL_FORM_BY_ID[co.legalForm].name} · {JURISDICTION_BY_ID[co.jurisdiction]?.flag}{co.parentId ? ` · de ${s.companies.find((c) => c.id === co.parentId)?.name ?? 'holding'}` : ''}{co.ownership < 1 ? ` · ${fmtPct(co.ownership, 0)} tuyo` : ''}</div>
@@ -54,9 +58,8 @@ function CompanyCard({ co }: { co: Company }) {
 
 function Portfolio() {
   const s = useGame();
-  const ui = useUI();
   const open = s.companies.filter(isOpen);
-  const c = useMemo(() => consolidated(s, s.day - 29, s.day), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const c = useDerived(businessesOf);
   return (
     <>
       <ScreenIntro icon="business" title="Negocios" text="Fundá, comprá y dirigí empresas. Antes de invertir podés proyectar cómo le iría a cada negocio." term="proyeccion_negocios" />
@@ -86,7 +89,7 @@ function Portfolio() {
           <div className="rows">
             {s.formerCompanies.slice().reverse().map((f) => (
               <div className="row" key={f.id}>
-                <span aria-hidden>{SECTOR_BY_ID[f.sector].icon}</span>
+                <Icon name={SECTOR_ICON[f.sector]} size={16} />
                 <div className="grow"><div className="title small">{f.name}</div><div className="meta">{f.outcome} el {formatDate(f.endDay)}</div></div>
                 <span className="small"><Money c={f.result} colored sign /></span>
               </div>
@@ -117,7 +120,7 @@ function Found({ parentId }: { parentId: number | null }) {
   const total = capital + partner;
   const working = total - costs.total;
   const monthly = costs.firstMonthFixed + costs.firstMonthPayroll;
-  const personalLiquid = parent ? parent.ledger.balances.cash : s.ledger.balances.checking + (s.bank.overdraftSweep ? s.ledger.balances.savings : 0);
+  const personalLiquid = parent ? parent.ledger.balances.cash : spendable(s);
   return (
     <>
       <button className="btn ghost sm" onClick={() => navStore.setSub('business', parent ? `co:${parent.id}:group` : 'portfolio')}>← Volver</button>
@@ -130,7 +133,7 @@ function Found({ parentId }: { parentId: number | null }) {
             return (
               <button key={x.id} className={`choice ${sector === x.id ? 'on' : ''}`} onClick={() => { setSector(x.id); setCapital(usd(x.recommendedCapital * s.macro.priceIndex)); }} aria-pressed={sector === x.id}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 20 }} aria-hidden>{x.icon}</span>
+                  <Icon name={SECTOR_ICON[x.id]} size={20} />
                   <strong style={{ flex: 1 }}>{x.name}</strong>
                   <span className="tiny num">desde {fmtMoney(setupCosts(s, x.id, form).total, { decimals: false })}</span>
                 </div>
@@ -237,7 +240,7 @@ function Market({ buyerId }: { buyerId: number | null }) {
           </div>
         )}
       </div>
-      {s.listings.length === 0 && <Empty icon="🏷️">No hay empresas en venta en este momento. Volvé en unas semanas.</Empty>}
+      {s.listings.length === 0 && <Empty icon="tag">No hay empresas en venta en este momento. Volvé en unas semanas.</Empty>}
       {s.listings.map((l) => {
         const co = l.company;
         const sec = SECTOR_BY_ID[co.sector];
@@ -249,7 +252,7 @@ function Market({ buyerId }: { buyerId: number | null }) {
         return (
           <div className="card" key={l.id}>
             <div className="co-head">
-              <div className="co-logo" style={{ background: co.color }} aria-hidden>{sec.icon}</div>
+              <div className="co-logo" style={{ background: co.color }} aria-hidden><Icon name={SECTOR_ICON[co.sector]} size={20} /></div>
               <div style={{ flex: 1 }}>
                 <strong>{co.name}</strong>
                 <div className="tiny muted">{sec.name} · {LEGAL_FORM_BY_ID[co.legalForm].name} · desde {formatDate(co.foundedDay)}</div>
@@ -269,7 +272,7 @@ function Market({ buyerId }: { buyerId: number | null }) {
             </div>
             {co.history.length > 1 && <LineChart series={[{ name: 'Ventas mensuales', values: co.history.map((h) => h.revenue), color: 'var(--accent)' }, { name: 'Resultado', values: co.history.map((h) => h.netIncome), color: 'var(--info)' }]} height={110} />}
             <details>
-              <summary className="small"><strong>🔮 Proyectar esta empresa antes de comprarla</strong></summary>
+              <summary className="small"><strong><Icon name="sparkles" size={14} /> Proyectar esta empresa antes de comprarla</strong></summary>
               <ForecastPanel compact target={{ kind: 'compra', listingId: l.id }} title="Si la comprás: próximos 12 meses" onResult={(f) => setFcs((m) => ({ ...m, [l.id]: f }))} />
             </details>
             <div className="field">
@@ -280,6 +283,7 @@ function Market({ buyerId }: { buyerId: number | null }) {
               label={offer < l.askPrice ? 'Contraofertar' : 'Comprar'}
               className="btn primary"
               help="accion_comprar_empresa"
+              disabled={!(offer > 0)}
               confirmLabel="Confirmar"
               detail={<>Pagarías {fmtMoney(offer)} + {fmtMoney(fee)} de costos legales (3 %). {offer < l.askPrice ? 'El vendedor puede rechazar la contraoferta (una sola vez).' : ''}</>}
               onConfirm={() => {
@@ -306,10 +310,10 @@ export function Business() {
   if (sub.startsWith('co:')) {
     const [, id, tab] = sub.split(':');
     const co = s.companies.find((c) => c.id === Number(id));
-    if (co) return <CompanyView co={co} tab={tab ?? 'summary'} />;
+    if (co) return <CompanyView key={co.id} co={co} tab={tab ?? 'summary'} />;
     return (
       <>
-        <Empty icon="📦">Esa empresa ya no forma parte de tu cartera.</Empty>
+        <Empty icon="package">Esa empresa ya no forma parte de tu cartera.</Empty>
         <button className="btn" onClick={() => navStore.setSub('business', 'portfolio')}>Ver mis empresas</button>
       </>
     );
@@ -364,7 +368,7 @@ function NewHolding() {
       </div>
       <div className="card">
         <CardHead title="Capital inicial" term="capital_aportado" />
-        <AmountInput id="h-cap" value={capital} onChange={setCapital} max={s.ledger.balances.checking} />
+        <AmountInput id="h-cap" value={capital} onChange={setCapital} max={spendable(s)} />
         <p className="tiny muted">Incluye los trámites de constitución ({fmtMoney(usd(lf.setupCost * s.macro.priceIndex), { decimals: false })}). El resto queda como caja de la holding para fundar o comprar subsidiarias.</p>
         <ConfirmButton label="Crear holding" help="accion_fundar_holding" className="btn primary block" detail={<>Se transferirán {fmtMoney(capital)} de tu cuenta corriente.</>}
           onConfirm={() => {

@@ -44,12 +44,6 @@ export function markPrice(state: GameState, cls: InvestClass, id: string): numbe
   }
 }
 
-export function marketValue(state: GameState, cls: InvestClass, id: string): Cents {
-  const h = holdingsOf(state, cls)[id];
-  if (!h) return 0;
-  return roundCents(h.qty * markPrice(state, cls, id));
-}
-
 function recordTrade(state: GameState, t: Omit<Trade, 'id' | 'day'>): void {
   state.stocks.trades.push({ id: state.meta.nextId++, day: state.day, ...t });
   if (state.stocks.trades.length > 500) state.stocks.trades.splice(0, state.stocks.trades.length - 500);
@@ -197,11 +191,6 @@ export function investmentsValue(state: GameState): Cents {
   let v = 0;
   for (const cls of INVEST_CLASSES) for (const p of positions(state, cls)) v += p.value;
   return v;
-}
-
-/** Ganancia realizada total del año en curso (bruta, antes de comisiones). */
-export function realizedThisYear(state: GameState): Cents {
-  return (state.tax.ytd.gainsShort ?? 0) + (state.tax.ytd.gainsLong ?? 0);
 }
 
 /** Comisión estándar del corredor: 0,2 % con mínimo de $1 (ajustado por inflación). */

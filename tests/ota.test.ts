@@ -1,5 +1,25 @@
 import { vi } from 'vitest';
-import { createHash } from 'node:crypto';
+import { createHash, sign } from 'node:crypto';
+
+// Par de claves de PRUEBA (la app real verifica con la clave pública de ota-keys.json).
+const testKeys = await vi.hoisted(async () => {
+  const { generateKeyPairSync } = await import('node:crypto');
+  const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const other = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  return {
+    privateKey: pair.privateKey,
+    otherPrivate: other.privateKey,
+    spki: pair.publicKey.export({ type: 'spki', format: 'der' }).toString('base64'),
+  };
+});
+vi.mock('../src/persistence/ota-keys.json', () => ({ default: { keys: { 'test-key': testKeys.spki } } }));
+
+function signManifest(man: object, opts: { key?: typeof testKeys.privateKey; keyId?: string; tamper?: boolean } = {}) {
+  const payload = Buffer.from(JSON.stringify(man), 'utf8');
+  const signature = sign('sha256', payload, { key: opts.key ?? testKeys.privateKey, dsaEncoding: 'ieee-p1363' });
+  const sent = opts.tamper ? Buffer.from(JSON.stringify({ ...man, build: 123456 }), 'utf8') : payload;
+  return { format: 'urt-ota-signed', keyId: opts.keyId ?? 'test-key', payload: sent.toString('base64'), signature: signature.toString('base64') };
+}
 
 /**
  * Flujo de actualización por internet con los plugins nativos simulados en memoria
@@ -13,6 +33,9 @@ const mem = {
   basePath: '',
   persisted: '',
   assetReset: 0,
+  /** Carpetas dentro de ota/ que devuelve readdir, y su demora (para probar carreras). */
+  dirs: [] as string[],
+  readdirDelayMs: 0,
 };
 
 vi.mock('@capacitor/core', () => ({
@@ -38,7 +61,10 @@ vi.mock('@capacitor/filesystem', () => ({
     rmdir: async ({ path }: { path: string }) => { for (const k of [...mem.files.keys()]) if (k.startsWith(path)) mem.files.delete(k); },
     writeFile: async ({ path, data }: { path: string; data: string }) => { mem.files.set(path, data); return { uri: `file:///data/app/files/${path}` }; },
     readFile: async ({ path }: { path: string }) => ({ data: mem.files.get(path) ?? '' }),
-    readdir: async () => ({ files: [] }),
+    readdir: async () => {
+      if (mem.readdirDelayMs) await new Promise((r) => setTimeout(r, mem.readdirDelayMs));
+      return { files: mem.dirs.map((name) => ({ name })) };
+    },
     getUri: async ({ path }: { path: string }) => ({ uri: `file:///data/app/files/${path}` }),
   },
 }));
@@ -48,10 +74,10 @@ const HTML = '<!doctype html><html><body><div id="root"></div><script>/* juego *
 const sha = createHash('sha256').update(HTML).digest('hex');
 const manifest = { format: 'urt-ota', version: '9.9.9', build: 99999, minNativeCode: 5, file: 'web-99999.html', sha256: sha, size: Buffer.byteLength(HTML), date: '2026-09-28', notes: ['Novedad de prueba'] };
 
-function mockFetch(body: string, man = manifest) {
+function mockFetch(body: string, man: object = manifest, envelope: object = signManifest(man)) {
   globalThis.fetch = vi.fn(async (url: string | URL) => {
     const u = String(url);
-    if (u.includes('manifest.json')) return new Response(JSON.stringify(man), { status: 200 });
+    if (u.includes('manifest.json')) return new Response(JSON.stringify(envelope), { status: 200 });
     return new Response(body, { status: 200, headers: { 'content-length': String(Buffer.byteLength(body)) } });
   }) as unknown as typeof fetch;
 }
@@ -64,6 +90,8 @@ beforeEach(() => {
   mem.basePath = '';
   mem.persisted = '';
   mem.assetReset = 0;
+  mem.dirs = [];
+  mem.readdirDelayMs = 0;
   vi.resetModules();
 });
 
@@ -96,6 +124,19 @@ describe('Actualizaciones por internet (flujo con plugins simulados)', () => {
     expect(saved).toBe(false);
     expect(mem.basePath).toBe('');
     expect(mem.prefs.get('urt.ota') ?? '').not.toContain('pending');
+  });
+
+  it('instalar espera a la limpieza de versiones viejas: nunca borra la carpeta que se está creando', async () => {
+    mockFetch(HTML);
+    // Quedó una carpeta a medias de un intento anterior de la misma versión, y la limpieza es lenta.
+    mem.dirs = ['99999'];
+    mem.readdirDelayMs = 40;
+    const ota = await import('../src/persistence/ota');
+    await ota.otaBoot();
+    const err = await ota.applyUpdate(manifest as never, async () => true);
+    expect(err).toBeNull();
+    await new Promise((r) => setTimeout(r, 80));
+    expect(mem.files.get('ota/99999/index.html')).toBe(HTML);
   });
 
   it('si no se pudo guardar la partida antes, no cambia de versión', async () => {
@@ -168,5 +209,78 @@ describe('Actualizaciones por internet (flujo con plugins simulados)', () => {
     const ota = await import('../src/persistence/ota');
     await ota.otaBoot();
     expect((await ota.checkForUpdate(false)).kind).toBe('needs-apk');
+  });
+
+  it('un manifiesto sin firma, alterado o firmado con otra clave no se ofrece', async () => {
+    const ota = await import('../src/persistence/ota');
+    await ota.otaBoot();
+    for (const env of [manifest, signManifest(manifest, { tamper: true }), signManifest(manifest, { key: testKeys.otherPrivate }), signManifest(manifest, { keyId: 'otra' })]) {
+      mockFetch(HTML, manifest, env);
+      const c = await ota.checkForUpdate(true);
+      expect(c.kind).toBe('error');
+    }
+  });
+
+  it('si la red falla, reintenta y termina encontrando la actualización', async () => {
+    const ota = await import('../src/persistence/ota');
+    ota.OTA_NET.retryDelayMs = 1;
+    let calls = 0;
+    const env = signManifest(manifest);
+    globalThis.fetch = vi.fn(async () => {
+      calls++;
+      if (calls < 3) throw new TypeError('Failed to fetch');
+      return new Response(JSON.stringify(env), { status: 200 });
+    }) as unknown as typeof fetch;
+    await ota.otaBoot();
+    expect((await ota.checkForUpdate(false)).kind).toBe('available');
+    expect(calls).toBe(3);
+  });
+
+  it('si el servidor no responde, termina con un error de tiempo y no se cuelga', async () => {
+    const ota = await import('../src/persistence/ota');
+    Object.assign(ota.OTA_NET, { manifestTimeoutMs: 20, retries: 1, retryDelayMs: 1 });
+    globalThis.fetch = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    })) as unknown as typeof fetch;
+    await ota.otaBoot();
+    const c = await ota.checkForUpdate(true);
+    expect(c.kind).toBe('error');
+    if (c.kind === 'error') expect(c.message).toMatch(/tardó demasiado/);
+  });
+
+  it('si la app se cierra durante la confirmación, la versión sana se retoma y no queda como fallida', async () => {
+    const { WEB_BUILD } = await import('../src/version');
+    // 1) Arranca la versión nueva y llega a funcionar.
+    mem.basePath = '/data/app/files/ota/99999';
+    mem.prefs.set('urt.ota', JSON.stringify({ failed: [], pending: { build: WEB_BUILD, version: 'nueva', path: mem.basePath, prevPath: '', fromVersion: '1.2.0', at: 1, notes: [] } }));
+    let ota = await import('../src/persistence/ota');
+    await ota.otaBoot();
+    ota.markHealthy();
+    await new Promise((r) => setTimeout(r, 20));
+    const afterHealthy = JSON.parse(mem.prefs.get('urt.ota')!);
+    expect(afterHealthy.pending.healthyAt).toBeGreaterThan(0);
+    expect(afterHealthy.pending.starts).toBe(1);
+    // 2) Se cierra antes de los 6 s: al reabrir arranca la versión ANTERIOR (otro número).
+    const pending = { ...afterHealthy.pending, build: 99999 };
+    mem.prefs.set('urt.ota', JSON.stringify({ ...afterHealthy, pending }));
+    mem.basePath = '';
+    vi.resetModules();
+    ota = await import('../src/persistence/ota');
+    await ota.otaBoot();
+    const prefs = JSON.parse(mem.prefs.get('urt.ota')!);
+    expect(prefs.failed).not.toContain(99999);
+    expect(prefs.pending.build).toBe(99999);
+    expect(mem.basePath).toBe('/data/app/files/ota/99999');
+  });
+
+  it('decisiones de arranque: nunca funcionó → fallida; muchos arranques sin confirmar → se revierte', async () => {
+    const { decideBoot } = await import('../src/persistence/ota');
+    const base = { build: 5, version: 'n', path: '/p', prevPath: '', fromVersion: 'v', at: 1, notes: [] };
+    expect(decideBoot(undefined, 5).kind).toBe('none');
+    expect(decideBoot(base, 5).kind).toBe('watch');
+    expect(decideBoot({ ...base, starts: 3 }, 5)).toMatchObject({ kind: 'failed', rollback: true });
+    expect(decideBoot(base, 4)).toMatchObject({ kind: 'failed', rollback: false });
+    expect(decideBoot({ ...base, healthyAt: 10, starts: 1 }, 4)).toEqual({ kind: 'resume', path: '/p' });
+    expect(decideBoot({ ...base, healthyAt: 10, starts: 3 }, 4).kind).toBe('failed');
   });
 });

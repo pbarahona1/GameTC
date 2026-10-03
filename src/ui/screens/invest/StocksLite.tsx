@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
+import type { GameState } from '../../../engine/state';
 import { navStore } from '../../nav';
 import { Money, InfoButton, CardHead, Pill, Seg, LineChart, NumInput, Act, Learn } from '../../components/common';
 import { Sparkline } from '../../components/charts';
@@ -8,6 +9,7 @@ import { SECTOR_NAMES } from '../../../content/stocks';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { Stock } from '../../../engine/invest/types';
+import { Icon } from '../../icons';
 
 export function riskLabel(st: Stock): { label: string; tone: 'gain' | 'warn' | 'loss' } {
   const r = st.beta * 0.5 + st.vol * 3 + (st.status !== 'activa' ? 5 : 0);
@@ -21,6 +23,15 @@ export function DayChange({ st }: { st: Stock }) {
   return <span className={`num small ${ch > 0 ? 'gain' : ch < 0 ? 'loss' : ''}`}>{ch > 0 ? '▲' : ch < 0 ? '▼' : ''} {fmtPct(Math.abs(ch), 2)}</span>;
 }
 
+/** Serie de precios de cierre para el gráfico: 3 meses, 1 año o todo (semanal + diario). */
+function priceSeries(s: GameState, id: string, range: '3m' | '1a' | 'max'): number[] {
+  const st = stockById(s, id)!;
+  const daily = st.history.map((c) => c.c);
+  if (range === '3m') return daily.slice(-63);
+  if (range === '1a') return daily.slice(-252);
+  return [...st.weekly.map((c) => c.c), ...daily];
+}
+
 function StockDetail({ st }: { st: Stock }) {
   const s = useGame();
   useUI();
@@ -30,12 +41,7 @@ function StockDetail({ st }: { st: Stock }) {
   const h = s.stocks.holdings[st.id];
   const buyQ = quoteMarket(s, st, 'compra', Math.max(1, qty));
   const sellQ = quoteMarket(s, st, 'venta', Math.max(1, qty));
-  const series = useMemo(() => {
-    const daily = st.history.map((c) => c.c);
-    if (range === '3m') return daily.slice(-63);
-    if (range === '1a') return daily.slice(-252);
-    return [...st.weekly.map((c) => c.c), ...daily];
-  }, [st, range, s.day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const series = useDerived(priceSeries, st.id, range);
   const risk = riskLabel(st);
   const ret = returnOver(st, range === '3m' ? 62 : range === '1a' ? 251 : st.history.length - 1);
   return (
@@ -79,7 +85,7 @@ function StockDetail({ st }: { st: Stock }) {
       {h && <p className="small">Tenés <strong>{h.qty}</strong> acciones · costo {fmtMoney(h.cost)} · valor {fmtMoney(Math.round(h.qty * st.price))} (<Money c={Math.round(h.qty * st.price) - h.cost} colored sign />)</p>}
       <div className="field">
         <label htmlFor="lite-qty">Cantidad de acciones</label>
-        <NumInput id="lite-qty" value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} />
+        <NumInput id="lite-qty" live value={qty} onChange={setQty} min={1} />
         <span className="tiny muted">Compra ≈ {fmtMoney(buyQ.total)} (incluye comisión {fmtMoney(buyQ.fee)}) · Venta ≈ {fmtMoney(sellQ.total)} neto{!isTradingDay(s.day) ? ' · Mercado cerrado: se ejecuta en la próxima apertura.' : ''}</span>
       </div>
       <div className="btn-row">
@@ -109,14 +115,14 @@ export function StocksLite({ selected }: { selected: string | null }) {
         <div className="kv">
           <dt>Índice <InfoButton term="indice_bursatil" /></dt><dd>{s.stocks.index.level.toFixed(1)}</dd>
           <dt>Mercado</dt><dd>{isTradingDay(s.day) ? 'Abierto (día hábil)' : 'Cerrado (fin de semana)'}</dd>
-          <dt>Comisión <InfoButton term="comision_corretaje" /></dt><dd>0,2 % (mín. $1)</dd>
+          <dt>Comisión <InfoButton term="comision_corretaje" /></dt><dd>0.2 % (mín. $1)</dd>
         </div>
       </div>
-      {st && <StockDetail st={st} />}
+      {st && <StockDetail key={st.id} st={st} />}
       <input className="input" placeholder="Buscar por nombre o código" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar acción" />
       <div className="chips">
         {['todos', 'mias', ...Object.keys(SECTOR_NAMES)].map((k) => (
-          <button key={k} onClick={() => setSector(k)} style={sector === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{k === 'todos' ? 'Todas' : k === 'mias' ? `⭐ Las mías (${Object.keys(s.stocks.holdings).length})` : SECTOR_NAMES[k as keyof typeof SECTOR_NAMES]}</button>
+          <button key={k} onClick={() => setSector(k)} style={sector === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{k === 'todos' ? 'Todas' : k === 'mias' ? `Las mías (${Object.keys(s.stocks.holdings).length})` : SECTOR_NAMES[k as keyof typeof SECTOR_NAMES]}</button>
         ))}
       </div>
       <div className="card" style={{ paddingBlock: 4 }}>
@@ -124,7 +130,7 @@ export function StocksLite({ selected }: { selected: string | null }) {
           {list.map((x) => (
             <button key={x.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { navStore.setSub('invest', `lite:${x.id}`); window.scrollTo({ top: 0 }); }}>
               <div className="grow">
-                <div className="title small">{mine(x.id) && '⭐ '}{x.id} <span className="faint">· {x.name}</span></div>
+                <div className="title small">{mine(x.id) && <><Icon name="star" size={13} label="Tenés esta acción" />{' '}</>}{x.id} <span className="faint">· {x.name}</span></div>
                 <div className="meta">{SECTOR_NAMES[x.sector]}{s.stocks.holdings[x.id] ? ` · tenés ${s.stocks.holdings[x.id].qty}` : ''}{x.status !== 'activa' ? ' · en quiebra' : ''}</div>
               </div>
               <Sparkline values={x.history.slice(-40).map((c) => c.c)} />

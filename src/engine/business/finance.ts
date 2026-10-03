@@ -1,6 +1,6 @@
 import type { GameState } from '../state';
 import type { Company, CoLoan } from './types';
-import { coLog, coPay, isOpen, px, sectorOf } from './common';
+import { coLog, coPay, isOpen, px } from './common';
 import { coPost } from './companyLedger';
 import { coIncomeStatement, coMetrics, coBalanceSheet } from './reports';
 import { amortizedPayment, amortizationSchedule } from '../finance/loans';
@@ -73,7 +73,7 @@ export function quoteCoLoan(state: GameState, co: Company, bank: BizBank, amount
   if (term > bank.maxTerm) reasons.push(`Plazo máximo: ${bank.maxTerm} meses.`);
   if (amount < px(state, 1000)) reasons.push('Monto mínimo: $1,000.');
   if (amount > maxAmount) reasons.push(`Monto máximo según ${bank.requiresGuarantee ? 'garantías' : 'ganancias (3 × EBITDA anual)'}: ${fmtMoney(maxAmount)}.`);
-  if (!bank.requiresGuarantee && (dscr === null || dscr < 1.25)) reasons.push('La empresa no genera suficiente EBITDA para cubrir 1,25 veces las cuotas.');
+  if (!bank.requiresGuarantee && (dscr === null || dscr < 1.25)) reasons.push('La empresa no genera suficiente EBITDA para cubrir 1.25 veces las cuotas.');
   if (bank.requiresGuarantee && state.credit.score < 640) reasons.push(`Tu puntaje personal (${state.credit.score}) está por debajo de 640, requerido para garantizar.`);
   const sched = amortizationSchedule(amount, apr, term);
   return {
@@ -85,6 +85,7 @@ export function quoteCoLoan(state: GameState, co: Company, bank: BizBank, amount
 export function takeCoLoan(state: GameState, co: Company, bankId: string, amount: Cents, term: number): ActionResult {
   const bank = BIZ_BANKS.find((b) => b.id === bankId);
   if (!bank) return FAIL('Banco inexistente.');
+  if (!Number.isSafeInteger(amount) || amount <= 0) return FAIL('Ingresá un monto mayor a cero.');
   const q = quoteCoLoan(state, co, bank, amount, term);
   if (bank.requiresGuarantee) recordInquiry(state);
   if (!q.approved) return FAIL('Rechazado: ' + q.reasons.join(' '));
@@ -258,14 +259,6 @@ export function payCoArrearsNow(state: GameState, co: Company): ActionResult {
   const paid = settleArrears(state, co);
   if (paid <= 0) return FAIL('La empresa no tiene caja. Aportá capital o pedí un préstamo.');
   return OK(`Se pagaron ${fmtMoney(paid)} de deudas vencidas.`);
-}
-
-export function clampShare(x: number): number {
-  return clamp(x, 0, 1);
-}
-
-export function sectorName(co: Company): string {
-  return sectorOf(co).name;
 }
 
 export { coPay };

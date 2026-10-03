@@ -5,7 +5,7 @@ import { post } from '../ledger/ledger';
 import { Cents, clamp, roundCents, usd } from '../money';
 import type { Application, GameState } from '../state';
 import { nextId } from '../state';
-import { addMonths, dateOf, dayOf, daysInMonth, endOfMonth } from '../time/calendar';
+import { addMonths, dateOf, dayOf, daysInMonth } from '../time/calendar';
 import { addLog } from '../log';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtMoney, fmtPct } from '../format';
@@ -27,10 +27,6 @@ export function jobSalary(state: GameState, job: JobDef): Cents {
 /** Ingreso bruto mensual fijo (base conservadora que usan los bancos). */
 export function monthlyGrossIncome(state: GameState): Cents {
   return state.career.job ? state.career.job.salary : 0;
-}
-
-export function currentJob(state: GameState): JobDef | null {
-  return state.career.job ? JOB_BY_ID[state.career.job.jobId] : null;
 }
 
 export interface RequirementCheck {
@@ -83,6 +79,7 @@ export function applicationChance(state: GameState, job: JobDef): number {
 export function apply(state: GameState, jobId: string): ActionResult {
   const job = JOB_BY_ID[jobId];
   if (!job) return FAIL('Empleo inexistente.');
+  if (state.legal?.prison) return FAIL('Desde prisión no podés postularte a empleos.');
   if (state.career.job?.jobId === jobId) return FAIL('Ya trabajás en ese puesto.');
   const apps = state.career.applications;
   if (apps.some((a) => a.jobId === jobId && (a.status === 'pending' || a.status === 'offer'))) return FAIL('Ya tenés una postulación activa para este puesto.');
@@ -116,7 +113,7 @@ export function processApplications(state: GameState): void {
         a.status = 'offer';
         a.offerSalary = roundCents(jobSalary(state, job) * (1 + randRange(state, -0.03, 0.05)) / 1000) * 1000;
         a.offerExpiresDay = state.day + OFFER_VALID_DAYS;
-        addLog(state, 'success', '📩', `¡Oferta de ${job.employer} para ${job.title}! ${fmtMoney(a.offerSalary)} brutos al mes. Tenés ${OFFER_VALID_DAYS} días para responder.`);
+        addLog(state, 'success', '📩', `¡Oferta de ${job.employer} para ${job.title}! ${fmtMoney(a.offerSalary)} brutos al mes. Tenés ${OFFER_VALID_DAYS} días para responder.`, undefined, 'ofertas');
       } else {
         a.status = 'rejected';
         a.message = REJECTIONS[randInt(state, 0, REJECTIONS.length - 1)];
@@ -177,6 +174,7 @@ function endEmployment(state: GameState, reason: 'renuncia' | 'ascenso' | 'despi
 export function acceptOffer(state: GameState, appId: number): ActionResult {
   const a = state.career.applications.find((x) => x.id === appId);
   if (!a || a.status !== 'offer' || a.offerSalary === undefined) return FAIL('Oferta no disponible.');
+  if (state.legal?.prison) return FAIL('Desde prisión no podés aceptar un empleo.');
   const job = JOB_BY_ID[a.jobId];
   if (state.career.job) endEmployment(state, 'cambio');
   a.status = 'accepted';
@@ -258,7 +256,7 @@ function postPayroll(state: GameState, base: Cents, variable: Cents, memo: strin
   y.withheld += withheld;
   addLog(state, 'income', '💵', `${memo}: bruto ${fmtMoney(gross)}, neto ${fmtMoney(net)}.`, net);
   const g = garnish(state, net);
-  if (g > 0) addLog(state, 'danger', '⚖️', 'Embargo salarial aplicado a un préstamo en impago.', g);
+  if (g > 0) addLog(state, 'danger', '⚖️', 'Embargo salarial aplicado a un préstamo en impago.', g, 'peligro');
   return net;
 }
 
@@ -319,7 +317,7 @@ export function monthEndCareer(state: GameState): void {
   state.career.careerPoints += Math.round(job.level * 10 * (e.performance / 50) * frac);
   // Bajo desempeño sostenido
   e.lowPerfMonths = e.performance < 30 ? e.lowPerfMonths + 1 : 0;
-  if (e.lowPerfMonths === 2) addLog(state, 'warning', '📉', `Tu jefe te advirtió por bajo desempeño (${e.performance}/100). Un mes más así y podrías perder el empleo.`);
+  if (e.lowPerfMonths === 2) addLog(state, 'warning', '📉', `Tu jefe te advirtió por bajo desempeño (${e.performance}/100). Un mes más así y podrías perder el empleo.`, undefined, 'peligro');
   if (e.lowPerfMonths >= 3) {
     dismiss(state);
     return;
@@ -336,7 +334,7 @@ function layoff(state: GameState): void {
   postPayroll(state, 0, severance, 'Indemnización por recorte de personal', true);
   endEmployment(state, 'despido');
   state.player.attributes.stress = Math.min(100, state.player.attributes.stress + 10);
-  addLog(state, 'danger', '📉', `${job.employer} hizo un recorte de personal por la situación económica y tu puesto de ${job.title} fue eliminado. Recibiste ${fmtMoney(severance)} de indemnización.`);
+  addLog(state, 'danger', '📉', `${job.employer} hizo un recorte de personal por la situación económica y tu puesto de ${job.title} fue eliminado. Recibiste ${fmtMoney(severance)} de indemnización.`, undefined, 'peligro');
 }
 
 function dismiss(state: GameState): void {
@@ -383,7 +381,7 @@ export function processReview(state: GameState): void {
       e.nextReviewDay = addMonths(state.day, 12);
       state.career.promotions++;
       state.player.attributes.reputation = Math.min(100, state.player.attributes.reputation + 3);
-      addLog(state, 'success', '🚀', `¡Ascenso! Ahora sos ${next.title}. Nuevo salario: ${fmtMoney(newSalary)}.`);
+      addLog(state, 'success', '🚀', `¡Ascenso! Ahora sos ${next.title}. Nuevo salario: ${fmtMoney(newSalary)}.`, undefined, 'logros');
       return;
     }
     addLog(state, 'info', '🪜', `Tu desempeño alcanza para ascender a ${next.title}, pero te faltan requisitos: ${reqs.items.filter((i) => !i.met).map((i) => i.label).join('; ')}.`);
@@ -396,6 +394,3 @@ export function processReview(state: GameState): void {
   addLog(state, raise > 0 ? 'success' : 'warning', '📋', `Evaluación anual: desempeño ${perf}/100. Aumento del ${fmtPct(raise)} (inflación del año: ${fmtPct(state.macro.inflation)}).`);
 }
 
-export function nextPayDay(state: GameState): number {
-  return endOfMonth(state.day);
-}

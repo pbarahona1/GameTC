@@ -2,7 +2,6 @@ import type { GameState } from '../state';
 import type { NewsItem, NewsKind, NewsTopic } from './types';
 import type { SkillId } from '../../content/skills';
 import { chance, nextRandom, randNormal, randRange, RngHolder, seedFromString } from '../rng';
-import { addLog } from '../log';
 import { practice } from '../skills/skills';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtPct } from '../format';
@@ -130,6 +129,14 @@ export function estimateError(skill: number): number {
 }
 
 /**
+ * Azar del análisis del jugador, separado del mundo y determinista: la misma
+ * noticia analizada con el mismo nivel da siempre el mismo resultado.
+ */
+export function analysisRng(state: GameState, n: NewsItem, skill: number): RngHolder {
+  return { rng: seedFromString(`${state.seed}|analisis|${n.id}|${skill}`) };
+}
+
+/**
  * Analizar una noticia: estimás su confiabilidad (con error según tu habilidad) y
  * quizá encontrás una pista. Solo se puede repetir si tu habilidad subió 10 niveles.
  */
@@ -140,7 +147,9 @@ export function analyzeNews(state: GameState, id: number): ActionResult {
   if (n.status !== 'abierta') return FAIL('Esta noticia ya se resolvió.');
   const skill = newsSkillLevel(state, n);
   if (n.analysis && skill < n.analysis.skill + 10) return FAIL(`Ya la analizaste. Podrás reanalizarla cuando tu habilidad llegue a ${n.analysis.skill + 10}.`);
-  const g = wrng(state);
+  // Generador propio de ESTE análisis (semilla + noticia + nivel): analizar no consume el
+  // azar del mundo, así que mirar una noticia no cambia lo que va a pasar después.
+  const g = analysisRng(state, n, skill);
   const est = Math.min(0.97, Math.max(0.03, n.reliability + randNormal(g) * estimateError(skill)));
   let clue: 'respalda' | 'contradice' | null = null;
   if (nextRandom(g) < 0.25 + skill / 250) {
@@ -153,8 +162,3 @@ export function analyzeNews(state: GameState, id: number): ActionResult {
   return OK(`Estimás que es cierta con ~${fmtPct(n.analysis.estimate, 0)} de probabilidad.${clueText}${xp ? ` (+${xp} XP)` : ''}`);
 }
 
-/** Aviso en el registro para noticias que afectan algo tuyo. */
-export function logNews(state: GameState, n: NewsItem | null, text: string): void {
-  if (!n || state.meta.projection) return;
-  addLog(state, 'info', '📰', text);
-}

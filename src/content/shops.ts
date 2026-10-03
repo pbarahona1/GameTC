@@ -149,10 +149,10 @@ export const ITEMS: ItemDef[] = [
   { id: 'celular_alta', storeId: 'techpro', name: 'Celular de alta gama', category: 'tecnologia', price: 1150, style: 0, durable: true, depreciation: 0.3, resale: 0.55, effects: { network: 0.25 }, description: 'Más contactos, más oportunidades: tu red crece cada mes.' },
   { id: 'notebook_pro', storeId: 'techpro', name: 'Notebook profesional', category: 'tecnologia', price: 2400, style: 0, durable: true, depreciation: 0.25, resale: 0.55, effects: { study: 0.18 }, description: 'Cursos y carreras 18 % más rápidos.' },
   // ---------------------------------------------------------------- Hogar
-  { id: 'colchon', storeId: 'hogarmas', name: 'Colchón ortopédico', category: 'hogar', price: 700, style: 0, durable: true, depreciation: 0.12, resale: 0.25, effects: { health: 0.5, stress: -0.2 }, description: 'Dormís mejor: salud +0,5 por mes.' },
-  { id: 'sillon', storeId: 'hogarmas', name: 'Sillón reclinable', category: 'hogar', price: 850, style: 0, durable: true, depreciation: 0.12, resale: 0.3, effects: { stress: -0.5 }, description: 'Descanso real al volver a casa: estrés −0,5 por mes.' },
+  { id: 'colchon', storeId: 'hogarmas', name: 'Colchón ortopédico', category: 'hogar', price: 700, style: 0, durable: true, depreciation: 0.12, resale: 0.25, effects: { health: 0.5, stress: -0.2 }, description: 'Dormís mejor: salud +0.5 por mes.' },
+  { id: 'sillon', storeId: 'hogarmas', name: 'Sillón reclinable', category: 'hogar', price: 850, style: 0, durable: true, depreciation: 0.12, resale: 0.3, effects: { stress: -0.5 }, description: 'Descanso real al volver a casa: estrés −0.5 por mes.' },
   { id: 'cocina', storeId: 'hogarmas', name: 'Cocina equipada', category: 'hogar', price: 2400, style: 0, durable: true, depreciation: 0.1, resale: 0.35, effects: { food: 0.12 }, description: 'Cocinás en casa: gastás 12 % menos en comida.' },
-  { id: 'gimnasio', storeId: 'hogarmas', name: 'Gimnasio en casa', category: 'hogar', price: 1800, style: 0, durable: true, depreciation: 0.12, resale: 0.35, effects: { health: 0.6, stress: -0.5 }, description: 'Entrenar sin salir: salud +0,6 y estrés −0,5 por mes.' },
+  { id: 'gimnasio', storeId: 'hogarmas', name: 'Gimnasio en casa', category: 'hogar', price: 1800, style: 0, durable: true, depreciation: 0.12, resale: 0.35, effects: { health: 0.6, stress: -0.5 }, description: 'Entrenar sin salir: salud +0.6 y estrés −0.5 por mes.' },
   { id: 'escritorio', storeId: 'hogarmas', name: 'Escritorio y silla ergonómica', category: 'hogar', price: 1100, style: 0, durable: true, depreciation: 0.1, resale: 0.35, effects: { study: 0.06, stress: -0.2 }, description: 'Un lugar para concentrarte: estudio 6 % más rápido.' },
 ];
 

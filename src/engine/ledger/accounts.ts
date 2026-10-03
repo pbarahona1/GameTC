@@ -106,11 +106,6 @@ export function accountDef(id: AccountId): AccountDef {
   return { id, ...(ACCOUNTS[id] as Omit<AccountDef, 'id'>) };
 }
 
-export function isDebitNormal(id: AccountId): boolean {
-  const t = ACCOUNTS[id].type;
-  return t === 'asset' || t === 'expense';
-}
-
 export const CASH_ACCOUNTS: AccountId[] = ACCOUNT_IDS.filter((id) => accountDef(id).cashEquivalent);
 export const EXPENSE_ACCOUNTS: AccountId[] = ACCOUNT_IDS.filter((id) => ACCOUNTS[id].type === 'expense');
 export const INCOME_ACCOUNTS: AccountId[] = ACCOUNT_IDS.filter((id) => ACCOUNTS[id].type === 'income');

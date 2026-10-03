@@ -267,7 +267,7 @@ function payDistribution(state: GameState, a: MogulAsset, total: Cents): void {
 }
 
 function liquidateAsset(state: GameState, a: MogulAsset, reason: string): void {
-  let perUnit = 0;
+  let perUnit: number;
   if (a.kind === 'empresa' && a.company) {
     const co = a.company;
     const b = co.ledger.balances;
@@ -282,7 +282,7 @@ function liquidateAsset(state: GameState, a: MogulAsset, reason: string): void {
     revalueInvestments(state, ['mogul']);
     const gross = roundCents(h.qty * perUnit);
     bookSell(state, 'mogul', a.id, h.qty, gross, 0, `Liquidación de ${a.name} (Mogul Exchange)`);
-    addLog(state, 'danger', '🧩', `${a.name} fue liquidado en Mogul Exchange (${reason}). Recuperaste ${fmtMoney(gross)}.`, gross);
+    addLog(state, 'danger', '🧩', `${a.name} fue liquidado en Mogul Exchange (${reason}). Recuperaste ${fmtMoney(gross)}.`, gross, 'inversiones');
   }
 }
 
@@ -298,7 +298,7 @@ export function mogulQuote(state: GameState, a: MogulAsset, units: number, side:
 export function buyMogul(state: GameState, id: string, units: number): ActionResult {
   const a = mogulAsset(state, id);
   if (!a || a.status !== 'activo') return FAIL('Activo no disponible.');
-  if (!(units >= 0.01)) return FAIL('La cantidad mínima es 0,01 participaciones.');
+  if (!(units >= 0.01)) return FAIL('La cantidad mínima es 0.01 participaciones.');
   if (state.legal?.prison) return FAIL('Desde prisión no podés operar.');
   const owned = state.mogul.holdings[id]?.qty ?? 0;
   if (owned + units > a.units * 0.49) return FAIL('Mogul Exchange limita a cada inversor al 49 % de un activo.');

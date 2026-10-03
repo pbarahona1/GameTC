@@ -55,9 +55,9 @@ export const PLAY_STYLES: Array<{ id: PlayStyle; name: string; hint: string }> =
   { id: 'libre', name: 'Libre', hint: 'Sin ruta sugerida. Combiná lo que quieras.' },
   { id: 'ejecutivo', name: 'Ejecutivo', hint: 'Crecer profesionalmente: estudiar, ascender y negociar salarios.' },
   { id: 'inversionista', name: 'Inversionista', hint: 'Ahorrar, invertir y dejar que el interés compuesto trabaje.' },
-  { id: 'emprendedor', name: 'Emprendedor', hint: 'Juntar capital para fundar empresas (Fase 2).' },
-  { id: 'inmobiliario', name: 'Inmobiliario', hint: 'Juntar capital y crédito para comprar propiedades (Fase 3).' },
-  { id: 'industrial', name: 'Industrial', hint: 'Experiencia en industria y logística para cadenas de producción (Fase 2).' },
+  { id: 'emprendedor', name: 'Emprendedor', hint: 'Juntar capital para fundar empresas.' },
+  { id: 'inmobiliario', name: 'Inmobiliario', hint: 'Juntar capital y crédito para comprar propiedades.' },
+  { id: 'industrial', name: 'Industrial', hint: 'Experiencia en industria y logística para cadenas de producción.' },
   { id: 'financiero', name: 'Magnate financiero', hint: 'Dominar crédito, apalancamiento e inversiones.' },
-  { id: 'tecnologico', name: 'Tecnológico', hint: 'Formarte en tecnología para fundar empresas de software (Fase 2).' },
+  { id: 'tecnologico', name: 'Tecnológico', hint: 'Formarte en tecnología para fundar empresas de software.' },
 ];

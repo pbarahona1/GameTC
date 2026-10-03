@@ -2,11 +2,13 @@ import { Fragment, useState } from 'react';
 import { useGame, useUI, store } from '../../store';
 import { InfoButton, CardHead, Pill, NumInput, Act, Learn, LineChart, Money, Seg } from '../../components/common';
 import { buyMogul, sellMogul, mogulQuote, mogulValuation, mogulRisk } from '../../../engine/invest/mogul';
-import { fmtMoney, fmtPct } from '../../../engine/format';
+import { fmtMoney, fmtPct, fmtNumber } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { MogulAsset } from '../../../engine/invest/types';
+import { Icon } from '../../icons';
+import { MOGUL_KIND_ICON } from '../../contentIcons';
 
-const KIND: Record<MogulAsset['kind'], string> = { empresa: '🏭 Empresa', inmueble: '🏢 Edificio', regalias: '🎵 Regalías' };
+const KIND: Record<MogulAsset['kind'], string> = { empresa: 'Empresa', inmueble: 'Edificio', regalias: 'Regalías' };
 
 function Detail({ a, onClose }: { a: MogulAsset; onClose: () => void }) {
   const s = useGame();
@@ -23,7 +25,7 @@ function Detail({ a, onClose }: { a: MogulAsset; onClose: () => void }) {
       <div className="card-head">
         <div style={{ flex: 1 }}>
           <h2>{a.name}</h2>
-          <div className="tiny muted">{KIND[a.kind]} · {a.units.toLocaleString('es')} participaciones</div>
+          <div className="tiny muted">{KIND[a.kind]} · {fmtNumber(a.units)} participaciones</div>
         </div>
         <button className="btn sm ghost" onClick={onClose}>Cerrar</button>
       </div>
@@ -51,8 +53,8 @@ function Detail({ a, onClose }: { a: MogulAsset; onClose: () => void }) {
       {a.status === 'activo' ? (
         <>
           <div className="field">
-            <label htmlFor="mog-u">Participaciones (acepta fracciones, mín. 0,01)</label>
-            <NumInput id="mog-u" value={units} onChange={setUnits} step={0.01} />
+            <label htmlFor="mog-u">Participaciones (acepta fracciones, mín. 0.01)</label>
+            <NumInput id="mog-u" live value={units} onChange={setUnits} step={0.01} />
             <span className="tiny muted">Compra ≈ {fmtMoney(bq.total)} · Venta ≈ {fmtMoney(sq.total)} neto · Podés comprar hasta {maxUnits.toFixed(2)} más (tope 49 %).</span>
           </div>
           <div className="btn-row">
@@ -80,7 +82,7 @@ export function MogulScreen() {
         <p className="small">Comprá fracciones de activos reales: pequeñas empresas, edificios alquilados y derechos de regalías. Cobrás tu parte de los repartos mensuales y el valor se recalcula cada mes con los datos del activo. Es menos líquido que la bolsa: el diferencial compra/venta es mayor.</p>
         <div className="kv"><dt>Repartos cobrados (histórico)</dt><dd>{fmtMoney(s.mogul.distributionsReceived)}</dd></div>
       </div>
-      {a && <Detail a={a} onClose={() => setSel(null)} />}
+      {a && <Detail key={a.id} a={a} onClose={() => setSel(null)} />}
       <Seg items={[{ id: 'todos', label: 'Todos' }, { id: 'empresa', label: 'Empresas' }, { id: 'inmueble', label: 'Edificios' }, { id: 'regalias', label: 'Regalías' }]} value={kind} onChange={setKind} />
       <div className="card" style={{ paddingBlock: 4 }}>
         <div className="rows">
@@ -90,7 +92,7 @@ export function MogulScreen() {
             return (
               <button key={x.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { setSel(x.id); window.scrollTo({ top: 0 }); }}>
                 <div className="grow">
-                  <div className="title small">{x.name}</div>
+                  <div className="title small"><Icon name={MOGUL_KIND_ICON[x.kind]} size={15} /> {x.name}</div>
                   <div className="meta">{KIND[x.kind]} · riesgo {x.risk}/5{s.mogul.holdings[x.id] ? ` · tenés ${s.mogul.holdings[x.id].qty.toFixed(2)}` : ''}{x.status !== 'activo' ? ' · liquidado' : ''}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>

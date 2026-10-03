@@ -4,6 +4,7 @@ import { InfoButton, CardHead, Pill, NumInput, Act, Learn, LineChart, AmountInpu
 import { buyFund, sellFund, fundReturn } from '../../../engine/invest/funds';
 import { FUND_DEFS } from '../../../content/funds';
 import { fmtMoney, fmtPct } from '../../../engine/format';
+import { spendable } from '../../../engine/finance/payments';
 import { usd } from '../../../engine/money';
 
 function FundCard({ id }: { id: string }) {
@@ -46,13 +47,13 @@ function FundCard({ id }: { id: string }) {
           <p className="small"><strong>Riesgos:</strong> {d.risks}</p>
           <div className="field">
             <label htmlFor={`fund-amt-${id}`}>Monto a invertir</label>
-            <AmountInput id={`fund-amt-${id}`} value={amount} onChange={setAmount} max={s.ledger.balances.checking} />
+            <AmountInput id={`fund-amt-${id}`} value={amount} onChange={setAmount} max={spendable(s)} />
           </div>
           <Act label="Invertir" help="accion_invertir_fondo" className="btn primary" onClick={() => store.run((x) => buyFund(x, id, amount))} />
           {h && (
             <div className="field">
               <label htmlFor={`fund-u-${id}`}>Participaciones a rescatar (tenés {h.qty.toFixed(2)})</label>
-              <NumInput id={`fund-u-${id}`} value={units} onChange={setUnits} step={0.01} />
+              <NumInput id={`fund-u-${id}`} live value={units} onChange={setUnits} step={0.01} />
               <div className="btn-row">
                 <button className="btn sm ghost" onClick={() => setUnits(Math.floor(h.qty * 100) / 100)}>Todo</button>
                 <Act label={`Rescatar ≈ ${fmtMoney(Math.round(Math.min(units, h.qty) * f.nav))}`} help="accion_rescatar_fondo" className="btn" disabled={!(units > 0)} onClick={() => store.run((x) => sellFund(x, id, units >= h.qty - 0.005 ? h.qty : units))} />

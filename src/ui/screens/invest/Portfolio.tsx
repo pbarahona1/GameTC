@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
 import { navStore } from '../../nav';
 import { Money, Stat, InfoButton, CardHead, Learn, Pill, NumInput, AmountInput, Act } from '../../components/common';
 import { Donut, CHART_COLORS, Sparkline } from '../../components/charts';
@@ -11,16 +11,16 @@ import { buyFund, sellFund } from '../../../engine/invest/funds';
 import { buyMogul, sellMogul, mogulQuote } from '../../../engine/invest/mogul';
 import { depositMandate, withdrawMandate, mandateById, mandateValue } from '../../../engine/invest/managed';
 import { propertyReport } from '../../../engine/realestate/realestate';
-import { PROPERTY_TYPE_ICONS } from '../../../content/realestate';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import { usd } from '../../../engine/money';
 import { FUND_BY_ID } from '../../../content/funds';
 import { annualVol, beta, maxDrawdown, valueAtRisk, herfindahl } from '../../../engine/invest/indicators';
 import type { GameState } from '../../../engine/state';
+import { Icon } from '../../icons';
+import { INVEST_CLASS_ICON, PROPERTY_ICON } from '../../contentIcons';
 
 const CLASS_NAMES: Record<InvestClass, string> = { stocks: 'Acciones', bonds: 'Bonos', funds: 'Fondos', mogul: 'Mogul Exchange', managed: 'Cuenta con gestor' };
-const CLASS_ICONS: Record<InvestClass, string> = { stocks: '📈', bonds: '🏛️', funds: '🧺', mogul: '🧩', managed: '🧑‍💼' };
 const CLASS_TAB: Record<InvestClass, string> = { stocks: 'lite', bonds: 'bonds', funds: 'funds', mogul: 'mogul', managed: 'gestor' };
 
 function assetName(s: GameState, cls: InvestClass, id: string): string {
@@ -75,7 +75,7 @@ function QuickTrade({ p }: { p: PositionSummary }) {
     const b = st ? quoteMarket(s, st, 'compra', Math.max(1, qty)) : null;
     body = (
       <>
-        <div className="inline-form small"><span>Acciones</span><NumInput id={`qt-${p.id}`} value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas ({p.qty})</button></div>
+        <div className="inline-form small"><span>Acciones</span><NumInput id={`qt-${p.id}`} live value={qty} onChange={setQty} min={1} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas ({p.qty})</button></div>
         <span className="tiny muted">Comprar ≈ {fmtMoney(b?.total ?? 0)} · Vender ≈ {fmtMoney(q?.total ?? 0)} neto{!isTradingDay(s.day) ? ' · Mercado cerrado: se ejecuta en la apertura' : ''}</span>
         <div className="btn-row">
           <Act label="Comprar más" help="accion_comprar_accion" className="btn sm primary" disabled={st?.status !== 'activa'} onClick={() => store.run((x) => placeStockOrder(x, { stockId: p.id, side: 'compra', type: 'mercado', qty }))} />
@@ -88,7 +88,7 @@ function QuickTrade({ p }: { p: PositionSummary }) {
     const q = b ? bondQuote(s, b, Math.max(1, qty), 'venta') : null;
     body = (
       <>
-        <div className="inline-form small"><span>Bonos</span><NumInput id={`qt-${p.id}`} value={qty} onChange={(n) => setQty(Math.max(1, Math.floor(n)))} min={1} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todos ({p.qty})</button></div>
+        <div className="inline-form small"><span>Bonos</span><NumInput id={`qt-${p.id}`} live value={qty} onChange={setQty} min={1} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todos ({p.qty})</button></div>
         <span className="tiny muted">Vender ≈ {fmtMoney(q?.total ?? 0)} neto</span>
         <div className="btn-row">
           <Act label="Comprar más" help="accion_comprar_bono" className="btn sm primary" disabled={b?.status !== 'vigente'} onClick={() => store.run((x) => buyBond(x, p.id, qty))} />
@@ -101,7 +101,7 @@ function QuickTrade({ p }: { p: PositionSummary }) {
       <>
         <div className="field"><label htmlFor={`qa-${p.id}`}>Invertir más</label><AmountInput id={`qa-${p.id}`} value={amount} onChange={setAmount} /></div>
         <Act label="Invertir" help="accion_invertir_fondo" className="btn sm primary" onClick={() => store.run((x) => buyFund(x, p.id, amount))} />
-        <div className="inline-form small"><span>Rescatar participaciones</span><NumInput id={`qt-${p.id}`} value={qty} onChange={setQty} step={0.01} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas</button></div>
+        <div className="inline-form small"><span>Rescatar participaciones</span><NumInput id={`qt-${p.id}`} live value={qty} onChange={setQty} step={0.01} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas</button></div>
         <Act label={`Rescatar ≈ ${fmtMoney(Math.round(Math.min(qty, p.qty) * p.price))}`} help="accion_rescatar_fondo" className="btn sm" disabled={!(qty > 0)} onClick={() => store.run((x) => sellFund(x, p.id, qty >= p.qty - 0.005 ? p.qty : qty))} />
       </>
     );
@@ -110,7 +110,7 @@ function QuickTrade({ p }: { p: PositionSummary }) {
     const q = a ? mogulQuote(s, a, Math.max(0.01, Math.min(qty, p.qty)), 'venta') : null;
     body = (
       <>
-        <div className="inline-form small"><span>Participaciones</span><NumInput id={`qt-${p.id}`} value={qty} onChange={setQty} step={0.01} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas</button></div>
+        <div className="inline-form small"><span>Participaciones</span><NumInput id={`qt-${p.id}`} live value={qty} onChange={setQty} step={0.01} /><button className="chip-btn" onClick={() => setQty(p.qty)}>Todas</button></div>
         <span className="tiny muted">Vender ≈ {fmtMoney(q?.total ?? 0)} neto (diferencial incluido)</span>
         <div className="btn-row">
           <Act label="Comprar más" help="accion_mogul_comprar" className="btn sm primary" disabled={a?.status !== 'activo'} onClick={() => store.run((x) => buyMogul(x, p.id, qty))} />
@@ -145,7 +145,7 @@ function HoldingRow({ p, open, onToggle }: { p: PositionSummary; open: boolean; 
   return (
     <div className={`holding ${open ? 'open' : ''}`}>
       <button className="row clickable holding-row" onClick={onToggle} aria-expanded={open}>
-        <span className="h-icon" aria-hidden>{CLASS_ICONS[p.cls]}</span>
+        <span className="h-icon" aria-hidden><Icon name={INVEST_CLASS_ICON[p.cls]} size={18} /></span>
         <div className="grow">
           <div className="title small">{assetName(s, p.cls, p.id)}</div>
           <div className="meta">{p.cls === 'stocks' || p.cls === 'bonds' ? `${p.qty} u.` : `${p.qty.toFixed(2)} ${p.cls === 'managed' ? 'unid.' : 'part.'}`} · pagaste {fmtMoney(p.cost, { decimals: false })}</div>
@@ -161,20 +161,21 @@ function HoldingRow({ p, open, onToggle }: { p: PositionSummary; open: boolean; 
   );
 }
 
+/** Resumen de "Mis inversiones": posiciones, valor, riesgo y proyección a 12 meses. */
+function portfolioOf(s: GameState) {
+  const b = s.ledger.balances;
+  const all = (['stocks', 'bonds', 'funds', 'mogul', 'managed'] as InvestClass[]).flatMap((cls) => positions(s, cls)).sort((a, x) => x.value - a.value);
+  const cost = all.reduce((a, p) => a + p.cost, 0);
+  const value = investmentsValue(s);
+  const personalProps = s.realEstate.properties.filter((p) => p.owner.kind === 'personal');
+  const reEquity = b.real_estate - b.mortgages;
+  return { all, cost, value, reEquity, props: personalProps, risk: portfolioRisk(s), proj: projectPortfolio(s, 12) };
+}
+
 export function Portfolio() {
   const s = useGame();
-  const ui = useUI();
-  const v = ui.version;
   const [open, setOpen] = useState<string | null>(null);
-  const data = useMemo(() => {
-    const b = s.ledger.balances;
-    const all = (['stocks', 'bonds', 'funds', 'mogul', 'managed'] as InvestClass[]).flatMap((cls) => positions(s, cls)).sort((a, x) => x.value - a.value);
-    const cost = all.reduce((a, p) => a + p.cost, 0);
-    const value = investmentsValue(s);
-    const personalProps = s.realEstate.properties.filter((p) => p.owner.kind === 'personal');
-    const reEquity = b.real_estate - b.mortgages;
-    return { all, cost, value, reEquity, props: personalProps, risk: portfolioRisk(s), proj: projectPortfolio(s, 12) };
-  }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
+  const data = useDerived(portfolioOf);
   const b = s.ledger.balances;
   const y = s.tax.ytd;
   const total = data.value + Math.max(0, data.reEquity);
@@ -197,9 +198,9 @@ export function Portfolio() {
         {data.all.length === 0 && data.props.length === 0 ? (
           <div className="stack" style={{ gap: 8 }}>
             <p className="small muted">Todavía no invertiste. Tres formas simples de empezar:</p>
-            <button className="start-option" onClick={() => navStore.setSub('invest', 'funds')}><strong>🧺 Fondo índice</strong><span className="tiny muted">Desde $50. Compra toda la bolsa de una vez: lo más simple y diversificado.</span></button>
-            <button className="start-option" onClick={() => navStore.setSub('invest', 'gestor')}><strong>🧑‍💼 Contratar un gestor</strong><span className="tiny muted">Le das dinero y lo invierte por vos. Cobra comisiones.</span></button>
-            <button className="start-option" onClick={() => navStore.setSub('invest', 'lite')}><strong>📈 Elegir acciones</strong><span className="tiny muted">Vos decidís qué empresas comprar. Más riesgo, más aprendizaje.</span></button>
+            <button className="start-option" onClick={() => navStore.setSub('invest', 'funds')}><strong><Icon name="funds" size={15} /> Fondo índice</strong><span className="tiny muted">Desde $50. Compra toda la bolsa de una vez: lo más simple y diversificado.</span></button>
+            <button className="start-option" onClick={() => navStore.setSub('invest', 'gestor')}><strong><Icon name="gestor" size={15} /> Contratar un gestor</strong><span className="tiny muted">Le das dinero y lo invierte por vos. Cobra comisiones.</span></button>
+            <button className="start-option" onClick={() => navStore.setSub('invest', 'lite')}><strong><Icon name="stocks" size={15} /> Elegir acciones</strong><span className="tiny muted">Vos decidís qué empresas comprar. Más riesgo, más aprendizaje.</span></button>
           </div>
         ) : (
           <>
@@ -210,7 +211,7 @@ export function Portfolio() {
                 const r = propertyReport(s, p);
                 return (
                   <button key={p.id} className="row clickable holding-row" onClick={() => navStore.setSub('invest', `realestate:prop:${p.id}`)}>
-                    <span className="h-icon" aria-hidden>{PROPERTY_TYPE_ICONS[p.type]}</span>
+                    <span className="h-icon" aria-hidden><Icon name={PROPERTY_ICON[p.type]} size={18} /></span>
                     <div className="grow">
                       <div className="title small">{p.name}</div>
                       <div className="meta">Inmueble · flujo <Money c={r.monthlyCashFlow} colored sign />/mes</div>

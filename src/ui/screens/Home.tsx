@@ -1,12 +1,10 @@
-import { ReactNode, useMemo } from 'react';
-import { useGame, useUI, store } from '../store';
+import { ReactNode } from 'react';
+import { useGame, useUI, useDerived, store } from '../store';
+import { metricsOf, insightsOf, monthOf } from '../derived';
 import { navStore } from '../nav';
-import { computeMetrics } from '../../engine/reports/metrics';
-import { analyze } from '../../engine/advisor/advisor';
-import { cashFlowStatement, incomeStatement } from '../../engine/reports/statements';
-import { startOfMonth, formatMonth, formatDate } from '../../engine/time/calendar';
+import { formatMonth, formatDate } from '../../engine/time/calendar';
 import { STAGES, professionalLevel } from '../../engine/progression/progression';
-import { TUTORIAL, nextMission, CHAPTERS } from '../../engine/progression/tutorial';
+import { nextMission, CHAPTERS, missionProgress } from '../../engine/progression/tutorial';
 import { Icon, IconName } from '../icons';
 import { imageScore, imageLabel } from '../../engine/lifestyle/effects';
 import { unreadNews, TOPIC_NAMES } from '../../engine/world/news';
@@ -18,11 +16,13 @@ import { fmtMoney } from '../../engine/format';
 import type { LogItem } from '../../engine/state';
 import { phaseInfo } from '../../engine/economy/economy';
 import { fmtPct } from '../../engine/format';
+import { logIcon, PHASE_ICON, NEWS_TOPIC_ICON } from '../contentIcons';
+import { ExportReminder } from '../components/Slots';
 
 export function LogRow({ l }: { l: LogItem }) {
   return (
     <div className="row">
-      <span aria-hidden style={{ width: 22, textAlign: 'center' }}>{l.icon}</span>
+      <span className="log-ic" aria-hidden><Icon name={logIcon(l)} size={16} /></span>
       <div className="grow">
         <div className="small">{l.text}</div>
         <div className="tiny faint">{formatDate(l.day)}</div>
@@ -37,13 +37,9 @@ export function LogRow({ l }: { l: LogItem }) {
 export function Home() {
   const ui = useUI();
   const s = useGame();
-  const v = ui.version;
-  const m = useMemo(() => computeMetrics(s), [v]); // eslint-disable-line react-hooks/exhaustive-deps
-  const insights = useMemo(() => analyze(s, m).filter((i) => ui.settings.alertCategories.includes(i.category)), [v]); // eslint-disable-line react-hooks/exhaustive-deps
-  const month = useMemo(() => {
-    const from = startOfMonth(s.day);
-    return { is: incomeStatement(s, from, s.day), cf: cashFlowStatement(s, from, s.day) };
-  }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useDerived(metricsOf);
+  const insights = useDerived(insightsOf).filter((i) => ui.settings.alertCategories.includes(i.category));
+  const month = useDerived(monthOf);
   const hist = s.history.slice(-24);
   const nwSeries = [...hist.map((h) => h.netWorth), m.netWorth];
   const prev = hist[hist.length - 1];
@@ -52,8 +48,7 @@ export function Home() {
   const prof = professionalLevel(s);
   const job = s.career.job ? JOB_BY_ID[s.career.job.jobId] : null;
   const tutorialOpen = !s.tutorial.dismissed;
-  const tutDone = TUTORIAL.filter((t) => !t.future && t.done(s)).length; // eslint-disable-line
-  const tutTotal = TUTORIAL.filter((t) => !t.future).length;
+  const { done: tutDone, total: tutTotal } = missionProgress(s);
   const nextStep = nextMission(s);
   const img = imageScore(s);
   const unread = unreadNews(s);
@@ -65,27 +60,53 @@ export function Home() {
   const nwLabels = [...hist.map((h) => formatMonth(h.day)), 'Hoy'];
   const openCos = s.companies.filter((c) => c.status === 'active' || c.status === 'insolvent');
   const invValue = m.securities + (s.ledger.balances.term_deposits ?? 0);
-  const areas: Array<{ icon: IconName; title: string; value: ReactNode; sub: string; go: () => void; term: string; badge?: number }> = [
-    { icon: 'career', title: 'Trabajo', value: job ? <Money c={m.monthlyGross} /> : 'Sin empleo', sub: job ? `${job.title} · nivel ${prof.level}` : 'Buscá empleo en Carrera', go: () => navStore.go('career'), term: 'salario_bruto' },
-    { icon: 'invest', title: 'Inversiones', value: <Money c={invValue} />, sub: invValue > 0 ? 'Tocá para ver y operar todo' : 'Empezá con un fondo índice', go: () => navStore.go('invest', 'portfolio'), term: 'mis_inversiones' },
-    { icon: 'realestate', title: 'Inmuebles', value: <Money c={m.realEstate - m.mortgages} />, sub: m.realEstate ? `Alquileres ${fmtMoney(m.rentIncome, { decimals: false })}/mes` : 'Cocheras y estudios desde poco', go: () => navStore.go('invest', 'realestate'), term: 'inmueble' },
-    { icon: 'business', title: 'Negocios', value: openCos.length ? `${openCos.length} empresa${openCos.length > 1 ? 's' : ''}` : 'Ninguno', sub: openCos.length ? `Tu parte ${fmtMoney(s.ledger.balances.business_equity, { decimals: false })}` : 'Proyectá y fundá tu primera', go: () => navStore.go('business'), term: 'metodo_participacion' },
-    { icon: 'card', title: `Crédito · ${cardTier(s).name}`, value: String(s.credit.score), sub: m.debt ? `Deudas ${fmtMoney(m.debt, { decimals: false })}` : 'Sin deudas', go: () => navStore.go('finance', 'card'), term: 'puntaje_crediticio' },
-    { icon: 'wardrobe', title: 'Tu imagen', value: `${img} · ${imageLabel(img)}`, sub: 'Vestidor, bienes y tiendas', go: () => navStore.go('more', 'wardrobe'), term: 'imagen_personal' },
-    { icon: 'news', title: 'Noticias', value: unread ? `${unread} nueva${unread > 1 ? 's' : ''}` : 'Al día', sub: 'Rumores que podés analizar', go: () => navStore.go('more', 'news'), term: 'noticias_rumores', badge: unread },
-    { icon: 'progress', title: 'Progreso', value: `Etapa ${s.progression.stage}/12`, sub: stage.name, go: () => navStore.open({ kind: 'progress' }), term: 'nivel_magnate' },
+  const areas: Array<{ icon: IconName; title: string; value: ReactNode; sub: string; go: () => void; badge?: number }> = [
+    { icon: 'career', title: 'Trabajo', value: job ? <Money c={m.monthlyGross} /> : 'Sin empleo', sub: job ? `${job.title} · nivel ${prof.level}` : 'Buscá empleo en Carrera', go: () => navStore.go('career') },
+    { icon: 'invest', title: 'Inversiones', value: <Money c={invValue} />, sub: invValue > 0 ? 'Tocá para ver y operar todo' : 'Empezá con un fondo índice', go: () => navStore.go('invest', 'portfolio') },
+    { icon: 'realestate', title: 'Inmuebles', value: <Money c={m.realEstate - m.mortgages} />, sub: m.realEstate ? `Alquileres ${fmtMoney(m.rentIncome, { decimals: false })}/mes` : 'Cocheras y estudios desde poco', go: () => navStore.go('invest', 'realestate') },
+    { icon: 'business', title: 'Negocios', value: openCos.length ? `${openCos.length} empresa${openCos.length > 1 ? 's' : ''}` : 'Ninguno', sub: openCos.length ? `Tu parte ${fmtMoney(s.ledger.balances.business_equity, { decimals: false })}` : 'Proyectá y fundá tu primera', go: () => navStore.go('business') },
+    { icon: 'card', title: `Crédito · ${cardTier(s).name}`, value: String(s.credit.score), sub: m.debt ? `Deudas ${fmtMoney(m.debt, { decimals: false })}` : 'Sin deudas', go: () => navStore.go('finance', 'card') },
+    { icon: 'wardrobe', title: 'Tu imagen', value: `${img} · ${imageLabel(img)}`, sub: 'Vestidor, bienes y tiendas', go: () => navStore.go('more', 'wardrobe') },
+    { icon: 'news', title: 'Noticias', value: unread ? `${unread} nueva${unread > 1 ? 's' : ''}` : 'Al día', sub: 'Rumores que podés analizar', go: () => navStore.go('more', 'news'), badge: unread },
+    { icon: 'progress', title: 'Progreso', value: `Etapa ${s.progression.stage}/12`, sub: stage.name, go: () => navStore.open({ kind: 'progress' }) },
   ];
   return (
     <>
       {s.legal.prison && (
         <button className="alert critical" style={{ textAlign: 'left' }} onClick={() => navStore.go('more', 'legal')}>
           <span className="stripe" />
-          <div className="small" style={{ flex: 1 }}><strong>🔒 Cumplís una condena hasta el {formatDate(s.legal.prison.until)}.</strong> No podés trabajar ni operar; tus empresas, inversiones y deudas siguen su curso.</div>
+          <div className="small" style={{ flex: 1 }}><strong><Icon name="lock" size={14} /> Cumplís una condena hasta el {formatDate(s.legal.prison.until)}.</strong> No podés trabajar ni operar; tus empresas, inversiones y deudas siguen su curso.</div>
         </button>
       )}
+      {ui.speed === 0 && (
+        <div className="pause-strip" role="status">
+          <Icon name="pause" size={16} />
+          <span className="grow small"><strong>El tiempo está en pausa.</strong> {s.day === 0 ? 'Cuando quieras, ponelo en marcha: un día dura 2 segundos a 1×.' : 'Nada avanza hasta que lo reanudes.'}</span>
+          <button className="btn sm primary" onClick={() => store.togglePlay()}><Icon name="play" size={14} /> Reanudar a {ui.settings.playSpeed}×</button>
+        </div>
+      )}
+      <ExportReminder />
+      {tutorialOpen && nextStep && (
+        <div className="card next-step">
+          <div className="card-head">
+            <span className="eyebrow" style={{ flex: 1 }}><Icon name="missions" size={13} /> Tu próxima acción · misiones {tutDone}/{tutTotal}</span>
+            <button className="btn sm ghost" onClick={() => navStore.open({ kind: 'tutorial' })}>Ver todas</button>
+            <button className="btn sm ghost" aria-label="Ocultar misiones" onClick={() => store.run((st) => { st.tutorial.dismissed = true; }, { toast: false })}><Icon name="close" size={15} /></button>
+          </div>
+          <Bar value={tutDone / tutTotal} />
+          <span className="tiny muted">{CHAPTERS[nextStep.chapter - 1].name}</span>
+          <strong>{nextStep.title}</strong>
+          <p className="small muted">{nextStep.body}</p>
+          <div className="btn-row" style={{ alignItems: 'center' }}>
+            <button className="btn sm dark" onClick={() => navStore.go(nextStep.tab, nextStep.sub)}>Hacerlo ahora</button>
+            {nextStep.reward && <span className="tiny muted">Recompensa: +{nextStep.reward.xp} XP</span>}
+          </div>
+        </div>
+      )}
+
       <button className="econ-chip" onClick={() => navStore.go('more', 'economy')} aria-label="Ver economía">
-        <span aria-hidden>{ph.icon}</span> {ph.name} · inflación {fmtPct(s.macro.inflation, 1)} · tasa {fmtPct(s.macro.policyRate, 2)} · desempleo {fmtPct(s.macro.unemployment, 1)}
-        {s.macro.events.some((e) => e.startDay <= s.day && e.endDay >= s.day) && <> · {s.macro.events.filter((e) => e.startDay <= s.day && e.endDay >= s.day).map((e) => e.icon).join('')}</>}
+        <Icon name={PHASE_ICON[s.macro.phase]} size={15} /> {ph.name} · inflación {fmtPct(s.macro.inflation, 1)} · tasa {fmtPct(s.macro.policyRate, 2)} · desempleo {fmtPct(s.macro.unemployment, 1)}
+        {s.macro.events.some((e) => e.startDay <= s.day && e.endDay >= s.day) && <> · {s.macro.events.filter((e) => e.startDay <= s.day && e.endDay >= s.day).map((e) => e.name.toLowerCase()).join(', ')}</>}
       </button>
 
       <section className="hero" aria-label="Patrimonio neto">
@@ -97,13 +118,13 @@ export function Home() {
         </div>
         <div className="big">{fmtMoney(m.netWorth)}</div>
         <Learn term="patrimonio_neto" />
-        <LineChart series={[{ name: 'Patrimonio neto', values: nwSeries, color: 'var(--accent)' }]} pointLabels={nwLabels} height={100} />
+        {nwSeries.length >= 2 && <LineChart series={[{ name: 'Patrimonio neto', values: nwSeries, color: 'var(--accent)' }]} pointLabels={nwLabels} height={100} />}
         <div className="tiny faint">Lo que tenés {fmtMoney(m.totalAssets, { decimals: false })} − lo que debés {fmtMoney(m.totalLiabilities, { decimals: false })}</div>
       </section>
 
       <div className="month-strip" role="group" aria-label="Tu mes">
         <button className="ms-cell" onClick={() => navStore.go('finance', 'accounts')}>
-          <span className="tiny muted">Disponible <InfoButton term="liquidez" /></span>
+          <span className="tiny muted">Liquidez</span>
           <strong className="num">{fmtMoney(m.liquid, { decimals: false })}</strong>
           <span className="tiny faint">{m.runwayMonths !== null ? `alcanza ~${m.runwayMonths.toFixed(1)} meses` : 'te sobra cada mes'}</span>
         </button>
@@ -113,7 +134,7 @@ export function Home() {
           <span className="tiny faint">salió {fmtMoney(month.cf.cashOut, { decimals: false })}</span>
         </button>
         <button className="ms-cell" onClick={() => navStore.go('reports', 'cf')}>
-          <span className="tiny muted">Balance del mes <InfoButton term="flujo_caja" /></span>
+          <span className="tiny muted">Balance del mes</span>
           <strong className={`num ${month.cf.cashIn - month.cf.cashOut >= 0 ? 'gain' : 'loss'}`}>{fmtMoney(month.cf.cashIn - month.cf.cashOut, { decimals: false, sign: true })}</strong>
           <span className="tiny faint">gastos fijos {fmtMoney(m.recurringMonthly, { decimals: false })}/mes</span>
         </button>
@@ -131,24 +152,6 @@ export function Home() {
         </div>
       )}
 
-      {tutorialOpen && nextStep && (
-        <div className="card next-step">
-          <div className="card-head">
-            <span className="eyebrow" style={{ flex: 1 }}><Icon name="missions" size={13} /> Misiones {tutDone}/{tutTotal} <InfoButton term="misiones" /></span>
-            <button className="btn sm ghost" onClick={() => navStore.open({ kind: 'tutorial' })}>Ver todas</button>
-            <button className="btn sm ghost" aria-label="Ocultar misiones" onClick={() => store.run((st) => { st.tutorial.dismissed = true; }, { toast: false })}><Icon name="close" size={15} /></button>
-          </div>
-          <Bar value={tutDone / tutTotal} />
-          <span className="tiny muted">{CHAPTERS[nextStep.chapter - 1].icon} {CHAPTERS[nextStep.chapter - 1].name}</span>
-          <strong>{nextStep.title}</strong>
-          <p className="small muted">{nextStep.body}</p>
-          <div className="btn-row" style={{ alignItems: 'center' }}>
-            <button className="btn sm dark" onClick={() => navStore.go(nextStep.tab, nextStep.sub)}>Hacerlo ahora</button>
-            {nextStep.reward && <span className="tiny muted">Recompensa: +{nextStep.reward.xp} XP</span>}
-          </div>
-        </div>
-      )}
-
       {insights.length > 0 && (
         <div className="stack" style={{ gap: 8 }}>
           {insights.slice(0, 2).map((i) => (
@@ -160,7 +163,7 @@ export function Home() {
               </div>
             </button>
           ))}
-          {insights.length > 2 && <button className="btn sm ghost" onClick={() => { store.markSeen('asesor'); navStore.open({ kind: 'advisor' }); }}>Ver {insights.length - 2} alertas más en el Asesor IA</button>}
+          {insights.length > 2 && <button className="btn sm ghost" onClick={() => { store.markSeen('asesor'); navStore.open({ kind: 'advisor' }); }}>Ver {insights.length - 2} alertas más en el Asesor</button>}
         </div>
       )}
 
@@ -168,7 +171,7 @@ export function Home() {
       <div className="area-grid">
         {areas.map((a) => (
           <button key={a.title} className="area" onClick={a.go}>
-            <span className="area-top"><span className="area-icon" aria-hidden><Icon name={a.icon} size={16} /></span><span className="tiny muted">{a.title}</span>{a.badge ? <span className="count-badge">{a.badge}</span> : <InfoButton term={a.term} />}</span>
+            <span className="area-top"><span className="area-icon" aria-hidden><Icon name={a.icon} size={16} /></span><span className="tiny muted">{a.title}</span>{a.badge ? <span className="count-badge">{a.badge}</span> : null}</span>
             <strong className="area-value">{a.value}</strong>
             <span className="tiny faint">{a.sub}</span>
           </button>
@@ -183,7 +186,7 @@ export function Home() {
           </div>
           {openNews.map((n) => (
             <button key={n.id} className="news-mini" onClick={() => navStore.go('more', 'news')}>
-              <span className="news-icon" aria-hidden>{n.icon}</span>
+              <span className="news-icon" aria-hidden><Icon name={NEWS_TOPIC_ICON[n.topic]} size={18} /></span>
               <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                 <strong className="small">{n.title}</strong>
                 <span className="tiny muted" style={{ display: 'block' }}>{TOPIC_NAMES[n.topic]} · {n.source}{n.analysis ? ` · tu estimación ~${Math.round(n.analysis.estimate * 100)} %` : ' · sin analizar'}</span>

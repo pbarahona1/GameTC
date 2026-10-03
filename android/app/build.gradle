@@ -1,28 +1,39 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
 
+// Única fuente de la versión: package.json ("version" → versionName, "nativeCode" → versionCode).
+def appPackage = new JsonSlurper().parse(rootProject.file('../package.json'))
+
 android {
-    namespace "com.urt.tycoon"
-    compileSdk rootProject.ext.compileSdkVersion
+    namespace = "com.urt.tycoon"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.urt.tycoon"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 5
-        versionName "1.2.0"
+        versionCode appPackage.nativeCode as int
+        versionName appPackage.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Compilaciones reproducibles: sin el bloque cifrado de dependencias dentro de la APK
+    // (Play lo sigue recibiendo dentro del AAB).
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = true
+    }
     // Firma:
-    //  - debug: llave FIJA incluida en el repositorio (urt-debug.keystore). Así cada APK
-    //    nueva se instala ENCIMA de la anterior y la partida se conserva. Solo sirve para
-    //    instalar a mano; no es la firma de publicación.
-    //  - release (Play Store): la llave real NUNCA se sube al repositorio. Se lee de
-    //    variables de entorno (en GitHub, de los secretos del repositorio). Sin ellas,
-    //    el AAB/APK de publicación se genera sin firmar.
+    //  - debug: llave FIJA incluida en el repositorio (urt-debug.keystore). Es la de las APK
+    //    instaladas a mano hasta la 1.2: una APK firmada con ella se instala ENCIMA de la
+    //    anterior y conserva la partida. Es pública: no sirve como firma de publicación.
+    //  - release (Play Store y APK de publicación): la llave real NUNCA se sube al
+    //    repositorio. Se lee de variables de entorno (en GitHub, de los secretos del
+    //    repositorio). Sin ellas, la variante release queda sin firmar y el CI no la publica.
     signingConfigs {
         debug {
             storeFile file('urt-debug.keystore')

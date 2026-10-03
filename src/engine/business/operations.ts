@@ -248,9 +248,9 @@ export function operateDay(state: GameState, co: Company): void {
     }
   }
   // Costos variables directos y comisiones de cobro.
-  let variable = 0;
-  if (sec.model === 'subscription') variable = roundCents((co.subscribers * px(state, sec.variableCost)) / 30);
-  else variable = roundCents(unitsSold * px(state, sec.variableCost) * (1 - logisticsCut(state, co)));
+  const variable = sec.model === 'subscription'
+    ? roundCents((co.subscribers * px(state, sec.variableCost)) / 30)
+    : roundCents(unitsSold * px(state, sec.variableCost) * (1 - logisticsCut(state, co)));
   if (variable > 0) coPay(state, co, 'variable_costs', variable, { memo: sec.variableCostLabel, tag: 'variable', kind: 'otros' });
   const fees = roundCents(revenue * sec.salesFeeRate * (countRole(co, 'contador') > 0 ? 0.85 : 1));
   if (fees > 0) coPay(state, co, 'sales_fees', fees, { memo: 'Comisiones de cobro con tarjeta', tag: 'fees', kind: 'otros' });
@@ -339,26 +339,23 @@ export function setPrice(state: GameState, co: Company, productId: string, price
   return OK(`Nuevo precio de ${p.name}: ${fmtMoney(price)}.`);
 }
 
-export function setPlan(state: GameState, co: Company, productId: string, plan: number): ActionResult {
+export function setPlan(_state: GameState, co: Company, productId: string, plan: number): ActionResult {
   const ps = co.products.find((p) => p.id === productId);
   if (!ps) return FAIL('Producto inexistente.');
   if (!(plan >= 0 && plan <= 500)) return FAIL('Plan inválido.');
   ps.plan = Math.round(plan);
-  void state;
   return OK('Plan de producción actualizado.');
 }
 
-export function toggleProduct(state: GameState, co: Company, productId: string, active: boolean): ActionResult {
+export function toggleProduct(_state: GameState, co: Company, productId: string, active: boolean): ActionResult {
   const ps = co.products.find((p) => p.id === productId);
   if (!ps) return FAIL('Producto inexistente.');
   ps.active = active;
-  void state;
   return OK(active ? 'Producto activado.' : 'Producto retirado de la venta.');
 }
 
-export function setMaintenance(state: GameState, co: Company, level: Company['maintenance']): ActionResult {
+export function setMaintenance(_state: GameState, co: Company, level: Company['maintenance']): ActionResult {
   co.maintenance = level;
-  void state;
   return OK('Política de mantenimiento actualizada.');
 }
 
@@ -375,6 +372,11 @@ export function buyEquipment(state: GameState, co: Company, equipId: string): Ac
 export function sellEquipment(state: GameState, co: Company, assetId: number): ActionResult {
   const a = co.assets.find((x) => x.id === assetId);
   if (!a) return FAIL('Equipo inexistente.');
+  if (a.bookValue <= 0) {
+    // Totalmente amortizado: se da de baja sin asiento (no tiene valor en libros ni de reventa).
+    co.assets = co.assets.filter((x) => x.id !== assetId);
+    return OK(`${equipDef(co, a.equipId).name} dado de baja: ya estaba totalmente amortizado.`);
+  }
   const price = roundCents(a.bookValue * 0.6 * (0.5 + a.condition / 200));
   const loss = a.bookValue - price;
   coPost(co.ledger, {

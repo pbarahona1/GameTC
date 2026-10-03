@@ -1,5 +1,5 @@
 import type { Chart, GLedger, GPostInput, GEntry } from '../ledger/core';
-import { emptyGLedger, gPost, gValidate, gPeriodTotals } from '../ledger/core';
+import { emptyGLedger, gPost, gPeriodTotals } from '../ledger/core';
 import type { Cents } from '../money';
 
 /**
@@ -76,12 +76,6 @@ export function emptyCoLedger(): CoLedger {
 
 export function coPost(ledger: CoLedger, input: CoPostInput): CoEntry {
   return gPost(CO_CHART, ledger, input);
-}
-
-export function coTryPost(ledger: CoLedger, input: CoPostInput): { ok: true; entry: CoEntry } | { ok: false; error: string } {
-  const err = gValidate(CO_CHART, ledger, input);
-  if (err) return { ok: false, error: err };
-  return { ok: true, entry: coPost(ledger, input) };
 }
 
 export function coPeriodTotals(ledger: CoLedger, from: number, to: number): Record<CoAccountId, Cents> {

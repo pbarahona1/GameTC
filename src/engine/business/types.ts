@@ -226,6 +226,8 @@ export interface Company {
   rdBonus: number;
   subscribers: number;
   delegation: Delegation;
+  /** Lo que decidió el gerente delegado en su última revisión semanal (1.3). */
+  managerReport?: { day: number; items: string[] };
   dividendPolicy: DividendPolicy;
   stats: DayStats[];
   history: CoSnapshot[];

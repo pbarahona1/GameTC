@@ -1,29 +1,29 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
+import { groupOf, groupRisksOf } from '../../derived';
 import { navStore } from '../../nav';
 import type { Company } from '../../../engine/business/types';
-import { SECTOR_BY_ID, LEGAL_FORM_BY_ID } from '../../../content/sectors';
+import { LEGAL_FORM_BY_ID } from '../../../content/sectors';
 import { JURISDICTION_BY_ID } from '../../../content/jurisdictions';
 import { isOpen } from '../../../engine/business/common';
 import { coMetrics } from '../../../engine/business/reports';
 import { CO_CHART } from '../../../engine/business/companyLedger';
 import {
-  parentOf, childrenOf, rootOf, isHolding, icLoansOf, grantIcLoan, repayIcLoan, setGroupPolicy, setManagementFee, consolidateGroup, groupRisks, canJoinGroup, groupMembers,
+  parentOf, childrenOf, rootOf, isHolding, icLoansOf, grantIcLoan, repayIcLoan, setGroupPolicy, setManagementFee, canJoinGroup, groupMembers,
 } from '../../../engine/business/groups';
 import { transferToGroup, spinOff } from '../../../engine/business/ownership';
 import { companyTaxRates } from '../../../engine/business/ownership';
 import { propertyReport } from '../../../engine/realestate/realestate';
-import { PROPERTY_TYPE_ICONS } from '../../../content/realestate';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import { Money, InfoButton, CardHead, Act, ConfirmButton, Seg, AmountInput, NumInput, Pill, Stat, Empty } from '../../components/common';
 import { runCo } from './CompanyView';
+import { SECTOR_ICON, PROPERTY_ICON } from '../../contentIcons';
+import { Icon } from '../../icons';
 
 function Consolidated({ root }: { root: Company }) {
-  const s = useGame();
-  const ui = useUI();
-  const c = useMemo(() => consolidateGroup(s, root, Math.max(root.foundedDay, s.day - 29), s.day), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
-  const r = useMemo(() => groupRisks(s, root), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const c = useDerived(groupOf, root.id);
+  const r = useDerived(groupRisksOf, root.id);
   return (
     <>
       <div className="card">
@@ -72,7 +72,7 @@ function Consolidated({ root }: { root: Company }) {
           <dt>Préstamos intragrupo vigentes</dt><dd>{fmtMoney(r.consolidated.intercompany)}</dd>
           <dt>Garantías personales</dt><dd>{fmtMoney(r.consolidated.guaranteed)}</dd>
         </div>
-        {r.consolidated.warnings.length === 0 ? <p className="small gain">Sin alertas consolidadas.</p> : r.consolidated.warnings.map((w) => <p key={w} className="small loss">⚠︎ {w}</p>)}
+        {r.consolidated.warnings.length === 0 ? <p className="small gain">Sin alertas consolidadas.</p> : r.consolidated.warnings.map((w) => <p key={w} className="small loss"><Icon name="alert" size={14} /> {w}</p>)}
       </div>
     </>
   );
@@ -111,7 +111,7 @@ function IcLoans({ co }: { co: Company }) {
           <strong className="small">Prestar desde {co.name} a…</strong>
           <div className="chips">{members.map((m) => <button key={m.id} onClick={() => setTo(m.id)} style={to === m.id ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{m.name}</button>)}</div>
           <AmountInput id="ic-amt" value={amount} onChange={setAmount} max={co.ledger.balances.cash} />
-          <div className="inline-form small"><span>Tasa anual</span><NumInput id="ic-rate" value={rate} onChange={setRate} step={0.5} suffix="%" /><span>Plazo</span><NumInput id="ic-m" value={months} onChange={setMonths} suffix="meses" /></div>
+          <div className="inline-form small"><span>Tasa anual</span><NumInput id="ic-rate" live value={rate} onChange={setRate} step={0.5} suffix="%" /><span>Plazo</span><NumInput id="ic-m" live value={months} onChange={setMonths} suffix="meses" /></div>
           <p className="tiny muted">Los intereses son ingreso para quien presta y gasto para quien recibe (cambia dónde tributa la ganancia si están en distintas jurisdicciones). En los estados consolidados se eliminan.</p>
           <Act label="Otorgar préstamo" help="accion_prestamo_intragrupo" className="btn sm" disabled={!to || !(amount > 0)} onClick={() => store.run((x) => grantIcLoan(x, co.id, to!, amount, rate / 100, months))} />
         </>
@@ -151,7 +151,7 @@ export function GroupTab({ co }: { co: Company }) {
         <div className="card">
           <CardHead title={`Subsidiaria de ${parent.name}`} term="subsidiaria" />
           <p className="small">Su resultado se refleja en el patrimonio de {parent.name} por el método de participación. Los dividendos hacia la matriz no pagan retención.</p>
-          <div className="inline-form small"><span>Honorario de gestión a la matriz</span><NumInput id="mgmt-fee" value={fee} onChange={setFee} step={0.5} suffix="% de ventas" /></div>
+          <div className="inline-form small"><span>Honorario de gestión a la matriz</span><NumInput id="mgmt-fee" live value={fee} onChange={setFee} step={0.5} suffix="% de ventas" /></div>
           <Act label="Guardar honorario" help="honorario_gestion" className="btn sm" onClick={() => store.run((x) => setManagementFee(x, co.id, fee / 100))} />
           <ConfirmButton label="Sacar del grupo (a tu nombre)" help="accion_spinoff" className="btn sm ghost" detail="La matriz te entrega la empresa como dividendo en especie. Los préstamos intragrupo se cancelan primero." onConfirm={() => runCo(co.id, (st, c) => spinOff(st, c))} />
           <button className="btn sm ghost" onClick={() => navStore.setSub('business', `co:${parent.id}:group`)}>Ver el grupo completo</button>
@@ -162,13 +162,13 @@ export function GroupTab({ co }: { co: Company }) {
         <>
           <div className="card">
             <CardHead title="Subsidiarias" term="holding" />
-            {kids.length === 0 && <Empty icon="🏢">Esta holding todavía no tiene subsidiarias. Transferile empresas tuyas, fundá una nueva a su nombre o comprá una en el mercado.</Empty>}
+            {kids.length === 0 && <Empty icon="network">Esta holding todavía no tiene subsidiarias. Transferile empresas tuyas, fundá una nueva a su nombre o comprá una en el mercado.</Empty>}
             <div className="rows">
               {kids.map((k) => {
                 const m = coMetrics(s, k);
                 return (
                   <button key={k.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => navStore.setSub('business', `co:${k.id}:summary`)}>
-                    <span aria-hidden>{SECTOR_BY_ID[k.sector].icon}</span>
+                    <Icon name={SECTOR_ICON[k.sector]} size={16} />
                     <div className="grow"><div className="title small">{k.name}</div><div className="meta">{fmtPct(k.ownership, 0)} · valor contable {fmtMoney(k.carrying, { decimals: false })} · caja {fmtMoney(m.cash, { decimals: false })}</div></div>
                     <Money c={m.net30} colored sign className="small" />
                   </button>
@@ -229,7 +229,7 @@ export function GroupTab({ co }: { co: Company }) {
           const r = propertyReport(s, p);
           return (
             <button key={p.id} className="row clickable" style={{ border: 0, background: 'none', textAlign: 'left', width: '100%' }} onClick={() => navStore.go('invest', `realestate:prop:${p.id}`)}>
-              <span aria-hidden>{PROPERTY_TYPE_ICONS[p.type]}</span>
+              <Icon name={PROPERTY_ICON[p.type]} size={16} />
               <div className="grow"><div className="title small">{p.name} {p.usedBy === co.id && <Pill tone="accent">Local propio</Pill>}</div><div className="meta">Libros {fmtMoney(p.carrying, { decimals: false })} · tasación {fmtMoney(p.appraisal, { decimals: false })}</div></div>
               <Money c={r.monthlyCashFlow} colored sign className="small" />
             </button>

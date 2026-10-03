@@ -274,6 +274,11 @@ export interface MonthlySnapshot {
 }
 
 export type LogKind = 'income' | 'expense' | 'info' | 'warning' | 'success' | 'danger';
+/**
+ * Categoría explícita de un evento para la pausa automática (no se deduce del
+ * ícono). Sin categoría, un evento de tipo 'danger' cuenta como 'peligro'.
+ */
+export type LogCategory = 'peligro' | 'ofertas' | 'logros' | 'legal' | 'inversiones';
 
 export interface LogItem {
   id: number;
@@ -284,6 +289,8 @@ export interface LogItem {
   amount?: Cents;
   /** Empresa relacionada (si el evento es empresarial). */
   company?: number;
+  /** Categoría para la pausa automática (ver LogCategory). */
+  cat?: LogCategory;
 }
 
 export interface Attributes {

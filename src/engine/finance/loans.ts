@@ -139,6 +139,8 @@ export function negotiateRate(state: GameState, bankId: string): ActionResult {
 export function takeLoan(state: GameState, bankId: string, amount: Cents, termMonths: number): ActionResult {
   const bank = BANK_BY_ID[bankId];
   if (!bank) return FAIL('Banco inexistente.');
+  if (!Number.isSafeInteger(amount) || amount <= 0) return FAIL('Ingresá un monto mayor a cero.');
+  if (state.legal?.prison) return FAIL('Desde prisión no podés pedir préstamos.');
   const offer = quoteLoan(state, bank, amount, termMonths);
   recordInquiry(state);
   if (!offer.approved) return FAIL(`Solicitud rechazada: ${offer.reasons.join(' ')}`);
@@ -214,7 +216,7 @@ function payInstallment(state: GameState, loan: Loan): void {
       loan.status = 'default';
       state.credit.defaults++;
       state.player.attributes.reputation = Math.max(0, state.player.attributes.reputation - 10);
-      addLog(state, 'danger', '🚨', `Préstamo de ${bank.name} en IMPAGO: 3 cuotas seguidas sin pagar. El banco embargará el 20 % de tu salario neto hasta cubrir la deuda.`);
+      addLog(state, 'danger', '🚨', `Préstamo de ${bank.name} en IMPAGO: 3 cuotas seguidas sin pagar. El banco embargará el 20 % de tu salario neto hasta cubrir la deuda.`, undefined, 'peligro');
       refreshCreditScore(state);
     }
   }

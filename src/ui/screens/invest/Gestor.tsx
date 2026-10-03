@@ -8,9 +8,11 @@ import {
 import { hirePro, firePro, trainPro, trainingCost, proMarketByKind, describeQuality, feeLabel, nextRefresh, TRAINING_COOLDOWN_DAYS } from '../../../engine/pros/pros';
 import { FUND_BY_ID } from '../../../content/funds';
 import { fmtMoney, fmtPct } from '../../../engine/format';
+import { spendable } from '../../../engine/finance/payments';
 import { formatDate } from '../../../engine/time/calendar';
 import type { ProHire } from '../../../engine/pros/types';
 import type { MandateProfile } from '../../../engine/invest/types';
+import { Icon } from '../../icons';
 
 const PROFILES: Array<{ id: MandateProfile; label: string }> = [
   { id: 'conservador', label: 'Conservador' },
@@ -33,7 +35,7 @@ function MandateCard({ h }: { h: ProHire }) {
     <div className="card" style={{ borderColor: 'var(--accent)' }}>
       <div className="card-head">
         <div style={{ flex: 1 }}>
-          <h2>🧑‍💼 {h.pro.name}</h2>
+          <h2><Icon name="gestor" size={18} /> {h.pro.name}</h2>
           <div className="tiny muted">{h.pro.specialty} · {h.pro.experience} años de experiencia · {h.trainings ?? 0} capacitación(es) · desde {formatDate(h.since)}</div>
           <div className="tiny muted">{feeLabel(h.pro)}</div>
         </div>
@@ -78,7 +80,7 @@ function MandateCard({ h }: { h: ProHire }) {
           )}
           <div className="field">
             <label htmlFor={`dep-${m.id}`}>Darle más dinero</label>
-            <AmountInput id={`dep-${m.id}`} value={amount} onChange={setAmount} max={s.ledger.balances.checking} />
+            <AmountInput id={`dep-${m.id}`} value={amount} onChange={setAmount} max={spendable(s)} />
           </div>
           <Act label="Aportar" help="accion_gestor_aportar" className="btn primary" disabled={!(amount > 0)} onClick={() => store.run((x) => depositMandate(x, m.id, amount))} />
           <div className="field">
@@ -98,7 +100,7 @@ function MandateCard({ h }: { h: ProHire }) {
           <p className="small">Todavía no le diste dinero. Elegí cuánto y con qué perfil de riesgo: lo invertirá en acciones y fondos del mercado del juego.</p>
           <div className="field">
             <label htmlFor={`open-${h.id}`}>Monto a entregar (mínimo {fmtMoney(minMandate(s), { decimals: false })})</label>
-            <AmountInput id={`open-${h.id}`} value={amount} onChange={setAmount} max={s.ledger.balances.checking} />
+            <AmountInput id={`open-${h.id}`} value={amount} onChange={setAmount} max={spendable(s)} />
           </div>
           <Seg items={PROFILES} value={profile} onChange={setProfile} />
           <p className="tiny muted">{PROFILE_INFO[profile].description} Acciones {fmtPct(PROFILE_INFO[profile].stocks, 0)} · bonos {fmtPct(PROFILE_INFO[profile].bonds, 0)} · liquidez {fmtPct(PROFILE_INFO[profile].money, 0)}.</p>
@@ -129,7 +131,7 @@ export function GestorScreen() {
       {hires.map((h) => <MandateCard key={h.id} h={h} />)}
       <div className="card">
         <CardHead title={hires.length ? 'Otros gestores disponibles' : 'Gestores disponibles'} right={<span className="tiny muted">Nuevos el {formatDate(nextRefresh(s))}</span>} />
-        {market.length === 0 && <Empty icon="🧑‍💼">No hay gestores disponibles ahora. El mercado de profesionales se renueva cada 60 días.</Empty>}
+        {market.length === 0 && <Empty icon="gestor">No hay gestores disponibles ahora. El mercado de profesionales se renueva cada 60 días.</Empty>}
         {market.map((p) => (
           <div className="card flat" key={p.id} style={{ padding: 12, gap: 6 }}>
             <div className="card-head">

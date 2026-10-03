@@ -14,7 +14,7 @@ import { residence } from '../../engine/tax/taxEngine';
 import { legalRiskSummary, heatLabel } from '../../engine/legal/legal';
 import { imageScore, imageLabel } from '../../engine/lifestyle/effects';
 import { unreadNews } from '../../engine/world/news';
-import { TUTORIAL } from '../../engine/progression/tutorial';
+import { missionProgress } from '../../engine/progression/tutorial';
 import { Icon, IconName } from '../icons';
 import { Avatar, avatarOf } from '../components/Avatar';
 
@@ -65,7 +65,8 @@ export function More() {
   const img = imageScore(s);
   const unread = unreadNews(s);
   const poach = s.world.poach.filter((p) => p.status === 'abierta').length;
-  const missionsLeft = TUTORIAL.filter((t) => !t.future && !t.done(s)).length;
+  const mp = missionProgress(s);
+  const missionsLeft = mp.total - mp.done;
   const groups: Array<{ title: string; tiles: Tile[] }> = [
     {
       title: 'Tu vida',

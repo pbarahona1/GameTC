@@ -30,7 +30,7 @@ const COMPETITOR_NAMES: Record<BizSectorId, string[]> = {
   holding: [],
 };
 
-export function initMarkets(state: GameState): Record<string, MarketState> {
+export function initMarkets(_state: GameState): Record<string, MarketState> {
   const out: Record<string, MarketState> = {};
   let id = 1;
   for (const s of SECTORS) {
@@ -40,7 +40,6 @@ export function initMarkets(state: GameState): Record<string, MarketState> {
       competitors: s.competitors.map((c) => ({ id: id++, name: c.name, priceMult: c.priceMult, quality: c.quality, reputation: c.reputation, awareness: c.awareness, active: true, enteredDay: 0 })),
     };
   }
-  void state;
   return out;
 }
 

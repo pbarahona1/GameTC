@@ -155,9 +155,10 @@ describe('Fase 5 · guardado comprimido y seguro', () => {
   it('una copia dañada no destruye las demás: se carga la mejor copia válida', async () => {
     const kv = new MemoryKV();
     const g = structuredClone(s);
+    // Copias separadas por tiempo real (1.3): se guarda cada dos días reales.
     for (let i = 0; i < 4; i++) {
       for (let d = 0; d < 31; d++) advanceDay(g);
-      await saveGame(kv, g, 1000 + i);
+      await saveGame(kv, g, 1000 + i * 2 * 24 * 3600 * 1000);
     }
     expect(kv.map.get(KEYS.backups[0])).toBeTruthy();
     // Se daña la principal
@@ -193,7 +194,7 @@ describe('Fase 5 · guardado comprimido y seguro', () => {
     let lastOk = 0;
     for (let i = 0; i < 6; i++) {
       for (let d = 0; d < 31; d++) advanceDay(g);
-      const r = await saveGame(kv, g, 10 + i);
+      const r = await saveGame(kv, g, 10 + i * 2 * 24 * 3600 * 1000);
       if (r.ok) lastOk = g.day;
     }
     expect(lastOk).toBe(g.day);
@@ -267,7 +268,7 @@ describe('Fase 5 · insolvencia personal de punta a punta', () => {
     // Gasta la liquidez y renuncia: ya no hay ingresos.
     const cash = s.ledger.balances.checking - usd(50);
     if (cash > 0) post(s.ledger, { day: s.day, memo: 'Gasto grande', cf: 'operating', lines: [{ account: 'other_expense', debit: cash }, { account: 'checking', credit: cash }] });
-    s.ledger.balances.savings > 0 && post(s.ledger, { day: s.day, memo: 'Gasto grande', cf: 'operating', lines: [{ account: 'other_expense', debit: s.ledger.balances.savings }, { account: 'savings', credit: s.ledger.balances.savings }] });
+    if (s.ledger.balances.savings > 0) post(s.ledger, { day: s.day, memo: 'Gasto grande', cf: 'operating', lines: [{ account: 'other_expense', debit: s.ledger.balances.savings }, { account: 'savings', credit: s.ledger.balances.savings }] });
     quitJob(s);
     const scoreBefore = s.credit.score;
     expect(analyze(s).some((i) => i.id === 'personal-insolvency')).toBe(true);

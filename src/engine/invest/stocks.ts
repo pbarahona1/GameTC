@@ -10,7 +10,7 @@ import { stockMarketDrift, stockSectorDrift } from '../economy/economy';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtMoney, fmtPct } from '../format';
 import { addLog } from '../log';
-import { canPayFromChecking } from '../finance/payments';
+import { canPayFromChecking, spendable } from '../finance/payments';
 import { bookBuy, bookSell, brokerFee, holdingsOf, revalueInvestments } from './portfolio';
 import { practice } from '../skills/skills';
 import { post } from '../ledger/ledger';
@@ -145,7 +145,21 @@ export function stocksDay(state: GameState): void {
   processOrders(state);
   expireOrders(state);
   updateIndex(state);
+  warnStrongDrops(state);
   delistAndIpo(state);
+}
+
+/** Caída diaria a partir de la cual se avisa (y, si lo elegiste, se pausa). */
+export const STRONG_DROP = 0.08;
+
+/** Aviso de caídas fuertes del día en acciones que tenés (categoría "inversiones"). */
+function warnStrongDrops(state: GameState): void {
+  if (state.meta.projection) return;
+  const held = holdingsOf(state, 'stocks');
+  const drops = state.stocks.stocks
+    .filter((s) => (held[s.id]?.qty ?? 0) > 0 && s.prevClose > 0 && s.price / s.prevClose - 1 <= -STRONG_DROP)
+    .map((s) => `${s.id} ${fmtPct(s.price / s.prevClose - 1, 1)}`);
+  if (drops.length) addLog(state, 'warning', '📉', `Caída fuerte hoy en tus acciones: ${drops.join(', ')}.`, undefined, 'inversiones');
 }
 
 function stepStock(state: GameState, s: Stock, rm: number, volMult: number): void {
@@ -261,7 +275,7 @@ function bankrupt(state: GameState, s: Stock): void {
   s.dividend = 0;
   adjustClose(s, Math.max(1, Math.round(s.price * 0.06)));
   news(s, state.day, 'La empresa se declaró en quiebra. Los accionistas probablemente pierdan casi todo.', -0.94);
-  addLog(state, holdingsOf(state, 'stocks')[s.id] ? 'danger' : 'warning', '💥', `${s.name} (${s.id}) quebró. Su acción se desplomó y dejará de cotizar en 60 días; sus bonos entran en impago.`);
+  addLog(state, holdingsOf(state, 'stocks')[s.id] ? 'danger' : 'warning', '💥', `${s.name} (${s.id}) quebró. Su acción se desplomó y dejará de cotizar en 60 días; sus bonos entran en impago.`, undefined, 'inversiones');
   s.nextEarnings = state.day + 60; // fecha de exclusión de la bolsa
   for (const o of state.stocks.orders) if (o.stockId === s.id && o.status === 'abierta' && o.side === 'compra') o.status = 'cancelada';
 }
@@ -303,7 +317,7 @@ function delistAndIpo(state: GameState): void {
       const h = m.holdings[s.id];
       if (h) {
         bookSell(state, 'stocks', s.id, h.qty, 0, 0, `${s.name} deja de cotizar tras su quiebra (pérdida total)`);
-        addLog(state, 'danger', '🪦', `${s.name} dejó de cotizar. Tu inversión se dio de baja como pérdida realizada.`);
+        addLog(state, 'danger', '🪦', `${s.name} dejó de cotizar. Tu inversión se dio de baja como pérdida realizada.`, undefined, 'inversiones');
       }
       for (const o of m.orders) if (o.stockId === s.id && o.status === 'abierta') o.status = 'cancelada';
     }
@@ -446,7 +460,7 @@ export function placeStockOrder(state: GameState, o: OrderInput): ActionResult {
   if (o.side === 'compra') {
     const ref = o.limit ?? o.stop ?? s.price;
     const need = roundCents(ref * o.qty) + brokerFee(state, roundCents(ref * o.qty));
-    if (state.ledger.balances.checking + state.ledger.balances.savings < need) return FAIL(`Fondos insuficientes para cubrir la orden (${fmtMoney(need)}).`);
+    if (spendable(state) < need) return FAIL(`Fondos insuficientes para cubrir la orden (${fmtMoney(need)}).`);
   }
   const base: Order = {
     id: state.meta.nextId++, stockId: s.id, side: o.side, type: o.type, qty: o.qty, limit: o.limit, stop: o.stop, trailPct: o.trailPct,
@@ -621,10 +635,6 @@ export function returnOver(s: Stock, n: number): number | null {
   return s.price / h[h.length - 1 - n].c - 1;
 }
 
-export function sectorLabel(s: Stock): string {
-  return SECTOR_NAMES[s.sector];
-}
-
 export function orderSummary(o: Order): string {
   const parts = [`${o.side === 'compra' ? 'Compra' : 'Venta'} ${o.qty} ${o.stockId}`, typeLabel(o.type)];
   if (o.limit) parts.push(`límite ${fmtMoney(o.limit)}`);
@@ -633,5 +643,4 @@ export function orderSummary(o: Order): string {
   return parts.join(' · ');
 }
 
-export { typeLabel as orderTypeLabel };
 export const _test = { stepStock, processOrders, split, bankrupt };

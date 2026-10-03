@@ -13,7 +13,13 @@ import { initWorldV3 } from '../engine/worldInit';
  * Versión 0 (prototipo interno): no tenía `credit.arrearsEvents` ni
  * `bank.rateNegotiations`. Se conserva como ejemplo y está cubierta por pruebas.
  */
-type AnyState = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+/**
+ * Una partida guardada por una versión anterior es JSON sin tipo estático (su forma
+ * es justamente lo que estas funciones corrigen). Es la única excepción al tipado
+ * estricto del proyecto; el resultado se valida después con las invariantes.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- datos heredados sin forma conocida
+type AnyState = Record<string, any>;
 
 export const MIGRATIONS: Record<number, (s: AnyState) => AnyState> = {
   0: (s) => {

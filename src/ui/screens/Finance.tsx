@@ -1,5 +1,6 @@
-import { Fragment, useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../store';
+import { Fragment, useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../store';
+import { loanOffersOf, lastMonthOf } from '../derived';
 import { navStore, useNav } from '../nav';
 import type { AccountId } from '../../engine/ledger/accounts';
 import { accountDef } from '../../engine/ledger/accounts';
@@ -8,16 +9,16 @@ import { payCard, setAutopay, requestLimitIncrease, statementRemaining, minRemai
 import { cardTier } from '../../engine/finance/cardRewards';
 import { CARD_TIER_ORDER, CardTier } from '../../content/cards';
 import { Icon } from '../icons';
-import { quoteAll, takeLoan, negotiateRate, prepayLoan, amortizationSchedule, LOAN_TERMS, MAX_ACTIVE_LOANS } from '../../engine/finance/loans';
+import { takeLoan, negotiateRate, prepayLoan, amortizationSchedule, LOAN_TERMS, MAX_ACTIVE_LOANS } from '../../engine/finance/loans';
 import { changeLifestyle, movingCost, setPaymentMethod, setPrivateInsurance, payArrears, hasEmployerInsurance, insuranceCost, monthlyRecurring, effectiveAmount } from '../../engine/finance/budget';
 import { computeCreditScore, scoreBand } from '../../engine/finance/credit';
 import { BANK_BY_ID } from '../../content/banks';
 import { LIFESTYLES } from '../../content/lifestyle';
-import { incomeStatement } from '../../engine/reports/statements';
 import { addMonths, formatDate, startOfMonth, formatMonth } from '../../engine/time/calendar';
 import { fmtMoney, fmtPct } from '../../engine/format';
+import { spendable } from '../../engine/finance/payments';
 import { usd } from '../../engine/money';
-import type { PaymentMethod } from '../../engine/state';
+import type { Loan, PaymentMethod } from '../../engine/state';
 import { Money, InfoButton, Tabs, Seg, AmountInput, ConfirmButton, Pill, Bar, LineChart, Learn, ScreenIntro } from '../components/common';
 
 type Sub = 'accounts' | 'card' | 'loans' | 'invest' | 'budget' | 'credit';
@@ -212,34 +213,40 @@ function Card() {
   );
 }
 
+/** Un préstamo activo con SU propio monto de amortización (no se comparte entre préstamos). */
+function LoanCard({ l }: { l: Loan }) {
+  const s = useGame();
+  const [prepay, setPrepay] = useState(0);
+  return (
+    <div className="card" style={l.status === 'default' ? { borderColor: 'var(--loss)' } : undefined}>
+      <div className="card-head">
+        <h2>{BANK_BY_ID[l.bankId].name}</h2>
+        {l.status === 'default' ? <Pill tone="loss">Impago</Pill> : <Pill tone="info">Activo</Pill>}
+      </div>
+      <div className="kv">
+        <dt>Saldo</dt><dd>{fmtMoney(l.balance)}</dd>
+        <dt>Cuota mensual</dt><dd>{fmtMoney(l.payment)}</dd>
+        <dt>Tasa anual fija</dt><dd>{fmtPct(l.apr, 2)}</dd>
+        <dt>Cuotas pagadas</dt><dd>{l.paymentsMade} de {l.termMonths}</dd>
+        <dt>Próximo vencimiento</dt><dd>{formatDate(l.nextDueDay)}</dd>
+        <dt>Intereses pagados</dt><dd>{fmtMoney(l.interestPaid)}</dd>
+      </div>
+      <AmountInput id={`prepay-${l.id}`} label={`Amortizar el préstamo de ${BANK_BY_ID[l.bankId].name}`} value={prepay} onChange={setPrepay} max={Math.min(l.balance, spendable(s))} />
+      <span className="act"><button className="btn sm dark" disabled={prepay <= 0} onClick={() => { const r = store.run((st) => prepayLoan(st, l.id, prepay)); if (r.ok) setPrepay(0); }}>Amortizar anticipadamente</button><InfoButton term="accion_amortizar" /></span>
+    </div>
+  );
+}
+
 function Loans() {
   const s = useGame();
   const [amount, setAmount] = useState(usd(1000));
   const [term, setTerm] = useState(12);
   const [showSched, setShowSched] = useState<string | null>(null);
-  const [prepay, setPrepay] = useState(0);
-  const offers = useMemo(() => quoteAll(s, amount, term), [amount, term, s.day, s.credit.score, s.bank.loans.length, JSON.stringify(s.bank.rateNegotiations)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const offers = useDerived(loanOffersOf, amount, term);
   const active = s.bank.loans.filter((l) => l.status !== 'paid');
   return (
     <>
-      {active.map((l) => (
-        <div className="card" key={l.id} style={l.status === 'default' ? { borderColor: 'var(--loss)' } : undefined}>
-          <div className="card-head">
-            <h2>{BANK_BY_ID[l.bankId].name}</h2>
-            {l.status === 'default' ? <Pill tone="loss">Impago</Pill> : <Pill tone="info">Activo</Pill>}
-          </div>
-          <div className="kv">
-            <dt>Saldo</dt><dd>{fmtMoney(l.balance)}</dd>
-            <dt>Cuota mensual</dt><dd>{fmtMoney(l.payment)}</dd>
-            <dt>Tasa anual fija</dt><dd>{fmtPct(l.apr, 2)}</dd>
-            <dt>Cuotas pagadas</dt><dd>{l.paymentsMade} de {l.termMonths}</dd>
-            <dt>Próximo vencimiento</dt><dd>{formatDate(l.nextDueDay)}</dd>
-            <dt>Intereses pagados</dt><dd>{fmtMoney(l.interestPaid)}</dd>
-          </div>
-          <AmountInput id={`prepay-${l.id}`} value={prepay} onChange={setPrepay} max={Math.min(l.balance, s.ledger.balances.checking)} />
-          <span className="act"><button className="btn sm dark" disabled={prepay <= 0} onClick={() => { const r = store.run((st) => prepayLoan(st, l.id, prepay)); if (r.ok) setPrepay(0); }}>Amortizar anticipadamente</button><InfoButton term="accion_amortizar" /></span>
-        </div>
-      ))}
+      {active.map((l) => <LoanCard key={l.id} l={l} />)}
 
       <div className="card">
         <div className="card-head"><h2>Comparar préstamos</h2><InfoButton term="prestamo" /></div>
@@ -353,11 +360,6 @@ function Invest() {
         </div>
         <p className="tiny muted">Deducible hasta 15 %. No es liquidez: no se puede usar para gastos. Aportar al menos lo que iguala tu empleador es dinero adicional.</p>
       </div>
-      <div className="card lock">
-        <Pill tone="neutral">Fase 3</Pill>
-        <strong>Bolsa de valores, Mogul Exchange y bienes raíces</strong>
-        <p className="small muted">Llegan en la próxima gran actualización, conectados al mismo libro mayor.</p>
-      </div>
     </>
   );
 }
@@ -365,10 +367,7 @@ function Invest() {
 function Budget() {
   const s = useGame();
   useUI();
-  const last = useMemo(() => {
-    const prevEnd = startOfMonth(s.day) - 1;
-    return prevEnd >= 0 ? incomeStatement(s, startOfMonth(prevEnd), prevEnd) : null;
-  }, [s.day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const last = useDerived(lastMonthOf);
   const [pay, setPay] = useState(0);
   const arrears = s.ledger.balances.arrears;
   return (
@@ -377,7 +376,7 @@ function Budget() {
         <div className="card" style={{ borderColor: 'var(--loss)' }}>
           <div className="card-head"><h2>Pagos vencidos</h2><InfoButton term="mora" /></div>
           <div className="big num loss" style={{ fontSize: 22 }}>{fmtMoney(arrears)}</div>
-          <AmountInput id="arr-pay" value={pay} onChange={setPay} max={Math.min(arrears, s.ledger.balances.checking)} />
+          <AmountInput id="arr-pay" value={pay} onChange={setPay} max={Math.min(arrears, spendable(s))} />
           <span className="act"><button className="btn primary" disabled={pay <= 0} onClick={() => { const r = store.run((st) => payArrears(st, pay)); if (r.ok) setPay(0); }}>Pagar atrasos</button><InfoButton term="accion_pagar_atrasos" /></span>
         </div>
       )}

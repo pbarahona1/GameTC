@@ -45,13 +45,10 @@ export function progressiveTax(j: Jurisdiction, taxable: Cents): { tax: Cents; s
 }
 
 export function marginalRate(j: Jurisdiction, taxable: Cents): number {
-  let lower = 0;
   for (const b of j.incomeBrackets) {
     const upper = b.upTo === null ? Infinity : usd(b.upTo);
     if (taxable < upper) return b.rate;
-    lower = upper;
   }
-  void lower;
   return j.incomeBrackets[j.incomeBrackets.length - 1].rate;
 }
 

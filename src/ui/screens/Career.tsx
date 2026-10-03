@@ -1,5 +1,5 @@
 import { imageJobBonus } from '../../engine/lifestyle/effects';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useGame, useUI, store } from '../store';
 import { navStore, useNav } from '../nav';
 import { JOBS, JOB_BY_ID, SECTOR_NAMES, Sector, EDUCATION_NAMES, FIELD_NAMES } from '../../content/jobs';
@@ -12,9 +12,11 @@ import { enroll, dropCourse, courseRequirements, courseTotalCost, studyHoursPerW
 import { payroll } from '../../engine/tax/incomeTax';
 import { residence } from '../../engine/tax/taxEngine';
 import { formatDate } from '../../engine/time/calendar';
-import { fmtMoney, fmtPct } from '../../engine/format';
+import { fmtMoney, fmtPct, fmtNumber } from '../../engine/format';
 import { Money, InfoButton, Tabs, Bar, Pill, Empty, ConfirmButton, Learn, ScreenIntro } from '../components/common';
 import { professionalLevel } from '../../engine/progression/progression';
+import { SKILL_ICON } from '../contentIcons';
+import { Icon } from '../icons';
 
 type Sub = 'job' | 'board' | 'study' | 'skills';
 
@@ -24,7 +26,7 @@ function CurrentJob() {
   if (!e) {
     return (
       <div className="card">
-        <Empty icon="🧳">
+        <Empty icon="career">
           <strong>Sin empleo.</strong>
           <div className="small">No es obligatorio trabajar, pero sin ingresos tus gastos fijos consumen tu efectivo cada mes.</div>
         </Empty>
@@ -170,7 +172,7 @@ function JobBoard() {
           {Object.entries(SECTOR_NAMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </div>
-      {list.length === 0 && <Empty icon="🔎">No hay vacantes que cumplan el filtro. Revisá "Todas" para ver qué requisitos te faltan.</Empty>}
+      {list.length === 0 && <Empty icon="search">No hay vacantes que cumplan el filtro. Revisá "Todas" para ver qué requisitos te faltan.</Empty>}
       {list.map((j) => {
         const req = checkRequirements(s, j);
         const active = s.career.applications.some((a) => a.jobId === j.id && (a.status === 'pending' || a.status === 'offer'));
@@ -274,7 +276,7 @@ function Study() {
             <div className="chips tiny">
               <Pill tone="neutral">{c.durationDays >= 365 ? `${Math.round(c.durationDays / 365)} años` : `${c.durationDays} días`}</Pill>
               <Pill tone="neutral">{c.hoursPerWeek} h/sem</Pill>
-              {Object.entries(c.xp).map(([sk, xp]) => <Pill key={sk} tone="accent">{SKILLS.find((x) => x.id === sk)!.name} +{(xp as number).toLocaleString('es')} XP</Pill>)}
+              {Object.entries(c.xp).map(([sk, xp]) => <Pill key={sk} tone="accent">{SKILLS.find((x) => x.id === sk)!.name} +{fmtNumber(xp as number)} XP</Pill>)}
               {c.grants?.education && <Pill tone="gain">Título {EDUCATION_NAMES[c.grants.education]}</Pill>}
               {c.grants?.certificate && <Pill tone="gain">Certificado</Pill>}
               {done > 0 && <Pill tone="info">Completado{c.kind !== 'titulo' ? ' · repetir rinde 20 %' : ''}</Pill>}
@@ -317,7 +319,7 @@ function Skills() {
         return (
           <div className="card" key={d.id} style={{ gap: 8 }}>
             <button className="row clickable" style={{ border: 0, background: 'none', padding: 0, textAlign: 'left' }} onClick={() => setOpen(isOpen ? null : d.id)} aria-expanded={isOpen}>
-              <span aria-hidden style={{ fontSize: 20 }}>{d.icon}</span>
+              <span className="skill-ic" aria-hidden><Icon name={SKILL_ICON[d.id]} size={18} /></span>
               <div className="grow">
                 <div className="title">{d.name}</div>
                 {d.trainable ? <Bar value={p.level >= SKILL_MAX_LEVEL ? 1 : p.xp / need} /> : <span className="tiny muted">Rasgo fijo</span>}
@@ -327,7 +329,7 @@ function Skills() {
             {isOpen && (
               <div className="stack small" style={{ gap: 6 }}>
                 <p className="muted">{d.description}</p>
-                {d.trainable && <p className="tiny faint">XP {p.xp.toLocaleString('es')} / {need.toLocaleString('es')} para nivel {p.level + 1} · máximo {SKILL_MAX_LEVEL}</p>}
+                {d.trainable && <p className="tiny faint">XP {fmtNumber(p.xp)} / {fmtNumber(need)} para nivel {p.level + 1} · máximo {SKILL_MAX_LEVEL}</p>}
                 {d.effects.length > 0 && <div><strong className="tiny">Efectos actuales</strong><ul style={{ margin: 0, paddingLeft: 18 }}>{d.effects.map((x) => <li key={x}>{x}</li>)}</ul></div>}
                 {d.futureEffects && <div><strong className="tiny">Próximamente</strong><ul style={{ margin: 0, paddingLeft: 18 }} className="muted">{d.futureEffects.map((x) => <li key={x}>{x}</li>)}</ul></div>}
                 <div><strong className="tiny">Cómo desarrollarla</strong><ul style={{ margin: 0, paddingLeft: 18 }}>{d.methods.map((x) => <li key={x}>{x}</li>)}</ul></div>
@@ -345,7 +347,7 @@ export function Career() {
   useUI();
   const s = useGame();
   const sub = (nav.sub.career as Sub) ?? 'job';
-  const offers = useMemo(() => s.career.applications.filter((a) => a.status === 'offer').length, [s.career.applications.length, s.day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const offers = s.career.applications.filter((a) => a.status === 'offer').length;
   return (
     <>
       <ScreenIntro icon="career" title="Carrera" text="Tu trabajo y tu formación: postulate a empleos, estudiá para subir tus habilidades y negociá tu sueldo." term="nivel_profesional" />

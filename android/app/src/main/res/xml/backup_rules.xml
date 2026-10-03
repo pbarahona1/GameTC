@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copia de seguridad automática de Android (hasta Android 11): solo las partidas.
+  No se copian las actualizaciones descargadas (ota/) ni su estado, que se vuelven a
+  descargar y dependen de la versión instalada.
+-->
+<full-backup-content>
+    <include domain="file" path="saves/" />
+</full-backup-content>

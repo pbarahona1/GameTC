@@ -6,7 +6,7 @@ import { addLog } from '../log';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtMoney, fmtPct } from '../format';
 import { recordInquiry, recordLate, recordOnTime, refreshCreditScore } from './credit';
-import { canPayFromChecking } from './payments';
+import { canPayFromChecking, spendable } from './payments';
 import { practice } from '../skills/skills';
 import { monthlyGrossIncome } from '../career/career';
 import { accrueRewards, cardTier, cardUsed } from './cardRewards';
@@ -165,7 +165,7 @@ function processDue(state: GameState): void {
   if (c.autopay !== 'none') {
     const target = c.autopay === 'full' ? statementRemaining(state) : minRemaining(state);
     if (target > 0) {
-      const available = Math.min(target, Math.max(0, state.ledger.balances.checking + (state.bank.overdraftSweep ? state.ledger.balances.savings : 0)));
+      const available = Math.min(target, Math.max(0, spendable(state)));
       if (available > 0) payCard(state, available, true);
     }
   }

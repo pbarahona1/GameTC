@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
-import { store, useGame, useUI } from '../../store';
+import { useState } from 'react';
+import { store, useGame, useUI, useDerived } from '../../store';
+import { coMetricsOf, coInsightsOf, coValuationOf } from '../../derived';
 import { navStore } from '../../nav';
 import type { Company } from '../../../engine/business/types';
 import type { GameState } from '../../../engine/state';
 import type { ActionResult } from '../../../engine/result';
 import { SECTOR_BY_ID, LEGAL_FORM_BY_ID, roleDef, allRoles, DEPT_NAMES, DeptId } from '../../../content/sectors';
-import { coMetrics, coIncomeStatement, valuation } from '../../../engine/business/reports';
-import { analyzeCompany } from '../../../engine/business/advisor';
+import { coIncomeStatement } from '../../../engine/business/reports';
 import { daysToBankruptcy } from '../../../engine/business/finance';
 import { capacity, countRole, hasManager, managerSkill, monthlyPayroll, equipDef } from '../../../engine/business/common';
 import { expectedDemand, refPrice, setPrice, setPlan, toggleProduct, buyEquipment, sellEquipment, setMaintenance } from '../../../engine/business/operations';
@@ -17,11 +17,14 @@ import { generateCandidates, hire, fire, train, setWage, marketWage, hiringFee, 
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import { Cents, usd } from '../../../engine/money';
-import { Money, InfoButton, Tabs, Pill, Bar, Empty, AmountInput, ConfirmButton, CardHead, Act, Stat, LineChart, Legend, NumInput, Seg } from '../../components/common';
+import { Money, InfoButton, GroupedTabs, Pill, Bar, Empty, AmountInput, ConfirmButton, CardHead, Act, Stat, LineChart, Legend, NumInput, Seg, GuardedAct } from '../../components/common';
+import type { TabGroup } from '../../components/common';
 import { MarketingTab, FinanceTab, MarketTab, ManageTab } from './CompanyTabs';
 import { ForecastPanel } from '../../components/ForecastPanel';
 import { BandChart } from '../../components/charts';
 import { GroupTab } from './GroupTab';
+import { SECTOR_ICON } from '../../contentIcons';
+import { Icon } from '../../icons';
 
 export function runCo(id: number, fn: (s: GameState, co: Company) => ActionResult | void): ActionResult {
   return store.run((s) => {
@@ -31,30 +34,28 @@ export function runCo(id: number, fn: (s: GameState, co: Company) => ActionResul
   });
 }
 
-const TABS = [
-  { id: 'summary', label: 'Resumen' },
-  { id: 'ops', label: 'Operaciones' },
-  { id: 'inventory', label: 'Inventario' },
-  { id: 'staff', label: 'Personal' },
-  { id: 'marketing', label: 'Marketing' },
-  { id: 'finance', label: 'Finanzas' },
-  { id: 'market', label: 'Mercado' },
-  { id: 'group', label: 'Grupo e inmuebles' },
-  { id: 'manage', label: 'Gestión' },
+type CoTab = 'summary' | 'ops' | 'inventory' | 'staff' | 'marketing' | 'finance' | 'market' | 'group' | 'manage';
+
+/** Secciones de una empresa agrupadas (las rutas "co:<id>:<sección>" no cambian). */
+const TAB_GROUPS: Array<TabGroup<CoTab>> = [
+  { id: 'summary', label: 'Resumen', items: [{ id: 'summary', label: 'Resumen' }] },
+  { id: 'ops', label: 'Operación', items: [{ id: 'ops', label: 'Operaciones' }, { id: 'inventory', label: 'Inventario' }, { id: 'staff', label: 'Personal' }] },
+  { id: 'sales', label: 'Comercial', items: [{ id: 'marketing', label: 'Marketing' }, { id: 'market', label: 'Mercado' }] },
+  { id: 'money', label: 'Finanzas', items: [{ id: 'finance', label: 'Finanzas' }, { id: 'group', label: 'Grupo e inmuebles' }] },
+  { id: 'manage', label: 'Gestión', items: [{ id: 'manage', label: 'Gestión' }] },
 ];
-const HOLDING_TABS = [
-  { id: 'summary', label: 'Resumen' },
-  { id: 'group', label: 'Grupo' },
-  { id: 'finance', label: 'Finanzas' },
-  { id: 'manage', label: 'Gestión' },
+const HOLDING_GROUPS: Array<TabGroup<CoTab>> = [
+  { id: 'summary', label: 'Resumen', items: [{ id: 'summary', label: 'Resumen' }] },
+  { id: 'group', label: 'Grupo', items: [{ id: 'group', label: 'Grupo' }] },
+  { id: 'finance', label: 'Finanzas', items: [{ id: 'finance', label: 'Finanzas' }] },
+  { id: 'manage', label: 'Gestión', items: [{ id: 'manage', label: 'Gestión' }] },
 ];
 
 function Summary({ co }: { co: Company }) {
   const s = useGame();
-  const ui = useUI();
-  const m = useMemo(() => coMetrics(s, co), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
-  const insights = useMemo(() => analyzeCompany(s, co), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
-  const v = useMemo(() => valuation(s, co), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useDerived(coMetricsOf, co.id);
+  const insights = useDerived(coInsightsOf, co.id);
+  const v = useDerived(coValuationOf, co.id);
   const left = daysToBankruptcy(s, co);
   const h = co.history.slice(-18);
   return (
@@ -85,7 +86,7 @@ function Summary({ co }: { co: Company }) {
       {co.forecast && <ForecastVsReality co={co} />}
       {sectorModel(co) !== 'holding' && co.status !== 'sold' && <ForecastPanel target={{ kind: 'empresa', companyId: co.id }} title="¿Cómo le irá? Próximos 12 meses" />}
       <div className="section-title"><h2>Asesor empresarial</h2><InfoButton term="asesor" /></div>
-      {insights.length === 0 && <Empty icon="✅">Sin alertas para esta empresa{m.daysOpen < 30 ? ' (algunas se activan tras 30 días de operación)' : ''}.</Empty>}
+      {insights.length === 0 && <Empty icon="check">Sin alertas para esta empresa{m.daysOpen < 30 ? ' (algunas se activan tras 30 días de operación)' : ''}.</Empty>}
       {insights.map((i) => (
         <button key={i.id} className={`alert ${i.severity}`} style={{ textAlign: 'left' }} onClick={() => navStore.open({ kind: 'advisor' })}>
           <span className="stripe" />
@@ -148,8 +149,20 @@ function Ops({ co }: { co: Company }) {
                 <dt>Demanda esperada por día (estim.)</dt><dd>{demandNow.toFixed(1)}</dd>
               </div>
               <div className="inline-form">
-                <div style={{ flex: 1, minWidth: 140 }}><AmountInput id={`price-${co.id}-${p.id}`} value={draft} onChange={(v) => setPrices({ ...prices, [p.id]: v })} /></div>
-                <Act label="Aplicar" help="accion_precio" className="btn sm dark" disabled={draft === ps.price} onClick={() => runCo(co.id, (st, c) => setPrice(st, c, p.id, draft))} />
+                <div style={{ flex: 1, minWidth: 140 }}><AmountInput id={`price-${co.id}-${p.id}`} label={`Precio de ${p.name}`} value={draft} onChange={(v) => setPrices({ ...prices, [p.id]: v })} /></div>
+                <GuardedAct
+                  label="Aplicar"
+                  help="accion_precio"
+                  className="btn sm dark"
+                  disabled={!(draft > 0) || draft === ps.price}
+                  warning={draft > 0 && draft < unitCost
+                    ? <>Con {fmtMoney(draft)} cada unidad se vende {fmtMoney(unitCost - draft)} por debajo de su costo directo estimado ({fmtMoney(unitCost)}).</>
+                    : draft > 0 && demandNow > 0 && demandDraft < demandNow * 0.25
+                      ? <>Con {fmtMoney(draft)} la demanda esperada cae de {demandNow.toFixed(1)} a {demandDraft.toFixed(1)} por día.</>
+                      : undefined}
+                  confirmLabel="Aplicar igual"
+                  onConfirm={() => runCo(co.id, (st, c) => setPrice(st, c, p.id, draft))}
+                />
               </div>
               {draft !== ps.price && <p className="tiny muted">Con {fmtMoney(draft)} la demanda esperada sería {demandDraft.toFixed(1)}/día ({demandDraft >= demandNow ? '+' : ''}{Math.round((demandDraft / Math.max(0.01, demandNow) - 1) * 100)} %). Elasticidad del sector: {p.elasticity}. <InfoButton term="elasticidad" /></p>}
               {sec.model === 'manufacturing' && (
@@ -217,7 +230,7 @@ function Inventory({ co }: { co: Company }) {
   const [item, setItem] = useState(sec.items[0]?.id ?? '');
   const [supplier, setSupplier] = useState('');
   const [qty, setQty] = useState(0);
-  if (!sec.items.length) return <div className="card"><Empty icon="📭">Este negocio no maneja inventario: vende {sec.model === 'subscription' ? 'suscripciones' : 'horas de servicio'}.</Empty></div>;
+  if (!sec.items.length) return <div className="card"><Empty icon="package">Este negocio no maneja inventario: vende {sec.model === 'subscription' ? 'suscripciones' : 'horas de servicio'}.</Empty></div>;
   const sups = sec.suppliers.filter((x) => x.itemId === item);
   const sup = sups.find((x) => x.id === supplier) ?? sups[0];
   const q = qty || sup?.minOrder || 0;
@@ -307,7 +320,7 @@ function Inventory({ co }: { co: Company }) {
           <>
             <div className="inline-form">
               <span className="small">Cantidad</span>
-              <NumInput id="po-qty" value={q} onChange={setQty} min={0} step={1} suffix={sec.items.find((x) => x.id === item)!.unit} />
+              <NumInput id="po-qty" live value={q} onChange={setQty} min={0} step={1} suffix={sec.items.find((x) => x.id === item)!.unit} />
             </div>
             <p className="small">Total {fmtMoney(Math.round(supplierUnitCost(s, sup) * q))} + flete {fmtMoney(deliveryFee(s, co, sup))}. Caja: {fmtMoney(co.ledger.balances.cash)}.</p>
             <Act label="Pedir" help="accion_pedido" className="btn primary" onClick={() => runCo(co.id, (st, c) => placeOrder(st, c, sup.id, q))} />
@@ -350,7 +363,7 @@ function Staff({ co }: { co: Company }) {
     <>
       <div className="card">
         <CardHead title={`Equipo (${co.employees.length})`} term="nomina" />
-        <p className="small muted">Nómina mensual con cargas: {fmtMoney(monthlyPayroll(s, co))}. Productividad = (0,5 + habilidad/100) × (0,7 + 0,3 × moral/100).</p>
+        <p className="small muted">Nómina mensual con cargas: {fmtMoney(monthlyPayroll(s, co))}. Productividad = (0.5 + habilidad/100) × (0.7 + 0.3 × moral/100).</p>
         {co.employees.length === 0 && <p className="small loss">Sin personal no hay producción ni atención.</p>}
         {co.employees.map((e) => {
           const r = roleDef(sec, e.role);
@@ -432,6 +445,14 @@ function Staff({ co }: { co: Company }) {
             {co.delegation.autoPricing && (
               <div className="inline-form small"><span>Margen objetivo sobre el costo</span><NumInput id={`markup-${co.id}`} value={Math.round(co.delegation.targetMarkup * 100)} onChange={(n) => runCo(co.id, (_st, c) => { c.delegation.targetMarkup = Math.max(1, n / 100); })} suffix="%" /></div>
             )}
+            {co.managerReport && (
+              <div className="manager-report">
+                <div className="title small">Resumen semanal del gerente · {formatDate(co.managerReport.day)}</div>
+                {co.managerReport.items.length
+                  ? <ul className="small">{co.managerReport.items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                  : <p className="small muted">Esta semana no hizo cambios: todo seguía dentro de lo previsto.</p>}
+              </div>
+            )}
           </>
         )}
         <p className="tiny muted">Empleados de apoyo en la empresa: {['contador', 'vendedor', 'marketing', 'rrhh', 'soporte', 'logistica', 'investigador'].map((r) => `${roleDef(sec, r).name} ${countRole(co, r)}`).join(' · ')}.</p>
@@ -470,7 +491,7 @@ export function CompanyView({ co, tab }: { co: Company; tab: string }) {
       <button className="btn ghost sm" onClick={() => navStore.setSub('business', 'portfolio')}>← Mis empresas</button>
       <div className="card">
         <div className="co-head">
-          <div className="co-logo" style={{ background: co.color }} aria-hidden>{sec.icon}</div>
+          <div className="co-logo" style={{ background: co.color }} aria-hidden><Icon name={SECTOR_ICON[co.sector]} size={20} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: 19 }}>{co.name}</h1>
             <div className="tiny muted">{sec.name} · {LEGAL_FORM_BY_ID[co.legalForm].name}{co.parentId ? ` · subsidiaria de ${s.companies.find((c) => c.id === co.parentId)?.name ?? ''}` : ''}{co.ownership < 1 ? ` · tu parte ${fmtPct(co.ownership, 1)}` : ''}</div>
@@ -488,7 +509,7 @@ export function CompanyView({ co, tab }: { co: Company; tab: string }) {
           <div className="small" style={{ flex: 1 }}><strong>{co.saleOffer.from} ofrece {fmtMoney(co.saleOffer.price, { decimals: false })} por {co.name}.</strong> Tocá para ver la oferta en Gestión.</div>
         </button>
       )}
-      <Tabs items={sec.model === 'holding' ? HOLDING_TABS : TABS} value={tab} onChange={(t) => { navStore.setSub('business', `co:${co.id}:${t}`); window.scrollTo({ top: 0 }); }} />
+      <GroupedTabs<CoTab> label={`Secciones de ${co.name}`} groups={sec.model === 'holding' ? HOLDING_GROUPS : TAB_GROUPS} value={tab as CoTab} onChange={(t) => { navStore.setSub('business', `co:${co.id}:${t}`); window.scrollTo({ top: 0 }); }} />
       {tab === 'summary' && <Summary co={co} />}
       {tab === 'ops' && <Ops co={co} />}
       {tab === 'inventory' && <Inventory co={co} />}

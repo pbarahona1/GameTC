@@ -1,81 +1,103 @@
-# Compila el juego para Android en GitHub (no hace falta instalar Android Studio).
+# Verificación, compilación Android y publicación.
 #
-# En cada push a main (o con Actions → "APK Android" → Run workflow):
-#  1. Pruebas automáticas.
-#  2. APK instalable firmada con la llave FIJA del repositorio: se instala encima de la
-#     anterior sin desinstalar, así la partida se conserva. Se publica como artefacto y
-#     como "Release" de GitHub (descarga directa desde el teléfono).
-#  3. Paquete para Play Store (AAB) firmado con la llave de publicación, SOLO si están
-#     configurados los secretos URT_KEYSTORE_BASE64, URT_KEYSTORE_PASSWORD y URT_KEY_ALIAS
-#     (opcional URT_KEY_PASSWORD). Ver docs/PUBLICAR.md.
+# - En CUALQUIER rama y en pull requests: tipos, lint, pruebas, compilación web, prueba
+#   de punta a punta (Playwright) y APK.
+#   Nada se publica.
+# - Solo en push a main (job "publicar"):
+#     · Release v<versión> con la APK (y el AAB/APK de publicación si hay llave de firma)
+#       y sus huellas SHA256SUMS. Si la Release de esa versión ya existe, NO se reemplaza:
+#       hay que subir la versión en package.json.
+#     · Actualización por internet firmada (ECDSA P-256) en la rama ota-channel, si está
+#       el secreto URT_OTA_SIGNING_KEY. Sin firma no se publica nada.
 #
-# No usa android-actions/setup-android: la imagen de GitHub (ubuntu-24.04) ya trae
-# el SDK de Android instalado en $ANDROID_HOME, con las licencias aceptadas.
-name: APK Android
+# Secretos (Settings → Secrets and variables → Actions), ver docs/PUBLICAR.md:
+#   URT_KEYSTORE_BASE64, URT_KEYSTORE_PASSWORD, URT_KEY_ALIAS, URT_KEY_PASSWORD (opcional)
+#   URT_OTA_SIGNING_KEY
+#
+# El runner ubuntu-24.04 trae el SDK de Android en $ANDROID_HOME con las licencias aceptadas.
+name: Android y publicación
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  # Compilaciones reproducibles: misma fecha de referencia para todo el contenido generado.
+  SOURCE_DATE_EPOCH: 1767225600
+  TZ: UTC
+
 jobs:
-  build:
+  verificar:
     runs-on: ubuntu-24.04
+    timeout-minutes: 40
     env:
-      HAS_RELEASE_KEY: ${{ secrets.URT_KEYSTORE_BASE64 != '' }}
+      HAS_RELEASE_KEY: ${{ secrets.URT_KEYSTORE_BASE64 != '' && secrets.URT_KEYSTORE_PASSWORD != '' && secrets.URT_KEY_ALIAS != '' }}
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v5
+      - uses: gradle/actions/wrapper-validation@v6
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 22.22.2
           cache: npm
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
           cache: gradle
-      - name: SDK de Android preinstalado
+
+      - name: "Versión (única fuente: package.json)"
+        id: ver
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          test -d "$ANDROID_HOME" || { echo "No se encontró el SDK de Android en el runner"; exit 1; }
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          VERSION=$(node -p "require('./package.json').version")
+          CODE=$(node -p "require('./package.json').nativeCode")
+          MIN=$(node -p "require('./package.json').otaMinNativeCode")
+          test "$MIN" -le "$CODE" || { echo "::error::otaMinNativeCode ($MIN) no puede ser mayor que nativeCode ($CODE)"; exit 1; }
+          grep -q "\"version\": \"$VERSION\"" src/content/changelog.json || { echo "::error::Falta la entrada $VERSION en src/content/changelog.json"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
       - run: npm run build
+      - name: Prueba de punta a punta (Playwright)
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+      - name: Informe de Playwright (solo si falla)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
       - run: npx cap sync android
-      - name: Versión
-        id: ver
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Compilar APK instalable (firma fija)
+      - name: SDK de Android preinstalado
+        run: |
+          test -d "$ANDROID_HOME" || { echo "::error::No se encontró el SDK de Android en el runner"; exit 1; }
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          echo "APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner" >> "$GITHUB_ENV"
+
+      - name: APK de actualización (firma fija de las instalaciones existentes)
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
-          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/ultimate-realistic-tycoon.apk"
-          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$RUNNER_TEMP/ultimate-realistic-tycoon.apk" | head -3 || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ultimate-realistic-tycoon-apk-${{ steps.ver.outputs.version }}
-          path: ${{ runner.temp }}/ultimate-realistic-tycoon.apk
-          if-no-files-found: error
+          mkdir -p "$RUNNER_TEMP/out"
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/out/ultimate-realistic-tycoon.apk"
+          "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/out/ultimate-realistic-tycoon.apk" | head -3
 
-      - name: Publicar la APK en Releases (descarga directa)
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.ver.outputs.version }}
-        run: |
-          TAG="v$VERSION"
-          NOTES="APK instalable de Ultimate Realistic Tycoon $VERSION. Se instala encima de la versión anterior (misma firma) y conserva la partida. Las versiones 1.1 y anteriores tenían otra firma: la primera vez hay que exportar la partida, desinstalar e importar."
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" "$RUNNER_TEMP/ultimate-realistic-tycoon.apk" --clobber
-          else
-            gh release create "$TAG" "$RUNNER_TEMP/ultimate-realistic-tycoon.apk" --title "Ultimate Realistic Tycoon $VERSION" --notes "$NOTES" --target "$GITHUB_SHA" --latest
-          fi
-
-      - name: Paquete para Play Store (AAB firmado)
+      - name: AAB y APK de publicación (llave de publicación)
         if: env.HAS_RELEASE_KEY == 'true'
         working-directory: android
         env:
@@ -84,17 +106,87 @@ jobs:
           URT_KEY_ALIAS: ${{ secrets.URT_KEY_ALIAS }}
           URT_KEY_PASSWORD: ${{ secrets.URT_KEY_PASSWORD }}
         run: |
+          umask 077
           echo "$URT_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          trap 'rm -f "$RUNNER_TEMP/release.jks"' EXIT
           export URT_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
-          ./gradlew bundleRelease --no-daemon --stacktrace
-          jarsigner -verify app/build/outputs/bundle/release/app-release.aab > /dev/null && echo "AAB firmado correctamente"
-          rm -f "$RUNNER_TEMP/release.jks"
-      - uses: actions/upload-artifact@v4
-        if: env.HAS_RELEASE_KEY == 'true'
-        with:
-          name: play-store-aab-${{ steps.ver.outputs.version }}
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
+          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
+          "$APKSIGNER" verify app/build/outputs/apk/release/app-release.apk
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab > /dev/null
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/out/ultimate-realistic-tycoon-play.aab"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/out/ultimate-realistic-tycoon-release.apk"
+
       - name: Aviso de firma de publicación
         if: env.HAS_RELEASE_KEY != 'true'
-        run: echo "::notice title=AAB para Play Store::No se generó el AAB firmado porque faltan los secretos URT_KEYSTORE_BASE64, URT_KEYSTORE_PASSWORD y URT_KEY_ALIAS. Ver docs/PUBLICAR.md."
+        run: echo "::notice title=Firma de publicación::No se generaron el AAB ni la APK de publicación porque faltan los secretos URT_KEYSTORE_BASE64, URT_KEYSTORE_PASSWORD y URT_KEY_ALIAS. Ver docs/PUBLICAR.md."
+
+      - name: Huellas SHA-256
+        working-directory: ${{ runner.temp }}/out
+        run: sha256sum * | tee SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ steps.ver.outputs.version }}
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: error
+
+  publicar:
+    needs: verificar
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.verificar.outputs.version }}
+      HAS_OTA_KEY: ${{ secrets.URT_OTA_SIGNING_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-${{ needs.verificar.outputs.version }}
+          path: out
+
+      - name: Release v${{ needs.verificar.outputs.version }} (sin reemplazar una existente)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$VERSION"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "::warning title=Release ya publicada::$TAG ya existe y no se reemplaza. Para publicar cambios, subí la versión en package.json (y nativeCode si cambió algo nativo)."
+            exit 0
+          fi
+          NOTES=$(node -e "const c=require('./src/content/changelog.json').find(e=>e.version===process.env.VERSION); console.log(c.items.map(i=>'- '+i).join('\n'))")
+          printf '%s\n\n%s\n' "$NOTES" "La APK ultimate-realistic-tycoon.apk se instala encima de la versión anterior y conserva la partida. Verificá la descarga con SHA256SUMS." > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" out/* --title "Ultimate Realistic Tycoon $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --target "$GITHUB_SHA" --latest
+
+      - uses: actions/setup-node@v5
+        if: env.HAS_OTA_KEY == 'true'
+        with:
+          node-version: 22.22.2
+          cache: npm
+
+      - name: Actualización por internet firmada
+        if: env.HAS_OTA_KEY == 'true'
+        env:
+          URT_OTA_SIGNING_KEY: ${{ secrets.URT_OTA_SIGNING_KEY }}
+        run: |
+          npm ci
+          BUILD=$(node -p "const [a,b,c]=require('./package.json').version.split(/[.-]/).map(Number); a*10000+b*100+c")
+          PUBLISHED=$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/ota-channel/manifest.json" 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const e=JSON.parse(d);console.log(JSON.parse(Buffer.from(e.payload,'base64')).build)}catch{console.log(0)}})" || echo 0)
+          if [ "$PUBLISHED" -ge "$BUILD" ]; then
+            echo "::warning title=OTA ya publicada::El canal ya tiene la versión $PUBLISHED; no se reemplaza."
+            exit 0
+          fi
+          node scripts/ota.mjs sign --out "$RUNNER_TEMP/ota"
+          cd "$RUNNER_TEMP/ota"
+          git init -q -b ota-channel
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "OTA $VERSION ($GITHUB_SHA)"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" ota-channel
+
+      - name: Aviso de actualización por internet
+        if: env.HAS_OTA_KEY != 'true'
+        run: echo "::notice title=OTA sin publicar::Falta el secreto URT_OTA_SIGNING_KEY; la actualización por internet no se publicó (nunca se publica sin firmar). Ver docs/PUBLICAR.md."

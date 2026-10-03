@@ -1,13 +1,13 @@
 import type { GameState } from '../state';
-import type { Property, PropertyType, PropertyOwner, Mortgage, Lease, ZoneState } from './types';
+import type { Property, PropertyType, PropertyOwner, Mortgage, Lease, ZoneState, PropertyListing } from './types';
 import { ZONES, ZONE_BY_ID, ZoneDef, PROPERTY_TYPE_NAMES, MORTGAGE_BANKS, MORTGAGE_BANK_BY_ID, MortgageBank, BUILD_COST, TENANT_NAMES } from '../../content/realestate';
 import { jurisdictionById } from '../../content/jurisdictions';
 import { Cents, clamp, roundCents, usd } from '../money';
 import { addMonths, dateOf, formatDate } from '../time/calendar';
 import { housingDrift, vacancyPressure, creditSpread, creditTightness } from '../economy/economy';
-import { chance, nextRandom, randInt, randNormal, randRange } from '../rng';
+import { chance, randInt, randNormal, randRange } from '../rng';
 import { post } from '../ledger/ledger';
-import { payExpense, canPayFromChecking } from '../finance/payments';
+import { payExpense, canPayFromChecking, spendable } from '../finance/payments';
 import { coPay, coEquity } from '../business/common';
 import { coPost } from '../business/companyLedger';
 import type { Company } from '../business/types';
@@ -39,6 +39,31 @@ import { residence } from '../tax/taxEngine';
  */
 export const AGENCY_FEE = 0.08;
 export const SALE_COMMISSION = 0.03;
+/** Venta rápida: se cobra hoy este porcentaje de la tasación. */
+export const QUICK_SALE_RATIO = 0.92;
+
+/**
+ * Probabilidad semanal de que aparezca un comprador para un inmueble publicado.
+ * Sube exponencialmente al bajar el precio frente a la tasación y tiene tope:
+ * por debajo de cierto precio, vender más barato ya no acelera la venta.
+ */
+export function buyerWeeklyChance(state: GameState, price: Cents, appraisal: Cents): number {
+  const ratio = price / Math.max(1, appraisal);
+  let prob = 0.22 * Math.exp(-7 * (ratio - 1));
+  if (state.macro.phase === 'recesion') prob *= 0.55;
+  if (state.macro.phase === 'auge') prob *= 1.3;
+  return clamp(prob, 0.005, 0.7);
+}
+
+/** Costo de reparar un vicio oculto ya detectado (lo paga el comprador al escriturar). */
+export function knownRepairCost(p: Property): Cents {
+  return p.hiddenDefect?.discovered ? p.hiddenDefect.cost : 0;
+}
+
+/** Precio que cobra la venta rápida (hoy, sin esperar comprador). */
+export function quickSalePrice(p: Property): Cents {
+  return roundCents(p.appraisal * QUICK_SALE_RATIO);
+}
 export const NOTARY_RATE = 0.01;
 export const FORECLOSURE_DISCOUNT = 0.75;
 export const MISSED_TO_FORECLOSE = 3;
@@ -79,6 +104,17 @@ export function marketRent(state: GameState, p: Pick<Property, 'zoneId' | 'type'
   const z = zoneDef(p.zoneId);
   const zs = zoneState(state, p.zoneId);
   return roundCents(p.m2 * z.rent[p.type] * zs.rentIndex * gradeMult(p.grade) * (p.type === 'terreno' ? 1 : condMult(p.condition)) * 100);
+}
+
+/** Alquiler mensual de referencia de una publicación: el del contrato vigente o el de mercado (los terrenos no rentan). */
+export function listingRent(state: GameState, l: PropertyListing): Cents {
+  const p = l.property;
+  return p.lease?.rent ?? (p.type === 'terreno' ? 0 : marketRent(state, p));
+}
+
+/** Rendimiento bruto anual de una publicación al precio pedido (alquiler × 12 / precio). */
+export function listingGrossYield(state: GameState, l: PropertyListing): number {
+  return l.askPrice > 0 ? (listingRent(state, l) * 12) / l.askPrice : 0;
 }
 
 /** Vacancia esperada del mercado para ese tipo en esa zona. */
@@ -216,7 +252,7 @@ function ownerIncome(state: GameState, p: Property, amount: Cents, memo: string)
 }
 
 export function ownerCash(state: GameState, owner: PropertyOwner): Cents {
-  if (owner.kind === 'personal') return state.ledger.balances.checking + (state.bank.overdraftSweep ? state.ledger.balances.savings : 0);
+  if (owner.kind === 'personal') return spendable(state);
   return ownerCompany(state, owner)?.ledger.balances.cash ?? 0;
 }
 
@@ -247,16 +283,40 @@ export function realEstateDay(state: GameState): void {
   re.mortgages = re.mortgages.filter((m) => m.status === 'activa' || state.day - m.startDay < 3650);
 }
 
+const TENANT = { base: 0.35, slope: 6, min: 0.01, max: 0.9 };
+
+/** Multiplicador de la probabilidad de inquilino por estado del inmueble, vacancia de la zona y administración. */
+function tenantFactor(state: GameState, p: Property): number {
+  const vac = marketVacancy(state, p.zoneId, p.type);
+  return (0.5 + p.condition / 200) * (1 - vac * 2) * (p.management === 'agencia' ? 1.5 : 1);
+}
+
+/**
+ * Probabilidad semanal de conseguir inquilino con un alquiler pedido: baja si
+ * pedís más que el mercado o el estado es malo; tiene tope.
+ */
+export function tenantWeeklyChance(state: GameState, p: Property, rent: Cents): number {
+  const mr = marketRent(state, p);
+  const ratio = rent / Math.max(1, mr);
+  let prob = TENANT.base * Math.exp(-TENANT.slope * (ratio - 1)) * (0.5 + p.condition / 200) * (1 - marketVacancy(state, p.zoneId, p.type) * 2);
+  if (p.management === 'agencia') prob *= 1.5;
+  return clamp(prob, TENANT.min, TENANT.max);
+}
+
+/**
+ * Alquiler por debajo del cual pedir menos ya no consigue inquilino más rápido
+ * (la probabilidad semanal llegó a su tope): solo baja el ingreso.
+ */
+export function rentNoFasterBelow(state: GameState, p: Property): Cents {
+  const k = tenantFactor(state, p);
+  if (k <= 0) return 0;
+  const ratio = 1 - Math.log(TENANT.max / (TENANT.base * k)) / TENANT.slope;
+  return Math.max(0, roundCents(marketRent(state, p) * ratio));
+}
+
 function weeklyTenantSearch(state: GameState, p: Property): void {
   if (!p.listedForRent || p.lease || p.usedBy !== null || p.renovation || p.development || p.evictionUntil !== null || p.type === 'terreno' && p.m2 < 100) return;
-  const mr = marketRent(state, p);
-  const ratio = p.askingRent / Math.max(1, mr);
-  const vac = marketVacancy(state, p.zoneId, p.type);
-  // Probabilidad semanal de conseguir inquilino: baja si pedís más que el mercado o el estado es malo.
-  let prob = 0.35 * Math.exp(-6 * (ratio - 1)) * (0.5 + p.condition / 200) * (1 - vac * 2);
-  if (p.management === 'agencia') prob *= 1.5;
-  prob = clamp(prob, 0.01, 0.9);
-  if (chance(state, prob)) {
+  if (chance(state, tenantWeeklyChance(state, p, p.askingRent))) {
     p.lease = newLease(state, p, p.askingRent);
     p.vacantSince = null;
     if (p.owner.kind !== 'mogul') addLog(state, 'success', '🤝', `${p.name}: nuevo inquilino (${p.lease.tenant}) por ${fmtMoney(p.lease.rent)}/mes hasta ${formatDate(p.lease.endDay)}.`);
@@ -264,11 +324,7 @@ function weeklyTenantSearch(state: GameState, p: Property): void {
 }
 
 function weeklyBuyerSearch(state: GameState, p: Property): void {
-  const ratio = p.forSale!.price / Math.max(1, p.appraisal);
-  let prob = 0.22 * Math.exp(-7 * (ratio - 1));
-  if (state.macro.phase === 'recesion') prob *= 0.55;
-  if (state.macro.phase === 'auge') prob *= 1.3;
-  if (chance(state, clamp(prob, 0.005, 0.7))) completeSale(state, p, p.forSale!.price, 'mercado');
+  if (chance(state, buyerWeeklyChance(state, p.forSale!.price, p.appraisal))) completeSale(state, p, p.forSale!.price, 'mercado');
 }
 
 /** Economía mensual de un inmueble (sin contabilizar). Sirve también para Mogul y proyecciones. */
@@ -392,7 +448,7 @@ function startEviction(state: GameState, p: Property): void {
   const days = lawyer ? clamp(Math.round(75 - lawyer.quality * 0.4), 30, 75) : 90;
   const cost = usd((lawyer ? 400 : 1500) * state.macro.priceIndex);
   ownerExpense(state, p, 'legal', cost, `Juicio de desalojo en ${p.name}`);
-  addLog(state, 'danger', '⚖️', `${p.name}: iniciaste el desalojo de ${p.lease.tenant} por falta de pago. Durará unos ${days} días${lawyer ? ` (con ${lawyer.name})` : ''}.`, cost);
+  addLog(state, 'danger', '⚖️', `${p.name}: iniciaste el desalojo de ${p.lease.tenant} por falta de pago. Durará unos ${days} días${lawyer ? ` (con ${lawyer.name})` : ''}.`, cost, 'legal');
   p.lease = null;
   p.evictionUntil = state.day + days;
   p.listedForRent = true;
@@ -461,7 +517,7 @@ export function quoteMortgage(state: GameState, bankId: string, owner: PropertyO
       const ebitdaMonthly = m.net30 + m.payrollMonthly * 0; // aproximación conservadora: beneficio neto mensual
       const cover = (Math.max(0, ebitdaMonthly) + expectedRent * 0.7) / Math.max(1, payment);
       if (co.status !== 'active') reasons.push('La empresa está insolvente.');
-      if (cover < 1.2 && coEquity(co) < price) reasons.push(`La empresa no demuestra flujo suficiente (cobertura ${cover.toFixed(2)}×, mínimo 1,2×) ni patrimonio que respalde el préstamo.`);
+      if (cover < 1.2 && coEquity(co) < price) reasons.push(`La empresa no demuestra flujo suficiente (cobertura ${cover.toFixed(2)}×, mínimo 1.2×) ni patrimonio que respalde el préstamo.`);
     }
   }
   if (amount > maxAmount) reasons.push(`Financian como máximo el ${Math.round(maxLtv * 100)} % del precio (${fmtMoney(maxAmount)}).`);
@@ -489,10 +545,14 @@ function processMortgagePayment(state: GameState, m: Mortgage): void {
   // Hipoteca variable: la tasa se revisa en cada aniversario.
   if (m.rateType === 'variable' && m.paymentsMade > 0 && m.paymentsMade % 12 === 0) {
     const newApr = Math.round((state.macro.policyRate + m.spread + creditSpread(state)) * 10000) / 10000;
-    if (Math.abs(newApr - m.apr) >= 0.0005) {
+    const oldApr = m.apr;
+    if (Math.abs(newApr - oldApr) >= 0.0005) {
+      const oldPayment = m.payment;
       m.apr = newApr;
       m.payment = amortizedPayment(m.balance, m.apr, m.termMonths - m.paymentsMade);
-      addLog(state, newApr > m.apr ? 'warning' : 'info', '🏦', `Tu hipoteca variable se ajustó al ${fmtPct(newApr, 2)}: nueva cuota ${fmtMoney(m.payment)}.`);
+      const up = newApr > oldApr;
+      const p = state.realEstate.properties.find((x) => x.id === m.propertyId);
+      addLog(state, up ? 'warning' : 'info', '🏦', `La hipoteca variable de ${p?.name ?? 'tu inmueble'} ${up ? 'subió' : 'bajó'} del ${fmtPct(oldApr, 2)} al ${fmtPct(newApr, 2)}: la cuota pasa de ${fmtMoney(oldPayment)} a ${fmtMoney(m.payment)}.`);
     }
   }
   const interest = roundCents((m.balance * m.apr) / 12);
@@ -607,7 +667,7 @@ function foreclose(state: GameState, p: Property, m: Mortgage): void {
     }
   }
   removeProperty(state, p);
-  addLog(state, 'danger', '🔨', `EMBARGO: el banco remató ${p.name} por ${fmtMoney(price)}. ${surplus ? `Recibiste el sobrante de ${fmtMoney(surplus)}.` : ''}${deficiency ? (m.recourse ? ` Seguís debiendo ${fmtMoney(deficiency)} (hipoteca con recurso).` : ` La diferencia de ${fmtMoney(deficiency)} la asume el banco (sin recurso).`) : ''}`);
+  addLog(state, 'danger', '🔨', `EMBARGO: el banco remató ${p.name} por ${fmtMoney(price)}. ${surplus ? `Recibiste el sobrante de ${fmtMoney(surplus)}.` : ''}${deficiency ? (m.recourse ? ` Seguís debiendo ${fmtMoney(deficiency)} (hipoteca con recurso).` : ` La diferencia de ${fmtMoney(deficiency)} la asume el banco (sin recurso).`) : ''}`, undefined, 'peligro');
 }
 
 function removeProperty(state: GameState, p: Property): void {
@@ -643,6 +703,7 @@ export function closingCosts(_state: GameState, price: Cents, jurisdictionId: st
 export function inspectListing(state: GameState, listingId: number): ActionResult {
   const l = state.realEstate.listings.find((x) => x.id === listingId);
   if (!l) return FAIL('El inmueble ya no está en venta.');
+  if (l.property.hiddenDefect?.discovered) return FAIL('Ya inspeccionaste este inmueble: el vicio oculto está detectado.');
   const lawyer = hiredPro(state, 'abogado', 'personal');
   const cost = lawyer ? 0 : usd(400 * state.macro.priceIndex);
   if (cost && !canPayFromChecking(state, cost)) return FAIL(`La inspección cuesta ${fmtMoney(cost)}.`);
@@ -650,14 +711,15 @@ export function inspectListing(state: GameState, listingId: number): ActionResul
   practice(state, 'inspection', 'realEstate', 40);
   const d = l.property.hiddenDefect;
   if (!d) return OK(`Inspección sin hallazgos relevantes en ${l.property.name}.`);
+  // Inspeccionar INFORMA: el vicio sigue ahí y, si comprás igual, la reparación se paga al escriturar.
   d.discovered = true;
   if (lawyer) {
-    const cut = d.cost;
+    // Con abogado, una sola consecuencia: rebaja equivalente al costo de reparar.
+    const cut = Math.min(d.cost, l.askPrice - 1);
     l.askPrice = Math.max(1, l.askPrice - cut);
-    l.property.hiddenDefect = null;
-    return OK(`${lawyer.name} detectó un vicio oculto y negoció una rebaja de ${fmtMoney(cut)}: el vendedor lo reparará a su cargo.`);
+    return OK(`${lawyer.name} detectó un vicio oculto y negoció una rebaja de ${fmtMoney(cut)}, lo que cuesta repararlo. Si comprás, la reparación se paga al escriturar.`);
   }
-  return OK(`La inspección encontró un vicio oculto: reparar costaría ${fmtMoney(d.cost)}. Tenelo en cuenta en tu oferta.`);
+  return OK(`La inspección encontró un vicio oculto: repararlo cuesta ${fmtMoney(d.cost)} y, si comprás, se paga al escriturar. Tenelo en cuenta en tu oferta.`);
 }
 
 export function buyProperty(state: GameState, listingId: number, o: BuyOptions): ActionResult {
@@ -666,7 +728,8 @@ export function buyProperty(state: GameState, listingId: number, o: BuyOptions):
   if (!l) return FAIL('El inmueble ya no está en venta.');
   if (state.legal?.prison) return FAIL('Desde prisión no podés comprar inmuebles.');
   let price = l.askPrice;
-  if (o.offer && o.offer < l.askPrice) {
+  if (o.offer !== undefined && !(o.offer > 0)) return FAIL('La oferta debe ser mayor a cero.');
+  if (o.offer !== undefined && o.offer < l.askPrice) {
     if (l.negotiated) return FAIL('El vendedor ya rechazó una contraoferta: solo acepta el precio publicado.');
     l.negotiated = true;
     const p = clamp((o.offer / l.askPrice - 0.85) / 0.15 + state.skills.negotiation.level * 0.004 + state.skills.realEstate.level * 0.002, 0, 0.95);
@@ -685,9 +748,11 @@ export function buyProperty(state: GameState, listingId: number, o: BuyOptions):
   }
   const fee = quote?.fee ?? 0;
   const cashNeeded = price - loan + cc.total + fee;
-  if (ownerCash(state, o.owner) < cashNeeded) return FAIL(`Se necesitan ${fmtMoney(cashNeeded)} (anticipo ${fmtMoney(price - loan)} + gastos de escritura e impuestos ${fmtMoney(cc.total)}${fee ? ` + comisión hipotecaria ${fmtMoney(fee)}` : ''}).`);
+  // Un vicio oculto ya detectado se repara al escriturar, a cargo del comprador.
+  const repair = knownRepairCost(p);
+  if (ownerCash(state, o.owner) < cashNeeded + repair) return FAIL(`Se necesitan ${fmtMoney(cashNeeded + repair)} (anticipo ${fmtMoney(price - loan)} + gastos de escritura e impuestos ${fmtMoney(cc.total)}${fee ? ` + comisión hipotecaria ${fmtMoney(fee)}` : ''}${repair ? ` + reparación del vicio oculto ${fmtMoney(repair)}` : ''}).`);
   if (o.owner.kind === 'personal') {
-    if (!canPayFromChecking(state, cashNeeded)) return FAIL('Fondos insuficientes en la cuenta corriente.');
+    if (!canPayFromChecking(state, cashNeeded + repair)) return FAIL('Fondos insuficientes en la cuenta corriente.');
     post(state.ledger, {
       day: state.day, memo: `Compra de ${p.name}`, cf: 'investing', tag: 'property:buy',
       lines: [
@@ -733,12 +798,16 @@ export function buyProperty(state: GameState, listingId: number, o: BuyOptions):
   }
   re.properties.push(p);
   re.listings = re.listings.filter((x) => x.id !== listingId);
+  if (repair > 0) {
+    ownerExpense(state, p, 'expense', repair, `Reparación del vicio oculto de ${p.name}`);
+    p.hiddenDefect = null;
+  }
   practice(state, 'buy_property', 'realEstate', 200);
-  addLog(state, 'success', '🏠', `${o.owner.kind === 'personal' ? 'Compraste' : `${ownerLabel(state, o.owner)} compró`} ${p.name} por ${fmtMoney(price)}${loan ? ` con una hipoteca de ${fmtMoney(loan)}` : ''}.`, cashNeeded);
-  return OK(`Compra escriturada: ${p.name}. Pagaste ${fmtMoney(cashNeeded)} en total.`);
+  addLog(state, 'success', '🏠', `${o.owner.kind === 'personal' ? 'Compraste' : `${ownerLabel(state, o.owner)} compró`} ${p.name} por ${fmtMoney(price)}${loan ? ` con una hipoteca de ${fmtMoney(loan)}` : ''}${repair ? ` y pagaste ${fmtMoney(repair)} para reparar el vicio oculto` : ''}.`, cashNeeded + repair);
+  return OK(`Compra escriturada: ${p.name}. Pagaste ${fmtMoney(cashNeeded + repair)} en total${repair ? ' (incluye la reparación del vicio oculto)' : ''}.`);
 }
 
-/** Venta: rápida (92 % de la tasación, inmediata) o publicada a un precio (espera comprador). */
+/** Venta: rápida (QUICK_SALE_RATIO de la tasación, inmediata) o publicada a un precio (espera comprador). */
 export function sellProperty(state: GameState, id: number, mode: 'rapida' | 'publicar' | 'retirar', price?: Cents): ActionResult {
   const p = state.realEstate.properties.find((x) => x.id === id);
   if (!p) return FAIL('Inmueble inexistente.');
@@ -748,11 +817,11 @@ export function sellProperty(state: GameState, id: number, mode: 'rapida' | 'pub
   }
   if (p.development) return FAIL('No se puede vender con la obra en curso.');
   if (mode === 'publicar') {
-    if (!price || price <= 0) return FAIL('Indicá el precio de venta.');
+    if (!price || !Number.isSafeInteger(price) || price <= 0) return FAIL('Indicá el precio de venta.');
     p.forSale = { price, since: state.day };
     return OK(`Publicaste ${p.name} a ${fmtMoney(price)} (${fmtPct(price / p.appraisal - 1, 0)} frente a la tasación). Cuanto más cerca de la tasación, más rápido se vende.`);
   }
-  return completeSale(state, p, roundCents(p.appraisal * 0.92), 'rapida');
+  return completeSale(state, p, quickSalePrice(p), 'rapida');
 }
 
 function completeSale(state: GameState, p: Property, price: Cents, how: 'rapida' | 'mercado'): ActionResult {
@@ -930,11 +999,6 @@ export function setUse(state: GameState, id: number, use: 'jugador' | number | n
   return OK('El inmueble quedó disponible para alquilar.');
 }
 
-/** ¿La empresa usa un inmueble propio como local? (no paga alquiler). */
-export function companyUsesOwnPremises(state: GameState, coId: number): boolean {
-  return (state.realEstate?.properties ?? []).some((p) => p.usedBy === coId);
-}
-
 export function prepayMortgage(state: GameState, id: number, amount: Cents): ActionResult {
   const m = state.realEstate.mortgages.find((x) => x.id === id && x.status === 'activa');
   if (!m) return FAIL('Hipoteca inexistente.');
@@ -1001,14 +1065,3 @@ export function propertyReport(state: GameState, p: Property): PropertyReport {
   };
 }
 
-export function personalProperties(state: GameState): Property[] {
-  return state.realEstate.properties.filter((p) => p.owner.kind === 'personal');
-}
-
-export function propertyTypeName(t: PropertyType): string {
-  return PROPERTY_TYPE_NAMES[t];
-}
-
-export function randomVacancyNoise(state: GameState): number {
-  return nextRandom(state);
-}

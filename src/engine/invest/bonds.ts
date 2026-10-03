@@ -227,7 +227,7 @@ function defaultBond(state: GameState, b: BondIssue, recovery: number): void {
   b.maturityDay = state.day + 90; // plazo de liquidación
   b.history.push({ d: state.day, p: bondPrice(state, b), y: Math.round(b.yield * 1e6) / 1e6 });
   const h = state.bonds.holdings[b.id];
-  addLog(state, h ? 'danger' : 'warning', '⚠️', `IMPAGO: ${b.name} dejó de pagar. Se estima un recupero del ${Math.round(recovery * 100)} % del nominal en 90 días.`);
+  addLog(state, h ? 'danger' : 'warning', '⚠️', `IMPAGO: ${b.name} dejó de pagar. Se estima un recupero del ${Math.round(recovery * 100)} % del nominal en 90 días.`, undefined, 'inversiones');
 }
 
 function settleDefault(state: GameState, b: BondIssue): void {
@@ -236,7 +236,7 @@ function settleDefault(state: GameState, b: BondIssue): void {
     revalueInvestments(state, ['bonds']);
     const gross = roundCents(h.qty * b.face * (b.recovery ?? 0.4));
     bookSell(state, 'bonds', b.id, h.qty, gross, 0, `Recupero por impago de ${b.name}`);
-    addLog(state, 'warning', '⚖️', `Se liquidó el impago de ${b.name}: recuperaste ${fmtMoney(gross)}.`, gross);
+    addLog(state, 'warning', '⚖️', `Se liquidó el impago de ${b.name}: recuperaste ${fmtMoney(gross)}.`, gross, 'inversiones');
   }
   b.status = 'vencido';
 }
@@ -252,7 +252,7 @@ export function bondQuote(state: GameState, b: BondIssue, qty: number, side: 'co
 export function buyBond(state: GameState, id: string, qty: number): ActionResult {
   const b = state.bonds.issues.find((x) => x.id === id);
   if (!b || b.status !== 'vigente') return FAIL('Ese bono no está disponible.');
-  if (!Number.isInteger(qty) || qty <= 0) return FAIL('Indicá una cantidad entera de bonos (nominal $1.000 cada uno).');
+  if (!Number.isInteger(qty) || qty <= 0) return FAIL('Indicá una cantidad entera de bonos (nominal $1,000 cada uno).');
   if (state.legal?.prison) return FAIL('Desde prisión no podés operar.');
   const q = bondQuote(state, b, qty, 'compra');
   if (!canPayFromChecking(state, q.total)) return FAIL(`Necesitás ${fmtMoney(q.total)}.`);

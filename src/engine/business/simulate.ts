@@ -210,7 +210,3 @@ export function refreshListings(state: GameState): void {
   }
 }
 
-export function totalEmployees(state: GameState): number {
-  return state.companies.filter(isOpen).reduce((s, c) => s + c.employees.length, 0);
-}
-

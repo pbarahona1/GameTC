@@ -9,7 +9,7 @@ import { accrueRewards } from '../finance/cardRewards';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtMoney, fmtPct } from '../format';
 import { addLog } from '../log';
-import { imageScore, storeDiscount, treatment, Treatment, wornStyle, itemDef, bestVehicle } from './effects';
+import { imageScore, storeDiscount, treatment, Treatment, wornStyle, itemDef } from './effects';
 import { practice } from '../skills/skills';
 
 /**
@@ -210,6 +210,3 @@ export function goodsValue(state: GameState): Cents {
   return (state.possessions?.items ?? []).reduce((s, o) => s + o.carrying, 0);
 }
 
-export function ownsVehicle(state: GameState): boolean {
-  return !!bestVehicle(state);
-}

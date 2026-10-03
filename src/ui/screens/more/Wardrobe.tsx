@@ -88,7 +88,7 @@ export function WardrobeScreen() {
       </div>
       <div className="card">
         <CardHead title={`Tus bienes · ${fmtMoney(goodsValue(s), { decimals: false })}`} term="bienes_personales" />
-        {durables.length === 0 && <Empty icon="📦">Todavía no tenés vehículos, tecnología, muebles ni joyas.</Empty>}
+        {durables.length === 0 && <Empty icon="package">Todavía no tenés vehículos, tecnología, muebles ni joyas.</Empty>}
         <div className="rows">
           {durables.map((o) => {
             const d = itemDef(o);

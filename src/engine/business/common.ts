@@ -1,5 +1,5 @@
 import { SECTOR_BY_ID, SectorDef, roleDef, EMPLOYER_PAYROLL_RATE, LEGAL_FORM_BY_ID } from '../../content/sectors';
-import type { GameState, LogKind } from '../state';
+import type { GameState, LogCategory, LogKind } from '../state';
 import type { Company, Arrear } from './types';
 import { Cents, clamp, roundCents, usd, applyRate } from '../money';
 import { coPost, CoAccountId, CO_ACCOUNT_IDS, CO_CHART } from './companyLedger';
@@ -17,15 +17,11 @@ export function px(state: GameState, dollars: number): Cents {
   return usd(dollars * state.macro.priceIndex);
 }
 
-export function coLog(state: GameState, co: Company, kind: LogKind, icon: string, text: string, amount?: Cents): void {
+export function coLog(state: GameState, co: Company, kind: LogKind, icon: string, text: string, amount?: Cents, cat?: LogCategory): void {
   if (state.meta.projection || co.status === 'sold') return;
   if (state.listings.some((l) => l.company === co)) return;
-  addLog(state, kind, icon, `${co.name}: ${text}`, amount);
+  addLog(state, kind, icon, `${co.name}: ${text}`, amount, cat);
   state.log[state.log.length - 1].company = co.id;
-}
-
-export function coCash(co: Company): Cents {
-  return co.ledger.balances.cash;
 }
 
 export function coEquity(co: Company): Cents {
@@ -118,11 +114,6 @@ export function hasManager(co: Company): boolean {
 export function managerSkill(co: Company): number {
   const m = co.employees.filter((e) => e.role === 'gerente');
   return m.length ? Math.max(...m.map((x) => x.skill)) : 0;
-}
-
-/** Efecto con rendimientos decrecientes de N personas de apoyo. */
-export function supportEffect(n: number, perHead: number, cap: number): number {
-  return Math.min(cap, n * perHead);
 }
 
 export function workingAssets(state: GameState, co: Company) {

@@ -1,17 +1,19 @@
-import { useMemo, useState } from 'react';
-import { useGame, useUI, store } from '../../store';
+import { useState } from 'react';
+import { useGame, useUI, useDerived, store } from '../../store';
 import { navStore } from '../../nav';
-import { InfoButton, CardHead, Pill, NumInput, Act, Learn, LineChart, Money, Seg, AmountInput, ConfirmButton, Empty, Stat, Bar } from '../../components/common';
+import { InfoButton, CardHead, Pill, NumInput, Act, Learn, LineChart, Money, Seg, AmountInput, ConfirmButton, Empty, Stat, Bar, GuardedAct } from '../../components/common';
 import {
   buyProperty, inspectListing, allMortgageQuotes, sellProperty, setRent, setManagement, renovate, developLand, setUse, prepayMortgage,
-  propertyReport, marketRent, closingCosts, ownerLabel, ownerCash, monthlyEconomics, zoneState, marketVacancy, SALE_COMMISSION,
+  propertyReport, marketRent, listingRent, listingGrossYield, closingCosts, ownerLabel, ownerCash, monthlyEconomics, zoneState, marketVacancy, SALE_COMMISSION, quickSalePrice, buyerWeeklyChance, tenantWeeklyChance, rentNoFasterBelow, knownRepairCost,
 } from '../../../engine/realestate/realestate';
-import { ZONES, ZONE_BY_ID, PROPERTY_TYPE_NAMES, PROPERTY_TYPE_ICONS, BUILD_COST } from '../../../content/realestate';
+import { ZONES, ZONE_BY_ID, PROPERTY_TYPE_NAMES, BUILD_COST } from '../../../content/realestate';
 import { jurisdictionById } from '../../../content/jurisdictions';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { GameState } from '../../../engine/state';
 import type { Property, PropertyOwner, PropertyType, PropertyListing } from '../../../engine/realestate/types';
+import { Icon } from '../../icons';
+import { PROPERTY_ICON } from '../../contentIcons';
 
 type Sub = 'mine' | 'market' | 'zones';
 
@@ -51,12 +53,15 @@ function PropertyDetail({ p }: { p: Property }) {
   const coId = p.owner.kind === 'company' ? p.owner.id : null;
   const devM2 = Math.round(p.m2 * 0.8);
   const devCost = Math.round(devM2 * BUILD_COST[devTo] * s.macro.priceIndex * 100);
-  const quick = Math.round(p.appraisal * 0.92);
+  const quick = quickSalePrice(p);
+  const saleChance = salePrice > 0 ? buyerWeeklyChance(s, salePrice, p.appraisal) : 0;
+  const rentFloor = rentNoFasterBelow(s, p);
+  const rentChance = rent > 0 ? tenantWeeklyChance(s, p, rent) : 0;
   return (
     <div className="card" style={{ borderColor: 'var(--accent)' }}>
       <div className="card-head">
         <div style={{ flex: 1 }}>
-          <h2>{PROPERTY_TYPE_ICONS[p.type]} {p.name}</h2>
+          <h2><Icon name={PROPERTY_ICON[p.type]} size={18} /> {p.name}</h2>
           <div className="tiny muted">{PROPERTY_TYPE_NAMES[p.type]} · {p.m2} m² · {ZONE_BY_ID[p.zoneId]?.name} ({j.name}) · categoría {p.grade}/5</div>
           <div className="tiny muted">Dueño: {ownerLabel(s, p.owner)}</div>
         </div>
@@ -116,9 +121,18 @@ function PropertyDetail({ p }: { p: Property }) {
               <div className="field">
                 <label htmlFor="rent">Alquiler pedido (mercado {fmtMoney(mr)})</label>
                 <AmountInput id="rent" value={rent} onChange={setRentV} />
+                {rent > 0 && <span className="tiny muted">Probabilidad de conseguir inquilino cada semana: ≈{fmtPct(rentChance, 0)}.</span>}
               </div>
               <div className="btn-row">
-                <Act label={p.listedForRent ? 'Actualizar alquiler' : 'Publicar en alquiler'} help="accion_alquilar" className="btn sm" onClick={() => store.run((x) => setRent(x, p.id, rent, true))} />
+                <GuardedAct
+                  label={p.listedForRent ? 'Actualizar alquiler' : 'Publicar en alquiler'}
+                  help="accion_alquilar"
+                  className="btn sm"
+                  disabled={!(rent > 0)}
+                  warning={rent > 0 && rent < rentFloor ? <>Pedís {fmtMoney(rent)}/mes ({fmtPct(rent / Math.max(1, mr) - 1, 0)} frente al mercado). Por debajo de {fmtMoney(rentFloor)} el inquilino no llega más rápido: solo cobrás menos durante todo el contrato.</> : undefined}
+                  confirmLabel="Publicar igual"
+                  onConfirm={() => store.run((x) => setRent(x, p.id, rent, true))}
+                />
                 {p.listedForRent && !p.lease && <button className="btn sm ghost" onClick={() => store.run((x) => setRent(x, p.id, p.askingRent || mr, false))}>Dejar de ofrecer</button>}
               </div>
             </>
@@ -168,10 +182,18 @@ function PropertyDetail({ p }: { p: Property }) {
               <div className="field">
                 <label htmlFor="sale">Precio de publicación</label>
                 <AmountInput id="sale" value={salePrice} onChange={setSalePrice} />
-                <span className="tiny muted">Comisión {fmtPct(SALE_COMMISSION, 0)}{m ? ` · se cancela la hipoteca (${fmtMoney(m.balance)})` : ''} · neto ≈ {fmtMoney(Math.round(salePrice * (1 - SALE_COMMISSION)) - (m?.balance ?? 0))}</span>
+                <span className="tiny muted">Comisión {fmtPct(SALE_COMMISSION, 0)}{m ? ` · se cancela la hipoteca (${fmtMoney(m.balance)})` : ''} · neto ≈ {fmtMoney(Math.round(salePrice * (1 - SALE_COMMISSION)) - (m?.balance ?? 0))}{salePrice > 0 ? ` · probabilidad de comprador por semana ≈${fmtPct(saleChance, 0)}` : ''}</span>
               </div>
               <div className="btn-row">
-                <Act label="Publicar en venta" help="accion_vender_inmueble" className="btn sm" onClick={() => store.run((x) => sellProperty(x, p.id, 'publicar', salePrice))} />
+                <GuardedAct
+                  label="Publicar en venta"
+                  help="accion_vender_inmueble"
+                  className="btn sm"
+                  disabled={!(salePrice > 0)}
+                  warning={salePrice > 0 && salePrice < quick ? <>Publicás a {fmtMoney(salePrice)} ({fmtPct(salePrice / p.appraisal - 1, 0)} frente a la tasación de {fmtMoney(p.appraisal)}): menos que la venta rápida, que te paga {fmtMoney(quick)} hoy mismo.</> : undefined}
+                  confirmLabel="Publicar igual"
+                  onConfirm={() => store.run((x) => sellProperty(x, p.id, 'publicar', salePrice))}
+                />
                 <ConfirmButton label={`Venta rápida (${fmtMoney(quick, { decimals: false })})`} className="btn sm ghost" detail={`Se vende hoy al 92 % de la tasación. Neto ≈ ${fmtMoney(Math.round(quick * (1 - SALE_COMMISSION)) - (m?.balance ?? 0))}.`} onConfirm={() => store.run((x) => sellProperty(x, p.id, 'rapida'))} />
               </div>
             </>
@@ -182,33 +204,37 @@ function PropertyDetail({ p }: { p: Property }) {
   );
 }
 
+/** Valor, deuda y flujo mensual de tus inmuebles y los de tus empresas. */
+function myPropertiesTotals(s: GameState) {
+  let value = 0;
+  let debt = 0;
+  let flow = 0;
+  for (const p of s.realEstate.properties) {
+    if (p.owner.kind === 'mogul') continue;
+    const r = propertyReport(s, p);
+    value += r.value;
+    debt += r.debt;
+    flow += r.monthlyCashFlow;
+  }
+  return { value, debt, flow };
+}
+
 function Mine({ selected }: { selected: number | null }) {
   const s = useGame();
   useUI();
   const props = s.realEstate.properties.filter((p) => p.owner.kind !== 'mogul');
   const sel = selected !== null ? props.find((p) => p.id === selected) : null;
-  const totals = useMemo(() => {
-    let value = 0;
-    let debt = 0;
-    let flow = 0;
-    for (const p of props) {
-      const r = propertyReport(s, p);
-      value += r.value;
-      debt += r.debt;
-      flow += r.monthlyCashFlow;
-    }
-    return { value, debt, flow };
-  }, [s.day, props.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const totals = useDerived(myPropertiesTotals);
   return (
     <>
-      {sel && <PropertyDetail p={sel} />}
+      {sel && <PropertyDetail key={sel.id} p={sel} />}
       <div className="grid2">
         <Stat label="Valor de tus inmuebles" term="tasacion" value={<Money c={totals.value} />} sub={`${props.length} inmueble(s)`} />
         <Stat label="Hipotecas" term="hipoteca" value={<Money c={totals.debt} />} sub={`Patrimonio ${fmtMoney(totals.value - totals.debt, { decimals: false })}`} />
         <Stat label="Flujo mensual estimado" term="flujo_caja" value={<Money c={totals.flow} colored sign />} />
         <Stat label="Alquileres cobrados (año)" term="alquiler" value={<Money c={s.tax.ytd.rentalIncome ?? 0} />} sub="Personales, para impuestos" />
       </div>
-      {props.length === 0 && <Empty icon="🏠">Todavía no tenés inmuebles. Mirá el mercado: podés comprar a tu nombre o a nombre de una empresa, con o sin hipoteca.</Empty>}
+      {props.length === 0 && <Empty icon="realestate">Todavía no tenés inmuebles. Mirá el mercado: podés comprar a tu nombre o a nombre de una empresa, con o sin hipoteca.</Empty>}
       {props.length > 0 && (
         <div className="card" style={{ paddingBlock: 4 }}>
           <div className="rows">
@@ -218,7 +244,7 @@ function Mine({ selected }: { selected: number | null }) {
               return (
                 <button key={p.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { navStore.setSub('invest', `realestate:prop:${p.id}`); window.scrollTo({ top: 0 }); }}>
                   <div className="grow">
-                    <div className="title small">{PROPERTY_TYPE_ICONS[p.type]} {p.name}</div>
+                    <div className="title small"><Icon name={PROPERTY_ICON[p.type]} size={15} /> {p.name}</div>
                     <div className="meta">{ownerLabel(s, p.owner)} · <Pill tone={st.tone}>{st.label}</Pill></div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -257,7 +283,8 @@ function ListingDetail({ l }: { l: PropertyListing }) {
   const quotes = finance ? allMortgageQuotes(s, owner, price, loan, years, rateType, p.type, expRent) : [];
   const chosen = quotes.find((q) => q.bank.id === bankId && q.approved) ?? quotes.find((q) => q.approved) ?? null;
   const fee = finance && chosen ? chosen.fee : 0;
-  const cashNeeded = price - (finance && chosen ? loan : 0) + cc.total + fee;
+  const repair = knownRepairCost(p);
+  const cashNeeded = price - (finance && chosen ? loan : 0) + cc.total + fee + repair;
   const avail = ownerCash(s, owner);
   const gross = p.appraisal > 0 ? (expRent * 12) / l.askPrice : 0;
   const j = jurisdictionById(p.jurisdiction);
@@ -267,7 +294,7 @@ function ListingDetail({ l }: { l: PropertyListing }) {
     <div className="card" style={{ borderColor: 'var(--accent)' }}>
       <div className="card-head">
         <div style={{ flex: 1 }}>
-          <h2>{PROPERTY_TYPE_ICONS[p.type]} {p.name}</h2>
+          <h2><Icon name={PROPERTY_ICON[p.type]} size={18} /> {p.name}</h2>
           <div className="tiny muted">{PROPERTY_TYPE_NAMES[p.type]} · {p.m2} m² · {ZONE_BY_ID[p.zoneId]?.name} ({j.name}) · categoría {p.grade}/5 · conservación {Math.round(p.condition)}/100</div>
         </div>
         <button className="btn sm ghost" onClick={() => navStore.setSub('invest', 'realestate:market')}>Cerrar</button>
@@ -281,7 +308,7 @@ function ListingDetail({ l }: { l: PropertyListing }) {
         <dt>Vacancia de la zona <InfoButton term="vacancia" /></dt><dd>{fmtPct(marketVacancy(s, p.zoneId, p.type), 0)}</dd>
         <dt>Gastos de escritura <InfoButton term="impuesto_transferencia" /></dt><dd>{fmtMoney(cc.total)} (transferencia {fmtPct(j.transferTaxRate, 1)} + escribano 1 %)</dd>
         <dt>Impuesto inmobiliario anual</dt><dd>{fmtPct(j.propertyTaxRate, 2)} ≈ {fmtMoney(Math.round(p.appraisal * j.propertyTaxRate), { decimals: false })}</dd>
-        <dt>Vicios ocultos <InfoButton term="vicio_oculto" /></dt><dd>{p.hiddenDefect?.discovered ? <span className="loss">Detectado: {fmtMoney(p.hiddenDefect.cost)}</span> : 'Desconocido (inspeccioná antes de comprar)'}</dd>
+        <dt>Vicios ocultos <InfoButton term="vicio_oculto" /></dt><dd>{p.hiddenDefect?.discovered ? <span className="loss">Detectado: reparación {fmtMoney(p.hiddenDefect.cost)}, a cargo del comprador al escriturar</span> : 'Desconocido (inspeccioná antes de comprar)'}</dd>
         <dt>Publicación vence</dt><dd>{formatDate(l.expiresDay)}</dd>
       </div>
       <Act label="Inspección técnica" help="accion_inspeccion" className="btn sm" disabled={!!p.hiddenDefect?.discovered} onClick={() => store.run((x) => inspectListing(x, l.id))} />
@@ -307,7 +334,7 @@ function ListingDetail({ l }: { l: PropertyListing }) {
           </div>
           <div className="field">
             <label htmlFor="yrs">Plazo (años)</label>
-            <NumInput id="yrs" value={years} onChange={(n) => setYears(Math.max(5, Math.min(30, Math.round(n))))} min={5} />
+            <NumInput id="yrs" live value={years} onChange={setYears} min={5} max={30} />
           </div>
           <Seg items={[{ id: 'fija', label: 'Tasa fija' }, { id: 'variable', label: 'Tasa variable' }]} value={rateType} onChange={setRateType} />
           <div className="rows">
@@ -330,8 +357,8 @@ function ListingDetail({ l }: { l: PropertyListing }) {
         label={offer < l.askPrice ? `Ofertar ${fmtMoney(offer, { decimals: false })}` : 'Comprar al precio pedido'}
         help="accion_comprar_inmueble"
         className="btn primary"
-        disabled={finance && !chosen}
-        detail={<>Precio {fmtMoney(price)} + gastos {fmtMoney(cc.total + fee)}{finance && chosen ? ` · hipoteca ${fmtMoney(loan)} con ${chosen.bank.name}` : ''}. Comprador: {os.find((o) => o.id === ownerId)?.label}.</>}
+        disabled={!(offer > 0) || (finance && (!chosen || !(loan > 0)))}
+        detail={<>Precio {fmtMoney(price)} + gastos {fmtMoney(cc.total + fee)}{repair ? ` + reparación del vicio oculto ${fmtMoney(repair)}` : ''}{finance && chosen ? ` · hipoteca ${fmtMoney(loan)} con ${chosen.bank.name}` : ''}. Comprador: {os.find((o) => o.id === ownerId)?.label}.</>}
         onConfirm={() => store.run((x) => {
           const r = buyProperty(x, l.id, { owner, offer: offer < l.askPrice ? offer : undefined, financing: finance && chosen ? { bankId: chosen.bank.id, amount: loan, years, rateType } : null });
           if (r.ok) navStore.setSub('invest', `realestate:prop:${p.id}`);
@@ -347,11 +374,19 @@ function Market({ selected }: { selected: number | null }) {
   useUI();
   const [type, setType] = useState<'todos' | PropertyType>('todos');
   const [zone, setZone] = useState('todas');
-  const list = s.realEstate.listings.filter((l) => (type === 'todos' || l.property.type === type) && (zone === 'todas' || l.property.zoneId === zone)).sort((a, b) => a.askPrice - b.askPrice);
+  const [order, setOrder] = useState<'precio' | 'rendimiento' | 'tasacion'>('precio');
+  const rank: Record<typeof order, (l: PropertyListing) => number> = {
+    precio: (l) => l.askPrice,
+    rendimiento: (l) => -listingGrossYield(s, l),
+    tasacion: (l) => l.askPrice / l.property.appraisal,
+  };
+  const list = s.realEstate.listings
+    .filter((l) => (type === 'todos' || l.property.type === type) && (zone === 'todas' || l.property.zoneId === zone))
+    .sort((a, b) => rank[order](a) - rank[order](b) || a.askPrice - b.askPrice);
   const sel = selected !== null ? s.realEstate.listings.find((l) => l.id === selected) : null;
   return (
     <>
-      {sel && <ListingDetail l={sel} />}
+      {sel && <ListingDetail key={sel.id} l={sel} />}
       <div className="chips">
         {([['todos', 'Todos'], ['cochera', 'Cocheras'], ['vivienda', 'Viviendas'], ['local', 'Locales'], ['oficina', 'Oficinas'], ['terreno', 'Terrenos']] as Array<['todos' | PropertyType, string]>).map(([id, label]) => (
           <button key={id} className={type === id ? 'on' : ''} onClick={() => setType(id)}>{label}</button>
@@ -361,17 +396,21 @@ function Market({ selected }: { selected: number | null }) {
       <div className="chips">
         {[{ id: 'todas', name: 'Todas las zonas' }, ...ZONES].map((z) => <button key={z.id} onClick={() => setZone(z.id)} style={zone === z.id ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{z.name}</button>)}
       </div>
-      {list.length === 0 && <Empty icon="🔎">No hay publicaciones con esos filtros. El mercado se renueva cada mes.</Empty>}
+      <div className="inline-form">
+        <span className="tiny muted">Ordenar por</span>
+        <Seg items={[{ id: 'precio', label: 'Precio' }, { id: 'rendimiento', label: 'Rendimiento' }, { id: 'tasacion', label: 'Vs. tasación' }]} value={order} onChange={setOrder} />
+      </div>
+      {list.length === 0 && <Empty icon="search">No hay publicaciones con esos filtros. El mercado se renueva cada mes.</Empty>}
       <div className="card" style={{ paddingBlock: 4 }}>
         <div className="rows">
           {list.map((l) => {
             const p = l.property;
-            const rent = p.lease?.rent ?? (p.type === 'terreno' ? 0 : marketRent(s, p));
+            const rent = listingRent(s, l);
             return (
               <button key={l.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { navStore.setSub('invest', `realestate:list:${l.id}`); window.scrollTo({ top: 0 }); }}>
                 <div className="grow">
-                  <div className="title small">{PROPERTY_TYPE_ICONS[p.type]} {p.name}</div>
-                  <div className="meta">{ZONE_BY_ID[p.zoneId]?.name} · {p.m2} m² · {p.lease ? 'con inquilino' : 'libre'}{rent ? ` · renta bruta ${fmtPct((rent * 12) / l.askPrice, 1)}` : ''}</div>
+                  <div className="title small"><Icon name={PROPERTY_ICON[p.type]} size={15} /> {p.name}</div>
+                  <div className="meta">{ZONE_BY_ID[p.zoneId]?.name} · {p.m2} m² · {p.lease ? 'con inquilino' : 'libre'}{rent ? ` · renta bruta ${fmtPct(listingGrossYield(s, l), 1)}` : ''}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div className="amt small">{fmtMoney(l.askPrice, { decimals: false })}</div>

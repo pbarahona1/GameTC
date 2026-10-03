@@ -6,6 +6,8 @@ import { difficultyOf } from '../../../engine/economy/difficulty';
 import { fmtPct } from '../../../engine/format';
 import { formatDate, formatDateShort } from '../../../engine/time/calendar';
 import { SECTORS } from '../../../content/sectors';
+import { PHASE_ICON } from '../../contentIcons';
+import { Icon } from '../../icons';
 
 /** Panel macroeconómico: todo sale del estado real de la simulación. */
 export function EconomyScreen() {
@@ -32,7 +34,7 @@ export function EconomyScreen() {
           <span className="eyebrow">Ciclo económico</span>
           <InfoButton term="ciclo_economico" />
         </div>
-        <div className="big">{ph.icon} {ph.name}</div>
+        <div className="big"><Icon name={PHASE_ICON[s.macro.phase]} size={26} /> {ph.name}</div>
         <div className="small">{ph.description} Lleva {m.phaseMonths} mes(es) en esta fase.</div>
         <Learn term="ciclo_economico" />
       </section>
@@ -41,7 +43,7 @@ export function EconomyScreen() {
         <Stat label="Desempleo" term="desempleo" value={fmtPct(m.unemployment, 1)} sub="Afecta búsqueda de empleo, despidos y morosidad" />
         <Stat label="Inflación anual" term="inflacion" value={fmtPct(m.inflation, 1)} sub={`Índice de precios ${m.priceIndex.toFixed(3)}`} />
         <Stat label="Tasa de política" term="interes" value={fmtPct(m.policyRate, 2)} sub={`Diferencial de crédito +${fmtPct(creditSpread(s), 1)}`} />
-        <Stat label="Confianza del consumidor" term="confianza_consumidor" value={m.confidence.toFixed(2)} sub="1,00 = normal" />
+        <Stat label="Confianza del consumidor" term="confianza_consumidor" value={m.confidence.toFixed(2)} sub="1.00 = normal" />
         <Stat label="Costos de proveedores" term="costo_proveedores" value={m.supplierCost.toFixed(2)} sub="Multiplica el costo de insumos" />
       </div>
       {months.length > 1 && (
@@ -66,17 +68,17 @@ export function EconomyScreen() {
         {active.map((e) => (
           <div className="alert info" key={e.id}>
             <span className="stripe" />
-            <div className="grow small" style={{ flex: 1 }}><strong>{e.icon} {e.name}</strong> · hasta {formatDate(e.endDay)}<br />{e.description}</div>
+            <div className="grow small" style={{ flex: 1 }}><strong>{e.name}</strong> · hasta {formatDate(e.endDay)}<br />{e.description}</div>
           </div>
         ))}
-        {past.length > 0 && <p className="tiny muted">Anteriores: {past.map((e) => `${e.icon} ${e.name} (${formatDateShort(e.startDay)})`).join(' · ')}</p>}
+        {past.length > 0 && <p className="tiny muted">Anteriores: {past.map((e) => `${e.name} (${formatDateShort(e.startDay)})`).join(' · ')}</p>}
       </div>
       <div className="card">
         <CardHead title="Las cinco fases" term="recesion" />
         <div className="rows">
           {Object.entries(PHASES).map(([id, p]) => (
             <div className="row" key={id}>
-              <span aria-hidden>{p.icon}</span>
+              <Icon name={PHASE_ICON[id as keyof typeof PHASE_ICON]} size={18} />
               <div className="grow"><div className="title small">{p.name} {id === m.phase && <Pill tone="accent">actual</Pill>}</div><div className="meta">{p.description}</div></div>
             </div>
           ))}

@@ -2,7 +2,7 @@ import type { GameState } from '../state';
 import type { Company } from './types';
 import { sectorOf, hasManager, managerSkill, capacity, countRole, coLog, monthlyPayroll } from './common';
 import { itemPlan, supplierAccessible, supplierUnitCost } from './inventory';
-import { refPrice, expectedDemand } from './operations';
+import { refPrice } from './operations';
 import { generateCandidates, hire, fire } from './staff';
 import { startCampaign } from './marketing';
 import { roleDef } from '../../content/sectors';
@@ -27,16 +27,24 @@ export function weeklyManager(state: GameState, co: Company): void {
   const sec = sectorOf(co);
   const d = co.delegation;
   const changes: string[] = [];
+  /** Resumen legible de lo que decidió el gerente esta semana (se muestra en la empresa). */
+  const report: string[] = [];
 
   if (d.autoReorder) {
     for (const r of co.rules) {
       const plan = itemPlan(state, co, r.item);
       if (plan.usage <= 0) continue;
+      // Mejor relación calidad / costo REAL de hoy (inflación, costos del sector y exclusividades de rivales).
+      const value = (x: (typeof sec.suppliers)[number]) => x.quality / Math.max(1, supplierUnitCost(state, x));
       const options = sec.suppliers.filter((s) => s.itemId === r.item && supplierAccessible(state, s));
-      const best = options.sort((a, b) => b.quality / a.unitCost - a.quality / b.unitCost)[0] ?? options[0];
+      const best = [...options].sort((a, b) => value(b) - value(a))[0];
       const item = sec.items.find((i) => i.id === r.item)!;
       const maxCover = item.shelfLifeDays ? Math.max(2, item.shelfLifeDays * 0.6) : 21;
       const s = best ?? sec.suppliers.find((x) => x.id === r.supplierId)!;
+      if (s.id !== r.supplierId) {
+        const prev = sec.suppliers.find((x) => x.id === r.supplierId);
+        report.push(`${item.name}: cambió de ${prev?.name ?? 'proveedor'} a ${s.name} (mejor calidad por precio).`);
+      }
       r.supplierId = s.id;
       r.reorderPoint = Math.ceil(plan.usage * (plan.leadDays + 3) * err());
       r.orderQty = Math.max(s.minOrder, Math.ceil(plan.usage * Math.min(14, maxCover) * err()));
@@ -59,6 +67,7 @@ export function weeklyManager(state: GameState, co: Company): void {
       for (const ps of co.products) ps.plan = Math.max(0, Math.round(want[ps.id] * scale * 10) / 10);
     }
     changes.push('reposición');
+    report.push(`Ajustó ${co.rules.length} regla${co.rules.length === 1 ? '' : 's'} de reposición según el consumo reciente.`);
   }
 
   if (d.autoPricing) {
@@ -76,7 +85,9 @@ export function weeklyManager(state: GameState, co: Company): void {
       const costPrice = unitCost > 0 ? unitCost * d.targetMarkup : ref;
       const target = (costPrice + ref * avgMult) / 2;
       const next = clamp(target * err(), ps.price * 0.95, ps.price * 1.05);
+      const old = ps.price;
       ps.price = Math.max(1, roundCents(next / 5) * 5);
+      if (ps.price !== old) report.push(`${p.name}: precio ${fmtMoney(old)} → ${fmtMoney(ps.price)}.`);
     }
     changes.push('precios');
   }
@@ -125,8 +136,11 @@ export function weeklyManager(state: GameState, co: Company): void {
       if (r.ok) changes.push('campaña de mantenimiento');
     }
   }
-  if (changes.length && countRole(co, 'gerente') > 0 && changes.some((c) => c.startsWith('contrató') || c.startsWith('despidió'))) {
-    coLog(state, co, 'info', '🧭', `el gerente ${changes.filter((c) => c.startsWith('contrató') || c.startsWith('despidió')).join(' y ')}. Nómina mensual: ${fmtMoney(monthlyPayroll(state, co))}.`);
+  const staff = changes.filter((c) => c.startsWith('contrató') || c.startsWith('despidió'));
+  for (const c of staff) report.push(`${c.charAt(0).toUpperCase()}${c.slice(1)}.`);
+  if (changes.includes('campaña de mantenimiento')) report.push('Lanzó una campaña digital de 30 días para sostener el conocimiento de marca.');
+  if (staff.length && countRole(co, 'gerente') > 0) {
+    coLog(state, co, 'info', '🧭', `el gerente ${staff.join(' y ')}. Nómina mensual: ${fmtMoney(monthlyPayroll(state, co))}.`);
   }
-  void expectedDemand;
+  if (!state.meta.projection) co.managerReport = { day: state.day, items: report.length ? report : ['Sin cambios: todo dentro de lo previsto.'] };
 }

@@ -14,3 +14,22 @@ android/app/src/main/assets/public/
 # Llaves de publicación: nunca al repositorio
 *.jks
 keystore.b64
+
+# Generados
+tsconfig.tsbuildinfo
+ota-dist/
+
+# Secretos y material de firma: NUNCA al repositorio
+URT_KEYSTORE_BASE64.txt
+LEEME_*
+release-key/
+ota-key/
+*.pem
+*.p8
+*.p12
+.env
+.env.*
+
+# Playwright
+playwright-report/
+test-results/

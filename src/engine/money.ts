@@ -9,8 +9,6 @@
  */
 export type Cents = number;
 
-export const CENT = 1;
-export const DOLLAR = 100;
 
 /** Convierte dólares (puede tener decimales) a centavos enteros. */
 export function usd(dollars: number): Cents {

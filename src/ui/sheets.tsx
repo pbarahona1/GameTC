@@ -1,48 +1,54 @@
-import { Fragment, ReactNode, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Fragment, ReactNode, useEffect, useState } from 'react';
 import { navStore, useNav, SheetSpec } from './nav';
-import { store, useUI, useGame } from './store';
+import { store, useUI, useGame, useDerived } from './store';
+import { insightsOf, stageOf } from './derived';
 import { GLOSSARY, GLOSSARY_BY_ID, GlossaryEntry } from '../content/glossary';
-import { analyze, CATEGORY_NAMES, Insight, AdvisorCategory } from '../engine/advisor/advisor';
+import { CATEGORY_NAMES, Insight, AdvisorCategory } from '../engine/advisor/advisor';
 import { DIFFICULTIES, DIFFICULTY_BY_ID } from '../engine/economy/difficulty';
 import type { PauseCategory } from './store';
 import { runScenario, ScenarioInput, ScenarioResult } from '../engine/advisor/scenarios';
-import { STAGES, ACHIEVEMENTS, evaluateStage } from '../engine/progression/progression';
-import { TUTORIAL, CHAPTERS, nextMission } from '../engine/progression/tutorial';
+import { STAGES, ACHIEVEMENTS } from '../engine/progression/progression';
+import { sectionsFromStage } from '../engine/progression/unlocks';
+import { TUTORIAL, CHAPTERS, nextMission, isMissionDone, missionProgress } from '../engine/progression/tutorial';
 import { SKILL_BY_ID } from '../content/skills';
 import { LIFESTYLES } from '../content/lifestyle';
 import { BANKS } from '../content/banks';
 import { fmtMoney } from '../engine/format';
 import { usd } from '../engine/money';
 import { formatDate } from '../engine/time/calendar';
-import { Sheet, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton, Switch } from './components/common';
+import { Sheet, SheetLayer, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton, Switch } from './components/common';
 import { Icon, IconName } from './icons';
 import { Avatar, avatarOf } from './components/Avatar';
+import { SlotList, SavedAgo, agoText, useNow, LastExport } from './components/Slots';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
-import { otaStore, applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
-
-export function useOta() {
-  return useSyncExternalStore(otaStore.subscribe, otaStore.get);
-}
+import { applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
+import { useOta } from './useOta';
 import { LogRow } from './screens/Home';
+import { CHAPTER_ICON } from './contentIcons';
+
+/** Bloque de una ficha del glosario (no se muestra si el campo está vacío). */
+function TermBlock({ t, v }: { t: string; v?: string }) {
+  return v ? <div className="stack" style={{ gap: 2 }}><span className="eyebrow">{t}</span><p className="small">{v}</p></div> : null;
+}
 
 function TermView({ id }: { id: string }) {
   const g = GLOSSARY_BY_ID[id];
   useEffect(() => store.markSeen(id), [id]);
   if (!g) return <Sheet title="Término">No encontrado.</Sheet>;
-  const Block = ({ t, v }: { t: string; v?: string }) => (v ? <div className="stack" style={{ gap: 2 }}><span className="eyebrow">{t}</span><p className="small">{v}</p></div> : null);
   return (
     <Sheet title={g.term}>
       <Pill tone="neutral">{g.category}</Pill>
       <p style={{ fontSize: 16, fontWeight: 600 }}>{g.short}</p>
-      <Block t="Para qué sirve" v={g.purpose} />
+      <TermBlock t="Para qué sirve" v={g.purpose} />
       {g.formula && <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Cómo se calcula</span><p className="num small" style={{ background: 'var(--surface-2)', padding: 10, borderRadius: 10 }}>{g.formula}</p></div>}
-      <Block t="Ejemplo" v={g.example} />
-      <Block t="Cómo te afecta" v={g.impact} />
-      <Block t="Riesgos" v={g.risks} />
-      <Block t="Errores comunes" v={g.mistakes} />
-      <Block t="Diferencia con conceptos parecidos" v={g.versus} />
-      <Block t="Consejo" v={g.tip} />
+      <TermBlock t="Ejemplo" v={g.example} />
+      <TermBlock t="Cómo te afecta" v={g.impact} />
+      <TermBlock t="Riesgos" v={g.risks} />
+      <TermBlock t="Errores comunes" v={g.mistakes} />
+      <TermBlock t="Diferencia con conceptos parecidos" v={g.versus} />
+      <TermBlock t="Consejo" v={g.tip} />
       <button className="btn ghost" onClick={() => navStore.open({ kind: 'glossary' })}>Abrir el glosario completo</button>
     </Sheet>
   );
@@ -73,7 +79,7 @@ function GlossaryView() {
           </div>
         </div>
       ))}
-      {list.length === 0 && <Empty icon="🔎">Sin resultados para “{q}”.</Empty>}
+      {list.length === 0 && <Empty icon="search">Sin resultados para “{q}”.</Empty>}
     </Sheet>
   );
 }
@@ -210,15 +216,15 @@ function AdvisorView() {
   const [tab, setTab] = useState<'alerts' | 'scen' | 'prefs'>('alerts');
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => store.markSeen('asesor'), []);
-  const all = useMemo(() => analyze(s), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const all = useDerived(insightsOf);
   const list = all.filter((i) => ui.settings.alertCategories.includes(i.category));
   return (
-    <Sheet title="🧭 Asesor IA">
+    <Sheet title="Asesor">
       <Seg items={[{ id: 'alerts', label: `Alertas (${list.length})` }, { id: 'scen', label: '¿Qué pasaría si…?' }, { id: 'prefs', label: 'Categorías' }]} value={tab} onChange={setTab} />
       {tab === 'alerts' && (
         <>
           <p className="tiny muted">Análisis con los datos reales de tu partida al {formatDate(s.day)}. Los <Pill tone="neutral">hechos</Pill> salen del libro mayor; las <Pill tone="info">estimaciones</Pill> son proyecciones con supuestos explícitos. El asesor nunca toca tu dinero.</p>
-          {list.length === 0 && <Empty icon="✅">No detecto problemas ni oportunidades claras en las categorías activas. Seguí así.</Empty>}
+          {list.length === 0 && <Empty icon="check">No detecto problemas ni oportunidades claras en las categorías activas. Seguí así.</Empty>}
           {list.map((i) => <InsightCard key={i.id} i={i} open={open === i.id} onToggle={() => setOpen(open === i.id ? null : i.id)} />)}
         </>
       )}
@@ -293,10 +299,42 @@ function UpdatesPanel() {
   );
 }
 
+/** Importar desde archivo o texto, con confirmación antes de cambiar de partida. */
+function ImportControls({ disabled }: { disabled: boolean }) {
+  const [pending, setPending] = useState<{ text: string; label: string } | null>(null);
+  const [pasted, setPasted] = useState('');
+  const run = async (text: string) => {
+    const r = await store.importText(text);
+    if (r.ok) {
+      setPending(null);
+      setPasted('');
+      navStore.closeAll();
+    }
+  };
+  if (pending) {
+    return (
+      <div className="card flat" style={{ padding: 12, gap: 8 }}>
+        <div className="small">Vas a importar {pending.label}. Se verifica la contabilidad y se abre como una partida nueva; la que tenés abierta queda guardada.</div>
+        <div className="btn-row">
+          <button className="btn sm ghost" onClick={() => setPending(null)}>Cancelar</button>
+          <button className="btn sm dark" onClick={() => void run(pending.text)}>Importar</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <label className="small" htmlFor="import-file">Desde un archivo .json</label>
+      <input id="import-file" type="file" disabled={disabled} accept=".json,application/json,text/plain" className="small" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setPending({ text: await f.text(), label: `«${f.name}»` }); }} />
+      <textarea className="input" aria-label="Texto de una partida exportada" disabled={disabled} placeholder="…o pegá aquí el texto de una partida exportada" value={pasted} onChange={(e) => setPasted(e.target.value)} style={{ minHeight: 60, padding: 8, fontSize: 12 }} />
+      <span className="act"><button className="btn sm" disabled={disabled || !pasted.trim()} onClick={() => setPending({ text: pasted, label: 'el texto pegado' })}>Importar y verificar</button><InfoButton term="accion_exportar" /></span>
+    </>
+  );
+}
+
 function SettingsView() {
   const ui = useUI();
   const [exportText, setExportText] = useState<string | null>(null);
-  const [importText, setImportText] = useState('');
   const [backups, setBackups] = useState<Awaited<ReturnType<typeof store.backups>>>([]);
   const [audit, setAudit] = useState<string[] | null>(null);
   const [open, setOpen] = useState<string>('game');
@@ -305,6 +343,7 @@ function SettingsView() {
   const s = ui.state;
   const toggle = (id: string) => setOpen((o) => (o === id ? '' : id));
   const ota = useOta();
+  const now = useNow();
   return (
     <Sheet title="Ajustes">
       {s && (
@@ -312,7 +351,7 @@ function SettingsView() {
           <Avatar data={avatarOf(s)} size={46} bust />
           <div style={{ flex: 1, minWidth: 0 }}>
             <strong>{s.player.name}</strong>
-            <div className="tiny muted">{formatDate(s.day)} · dificultad {DIFFICULTY_BY_ID[s.options.difficulty].name.toLowerCase()} · {ui.lastSaved ? `guardado ${new Date(ui.lastSaved).toLocaleTimeString()}` : 'sin guardar aún'}</div>
+            <div className="tiny muted">{formatDate(s.day)} · dificultad {DIFFICULTY_BY_ID[s.options.difficulty].name.toLowerCase()} · <SavedAgo className="" /></div>
           </div>
           <span className="act"><button className="btn sm dark" onClick={async () => { if (await store.save()) store.toast('Partida guardada.', 'ok'); }}><Icon name="save" size={15} /> Guardar</button><InfoButton term="accion_guardar" /></span>
         </div>
@@ -327,7 +366,8 @@ function SettingsView() {
           <div className="btn-row">
             <button className="btn sm" onClick={() => { store.run((x) => { x.tutorial.dismissed = false; }, { toast: false }); navStore.open({ kind: 'tutorial' }); }}><Icon name="missions" size={15} /> Ver misiones</button>
           </div>
-          <ConfirmButton label="Empezar una partida nueva" className="btn sm danger" confirmLabel="Borrar y empezar de nuevo" detail="Se eliminarán la partida y sus copias de este dispositivo. Exportala antes si querés conservarla." onConfirm={() => { navStore.closeAll(); void store.abandonGame(); }} />
+          <ConfirmButton label="Nueva partida" className="btn sm" disabled={!store.canCreateSlot()} confirmLabel="Empezar otra partida" detail={<>Vas a la pantalla de partida nueva. «{s.player.name}» se guarda antes y queda en «Tus partidas» para volver cuando quieras.</>} onConfirm={() => { navStore.closeAll(); void store.requestNewGame(); }} />
+          <p className="tiny muted">{store.canCreateSlot() ? 'La partida actual queda guardada: podés volver a ella desde «Tus partidas».' : 'Ya tenés el máximo de partidas: borrá una en «Guardado y copias» para empezar otra.'}</p>
         </SettingsSection>
       )}
       <SettingsSection id="look" icon="palette" title="Apariencia" summary={`${st.theme === 'system' ? 'Tema del sistema' : st.theme === 'dark' ? 'Oscuro' : 'Claro'} · aprendizaje ${st.learningMode ? 'activado' : 'desactivado'}`} open={open === 'look'} onToggle={toggle}>
@@ -353,40 +393,43 @@ function SettingsView() {
         <Switch checked={st.successToasts} onChange={() => store.updateSettings({ successToasts: !st.successToasts })} label="Confirmaciones de acciones exitosas" sub="Los errores siempre se muestran." />
         <span className="small">Progreso sin conexión (1 día cada 10 minutos reales, tope):</span>
         <Seg items={[{ id: 0, label: 'Nada' }, { id: 7, label: '7 días' }, { id: 30, label: '30 días' }, { id: 90, label: '90 días' }]} value={st.offlineMaxDays} onChange={(v) => store.updateSettings({ offlineMaxDays: v })} />
-        <p className="tiny muted">Las alertas del Asesor IA se eligen en el Asesor → Preferencias.</p>
+        <p className="tiny muted">Las alertas del Asesor se eligen en el Asesor → Categorías.</p>
       </SettingsSection>
-      <SettingsSection id="save" icon="disk" title="Guardado y copias" summary={ui.storageKind === 'native' ? 'Archivos privados de la app · 3 copias automáticas' : ui.storageKind === 'local' ? 'Navegador · exportá una copia' : 'Solo memoria: exportá'} open={open === 'save'} onToggle={toggle}>
+      <SettingsSection id="save" icon="disk" title="Guardado y copias" summary={<>{ui.slots.length} {ui.slots.length === 1 ? 'partida' : 'partidas'} · <SavedAgo className="" /></>} open={open === 'save'} onToggle={toggle}>
         <p className="small muted">
-          Guardado automático cada 30 días de juego y al salir. {ui.storageKind === 'native' ? 'Tu partida vive en los archivos privados de la app (con una segunda copia en las preferencias del sistema): las actualizaciones no la borran.' : ui.storageKind === 'local' ? 'Se guarda en el navegador: exportá un archivo como respaldo.' : 'Sin almacenamiento: exportá para no perder la partida.'}
+          Se guarda solo cada 90 segundos, al pausar, al salir de la app y después de cada decisión. {ui.storageKind === 'native' ? 'Tu partida vive en los archivos privados de la app: las actualizaciones no la borran.' : ui.storageKind === 'local' ? 'Se guarda en el navegador: exportá un archivo como respaldo.' : 'Sin almacenamiento: exportá para no perder la partida.'}
           {ui.saveBytes && ` Tamaño: ${(ui.saveBytes / 1024).toFixed(0)} KB.`}
           {s?.ledger.archive && ` Libro mayor: ${s.ledger.entries.length} asientos detallados + ${s.ledger.archive.entries} resumidos.`}
         </p>
         {ui.saveError && <p className="small loss">{ui.saveError}</p>}
+        <span className="eyebrow">Tus partidas</span>
+        <SlotList />
         <div className="btn-row">
           <span className="act"><button className="btn sm dark" onClick={() => void store.exportFile()}><Icon name="upload" size={15} /> Exportar a archivo</button><InfoButton term="accion_exportar" /></span>
           <span className="act"><button className="btn sm" onClick={() => setAudit(store.audit())}>Auditar contabilidad</button><InfoButton term="accion_auditar" /></span>
         </div>
-        {audit && (audit.length === 0 ? <p className="small gain">✓ {s?.ledger.entries.length} asientos verificados: todo cuadra.</p> : <ul className="small loss">{audit.map((a) => <li key={a}>{a}</li>)}</ul>)}
-        <span className="eyebrow">Copias de seguridad</span>
+        <LastExport />
+        {audit && (audit.length === 0 ? <p className="small gain"><Icon name="check" size={14} /> {s?.ledger.entries.length} asientos verificados: todo cuadra.</p> : <ul className="small loss">{audit.map((a) => <li key={a}>{a}</li>)}</ul>)}
+        <span className="eyebrow">Copias de seguridad de esta partida</span>
+        <p className="tiny muted">La copia 1 tiene como mucho 10 minutos; la 2, entre 10 y 70 minutos; la 3, de una hora a un día. Así un error reciente no alcanza a todas. Restaurar guarda antes la partida actual en «Antes de restaurar».</p>
         <div className="rows">
-          {backups.filter((b) => b.header).map((b) => (
+          {backups.filter((b) => b.header).map((b, i) => (
             <div className="row" key={b.key}>
-              <div className="grow small">{b.key.endsWith('primary') ? 'Principal' : `Copia ${b.key.slice(-1)}`} · {b.header!.name} · {formatDate(b.header!.day)}</div>
-              {!b.key.endsWith('primary') && <ConfirmButton label="Restaurar" className="btn sm ghost" help="accion_restaurar" confirmLabel="Restaurar" detail="Reemplaza la partida actual por esta copia." onConfirm={async () => { const r = await store.restore(b.key); store.toast(r.ok ? r.message ?? 'OK' : r.error, r.ok ? 'ok' : 'error'); }} />}
+              <div className="grow small">{b.kind === 'principal' ? 'Principal' : b.kind === 'copia' ? `Copia ${i}` : b.kind === 'antes de restaurar' ? 'Antes de restaurar' : 'Antes de actualizar'} · {formatDate(b.header!.day)} · {agoText(Math.max(0, now - b.header!.savedAt))}</div>
+              {b.kind !== 'principal' && <ConfirmButton label="Restaurar" className="btn sm ghost" help="accion_restaurar" confirmLabel="Restaurar" detail={<>La partida vuelve al {formatDate(b.header!.day)}. La actual queda en «Antes de restaurar» por si querés deshacerlo.</>} onConfirm={async () => { const r = await store.restore(b.key); store.toast(r.ok ? r.message ?? 'OK' : r.error, r.ok ? 'ok' : 'error'); }} />}
             </div>
           ))}
         </div>
         <button className="btn sm" onClick={() => setExportText(store.exportText())}>Mostrar como texto</button>
         {exportText && (
           <>
-            <textarea className="input" readOnly value={exportText} style={{ minHeight: 90, padding: 8, fontSize: 11 }} onFocus={(e) => e.target.select()} />
+            <textarea className="input" aria-label="Partida exportada como texto" readOnly value={exportText} style={{ minHeight: 90, padding: 8, fontSize: 11 }} onFocus={(e) => e.target.select()} />
             <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(exportText); store.toast('Copiado.', 'ok'); } catch { store.toast('Seleccioná el texto y copialo manualmente.', 'error'); } }}>Copiar</button>
           </>
         )}
-        <label className="small" htmlFor="import-file">Importar desde archivo .json</label>
-        <input id="import-file" type="file" accept=".json,application/json,text/plain" className="small" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const r = await store.importText(await f.text()); if (r.ok) navStore.closeAll(); e.target.value = ''; }} />
-        <textarea className="input" placeholder="…o pegá aquí el texto de una partida exportada" value={importText} onChange={(e) => setImportText(e.target.value)} style={{ minHeight: 60, padding: 8, fontSize: 12 }} />
-        <span className="act"><button className="btn sm" disabled={!importText.trim()} onClick={async () => { const r = await store.importText(importText); if (r.ok) { setImportText(''); navStore.closeAll(); } }}>Importar y verificar</button><InfoButton term="accion_exportar" /></span>
+        <span className="eyebrow">Importar una partida</span>
+        <p className="tiny muted">{store.canCreateSlot() ? 'La partida importada se abre como una partida nueva: la actual queda guardada.' : 'Ya tenés el máximo de partidas: borrá una para importar otra.'}</p>
+        <ImportControls disabled={!store.canCreateSlot()} />
       </SettingsSection>
       <SettingsSection id="updates" icon="update" title="Actualizaciones" summary={ota.check?.kind === 'available' ? `Versión ${ota.check.manifest.version} disponible` : `Versión ${APP_VERSION}`} open={open === 'updates'} onToggle={toggle}>
         <UpdatesPanel />
@@ -398,9 +441,8 @@ function SettingsView() {
 }
 
 function ProgressView() {
-  const ui = useUI();
   const s = useGame();
-  const ev = useMemo(() => evaluateStage(s), [ui.version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ev = useDerived(stageOf);
   const a = s.player.attributes;
   const attrs: Array<[string, number, string, string?]> = [
     ['Estrés', a.stress, 'Más de 60 reduce el desempeño; más de 50 desgasta la salud.', 'estres'],
@@ -431,7 +473,7 @@ function ProgressView() {
               <h2>{d.stage.name}</h2>
               {reached ? <Pill tone="gain">Alcanzada</Pill> : d.stage.n === s.progression.stage + 1 ? <Pill tone="accent">Siguiente</Pill> : null}
             </div>
-            <p className="small muted">{d.stage.description} Desbloquea: {d.stage.unlocks}</p>
+            <p className="small muted">{d.stage.description}{sectionsFromStage(d.stage.n).length > 0 && <> Desde esta etapa se recomienda: {sectionsFromStage(d.stage.n).map((g) => g.name).join(', ')}.</>}</p>
             {d.criteria.length > 0 && (
               <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
                 {d.criteria.map((c) => <li key={c.label} className={c.met ? 'gain' : ''}>{c.met ? '✓' : '○'} {c.label}{c.future && <span className="faint"> ({c.future})</span>}</li>)}
@@ -446,7 +488,7 @@ function ProgressView() {
           const day = s.progression.achievements[x.id];
           return (
             <div key={x.id} className="stat" style={{ opacity: day === undefined ? 0.55 : 1 }}>
-              <div className="label"><span aria-hidden>{x.icon}</span> {x.name}</div>
+              <div className="label"><Icon name={day === undefined ? 'lock' : 'medal'} size={14} /> {x.name}</div>
               <div className="tiny muted">{x.description}</div>
               {day !== undefined && <div className="tiny gain">{formatDate(day)}</div>}
             </div>
@@ -466,7 +508,7 @@ function LogView() {
     <Sheet title="Actividad">
       <Seg items={[{ id: 'all', label: 'Todo' }, { id: 'money', label: 'Dinero' }, { id: 'alerts', label: 'Alertas' }]} value={kind} onChange={setKind} />
       <div className="rows">{list.map((l) => <LogRow key={l.id} l={l} />)}</div>
-      {list.length === 0 && <Empty icon="🗒️">Sin actividad.</Empty>}
+      {list.length === 0 && <Empty icon="log">Sin actividad.</Empty>}
     </Sheet>
   );
 }
@@ -475,8 +517,7 @@ function TutorialView() {
   const s = useGame();
   useUI();
   const next = nextMission(s);
-  const total = TUTORIAL.filter((t) => !t.future).length;
-  const done = TUTORIAL.filter((t) => !t.future && t.done(s)).length;
+  const { done, total } = missionProgress(s);
   return (
     <Sheet title="Misiones">
       <div className="card">
@@ -486,15 +527,15 @@ function TutorialView() {
       </div>
       {CHAPTERS.map((ch) => {
         const list = TUTORIAL.filter((t) => t.chapter === ch.n);
-        const chDone = list.filter((t) => t.done(s)).length;
+        const chDone = list.filter((t) => isMissionDone(s, t)).length;
         const early = s.progression.stage < ch.stage;
         return (
           <div key={ch.n} className="stack" style={{ gap: 6 }}>
-            <div className="section-title"><h2>{ch.icon} {ch.name}</h2><span className="tiny muted">{chDone}/{list.length}{early ? ` · recomendado desde la etapa ${ch.stage}` : ''}</span></div>
+            <div className="section-title"><h2><Icon name={CHAPTER_ICON[ch.n - 1] ?? 'missions'} size={18} /> {ch.name}</h2><span className="tiny muted">{chDone}/{list.length}{early ? ` · recomendado desde la etapa ${ch.stage}` : ''}</span></div>
             <div className="card" style={{ paddingBlock: 4 }}>
               <div className="rows">
                 {list.map((t) => {
-                  const ok = t.done(s);
+                  const ok = isMissionDone(s, t);
                   return (
                     <div key={t.id} className={`row mission ${ok ? 'done' : ''} ${next?.id === t.id ? 'next' : ''}`}>
                       <span className={`m-check ${ok ? 'on' : ''}`} aria-hidden>{ok ? <Icon name="check" size={14} /> : null}</span>
@@ -559,8 +600,18 @@ function render(spec: SheetSpec) {
   }
 }
 
+/**
+ * Pila de hojas: todas quedan montadas (al volver, la de abajo conserva su estado:
+ * sección abierta, lo escrito…) y solo la de arriba se ve y recibe el foco.
+ */
 export function SheetHost() {
   const nav = useNav();
-  const top = nav.sheets[nav.sheets.length - 1];
-  return top ? render(top) : null;
+  const last = nav.sheets.length - 1;
+  return (
+    <>
+      {nav.sheets.map((spec, i) => (
+        <SheetLayer key={`${i}:${spec.kind}`} top={i === last}><ErrorBoundary scope="section">{render(spec)}</ErrorBoundary></SheetLayer>
+      ))}
+    </>
+  );
 }

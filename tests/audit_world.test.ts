@@ -3,7 +3,7 @@ import { advanceDay } from '../src/engine/simulation';
 import { post, entryDelta } from '../src/engine/ledger/ledger';
 import { CASH_ACCOUNTS } from '../src/engine/ledger/accounts';
 import { usd } from '../src/engine/money';
-import { nextRandom, randInt, RngHolder } from '../src/engine/rng';
+import { nextRandom, randInt, RngHolder, seedFromString } from '../src/engine/rng';
 import type { GameState } from '../src/engine/state';
 import { isLastDayOfMonth } from '../src/engine/time/calendar';
 import { balanceSheet, incomeStatement, cashFlowStatement } from '../src/engine/reports/statements';
@@ -139,7 +139,10 @@ function worldAction(s: GameState, bot: RngHolder): void {
     }
   } else if (r < 0.76) {
     const f = pickOne(bot, s.legal.fines.filter((x) => x.balance > 0));
-    if (f) nextRandom(bot) < 0.5 ? payFine(s, f.id) : finePlan(s, f.id);
+    if (f) {
+      if (nextRandom(bot) < 0.5) payFine(s, f.id);
+      else finePlan(s, f.id);
+    }
     const c = pickOne(bot, s.legal.cases.filter((x) => x.stage !== 'cerrado'));
     if (c) {
       const lawyer = s.pros.hires.find((h) => h.pro.kind === 'abogado');
@@ -199,17 +202,24 @@ function worldAction(s: GameState, bot: RngHolder): void {
   }
 }
 
+/**
+ * Escala de la prueba de caos. Por defecto (en cada `npm test`): 3 semillas × 3 años.
+ * La corrida larga (`npm run chaos`, semanal en el CI) usa 50 semillas × 20 años.
+ */
+const CHAOS_SEEDS = Math.max(1, Number(process.env.URT_CHAOS_SEEDS ?? 3));
+const CHAOS_YEARS = Math.max(1, Number(process.env.URT_CHAOS_YEARS ?? 3));
+
 describe('Auditoría integral de todos los sistemas (bots aleatorios)', () => {
-  for (const seed of ['w1', 'w2', 'w3']) {
-    it(`semilla ${seed}: 3 años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal`, () => {
+  for (const seed of Array.from({ length: CHAOS_SEEDS }, (_, i) => `w${i + 1}`)) {
+    it(`semilla ${seed}: ${CHAOS_YEARS} años con decisiones aleatorias en inversiones, inmuebles, grupos, profesionales y sistema legal`, () => {
       const s = makeGame('herencia', 'world-audit-' + seed);
       post(s.ledger, { day: 0, memo: 'Capital de prueba', cf: 'internal', lines: [{ account: 'checking', debit: usd(400000) }, { account: 'opening_equity', credit: usd(400000) }] });
       s.credit.score = 720;
-      const bot = { rng: seed.charCodeAt(1) * 7919 };
+      const bot = { rng: seedFromString(`bot|${seed}`) };
       let monthStart = s.day + 1;
       let nw0 = balanceSheet(s).netWorth;
       let actions = 0;
-      while (s.day < 3 * 365) {
+      while (s.day < CHAOS_YEARS * 365) {
         advanceDay(s);
         if (nextRandom(bot) < 0.45) {
           worldAction(s, bot);
@@ -230,9 +240,9 @@ describe('Auditoría integral de todos los sistemas (bots aleatorios)', () => {
           nw0 = nw1;
         }
       }
-      expect(actions).toBeGreaterThan(300);
+      expect(actions).toBeGreaterThan(100 * CHAOS_YEARS);
       expect(s.stocks.trades.length).toBeGreaterThan(10);
       expect(s.possessions.spent).toBeGreaterThan(0);
-    });
+    }, 30_000 * CHAOS_YEARS);
   }
 });
