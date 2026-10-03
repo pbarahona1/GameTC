@@ -33,6 +33,9 @@ const mem = {
   basePath: '',
   persisted: '',
   assetReset: 0,
+  /** Carpetas dentro de ota/ que devuelve readdir, y su demora (para probar carreras). */
+  dirs: [] as string[],
+  readdirDelayMs: 0,
 };
 
 vi.mock('@capacitor/core', () => ({
@@ -58,7 +61,10 @@ vi.mock('@capacitor/filesystem', () => ({
     rmdir: async ({ path }: { path: string }) => { for (const k of [...mem.files.keys()]) if (k.startsWith(path)) mem.files.delete(k); },
     writeFile: async ({ path, data }: { path: string; data: string }) => { mem.files.set(path, data); return { uri: `file:///data/app/files/${path}` }; },
     readFile: async ({ path }: { path: string }) => ({ data: mem.files.get(path) ?? '' }),
-    readdir: async () => ({ files: [] }),
+    readdir: async () => {
+      if (mem.readdirDelayMs) await new Promise((r) => setTimeout(r, mem.readdirDelayMs));
+      return { files: mem.dirs.map((name) => ({ name })) };
+    },
     getUri: async ({ path }: { path: string }) => ({ uri: `file:///data/app/files/${path}` }),
   },
 }));
@@ -84,6 +90,8 @@ beforeEach(() => {
   mem.basePath = '';
   mem.persisted = '';
   mem.assetReset = 0;
+  mem.dirs = [];
+  mem.readdirDelayMs = 0;
   vi.resetModules();
 });
 
@@ -116,6 +124,19 @@ describe('Actualizaciones por internet (flujo con plugins simulados)', () => {
     expect(saved).toBe(false);
     expect(mem.basePath).toBe('');
     expect(mem.prefs.get('urt.ota') ?? '').not.toContain('pending');
+  });
+
+  it('instalar espera a la limpieza de versiones viejas: nunca borra la carpeta que se está creando', async () => {
+    mockFetch(HTML);
+    // Quedó una carpeta a medias de un intento anterior de la misma versión, y la limpieza es lenta.
+    mem.dirs = ['99999'];
+    mem.readdirDelayMs = 40;
+    const ota = await import('../src/persistence/ota');
+    await ota.otaBoot();
+    const err = await ota.applyUpdate(manifest as never, async () => true);
+    expect(err).toBeNull();
+    await new Promise((r) => setTimeout(r, 80));
+    expect(mem.files.get('ota/99999/index.html')).toBe(HTML);
   });
 
   it('si no se pudo guardar la partida antes, no cambia de versión', async () => {

@@ -6,6 +6,7 @@ import { App } from './ui/App';
 import { store } from './ui/store';
 import { otaBoot, markHealthy, failBoot, autoCheck } from './persistence/ota';
 import { ErrorBoundary } from './ui/components/ErrorBoundary';
+import { navStore } from './ui/nav';
 
 // Arranque: primero se revisa si esta página es una actualización recién instalada
 // (para poder volver atrás si falla), después se carga la partida.
@@ -26,7 +27,6 @@ void (async () => {
 void import('@capacitor/core').then(async ({ Capacitor }) => {
   if (!Capacitor.isNativePlatform()) return;
   const { App: CapApp } = await import('@capacitor/app');
-  const { navStore } = await import('./ui/nav');
   CapApp.addListener('backButton', () => {
     const ui = store.getSnapshot();
     if (ui.simError) store.dismissSimError();

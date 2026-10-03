@@ -5,7 +5,7 @@ import { navStore, useNav, Tab } from './nav';
 import { formatDateShort } from '../engine/time/calendar';
 import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
-import { SheetHost, useOta } from './sheets';
+import { useOta } from './useOta';
 import { Icon, IconName } from './icons';
 import { unreadNews } from '../engine/world/news';
 const More = lazy(() => import('./screens/More').then((m) => ({ default: m.More })));
@@ -14,6 +14,8 @@ const Reports = lazy(() => import('./screens/Reports').then((m) => ({ default: m
 const Business = lazy(() => import('./screens/Business').then((m) => ({ default: m.Business })));
 const Finance = lazy(() => import('./screens/Finance').then((m) => ({ default: m.Finance })));
 const Career = lazy(() => import('./screens/Career').then((m) => ({ default: m.Career })));
+// Las hojas (glosario, asesor, ajustes…) se cargan aparte: no demoran el primer arranque.
+const SheetHost = lazy(() => import('./sheets').then((m) => ({ default: m.SheetHost })));
 import { Money, Sheet, DotBudget, ScreenSkeleton } from './components/common';
 import { MenuButton, type MenuItem } from './components/Menu';
 import { fmtMoney } from '../engine/format';
@@ -180,7 +182,7 @@ export function App() {
     );
   }
   if (!ui.state && ui.bootError) return <><BootErrorScreen /><Toasts /></>;
-  if (!ui.state) return <><DotBudget><Onboarding /></DotBudget><SheetHost /><Toasts /></>;
+  if (!ui.state) return <><DotBudget><Onboarding /></DotBudget><Suspense fallback={null}><SheetHost /></Suspense><Toasts /></>;
   return (
     <div className="app">
       <TopBar />
@@ -215,7 +217,7 @@ export function App() {
         </ErrorBoundary>
       </main>
       <BottomNav />
-      <SheetHost />
+      <Suspense fallback={null}><SheetHost /></Suspense>
       <AbsenceReport />
       <SimErrorSheet />
       <Toasts />

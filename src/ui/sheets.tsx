@@ -1,4 +1,4 @@
-import { Fragment, ReactNode, useEffect, useState, useSyncExternalStore } from 'react';
+import { Fragment, ReactNode, useEffect, useState } from 'react';
 import { navStore, useNav, SheetSpec } from './nav';
 import { store, useUI, useGame, useDerived } from './store';
 import { insightsOf, stageOf } from './derived';
@@ -23,11 +23,8 @@ import { SlotList, SavedAgo, agoText, useNow, LastExport } from './components/Sl
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
-import { otaStore, applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
-
-export function useOta() {
-  return useSyncExternalStore(otaStore.subscribe, otaStore.get);
-}
+import { applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
+import { useOta } from './useOta';
 import { LogRow } from './screens/Home';
 import { CHAPTER_ICON } from './contentIcons';
 

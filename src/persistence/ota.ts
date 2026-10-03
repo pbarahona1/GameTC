@@ -326,7 +326,9 @@ export async function otaBoot(): Promise<void> {
     await rollback(d.reason);
     return;
   }
-  void cleanupOldBundles([p.current, p.pending?.build]);
+  // Limpieza en segundo plano (no demora el arranque); instalar una versión la espera
+  // antes de escribir, para que nunca borre la carpeta que se está creando.
+  cleanup = cleanupOldBundles([p.current, p.pending?.build]);
 }
 
 /** La versión pendiente no pudo cargar la partida: volver a la anterior. */
@@ -377,6 +379,9 @@ export async function dismissUpdateNotes(): Promise<void> {
   });
   set({ justUpdated: null, rolledBack: null });
 }
+
+/** Limpieza de versiones viejas en curso (ver otaBoot). */
+let cleanup: Promise<void> = Promise.resolve();
 
 async function cleanupOldBundles(keep: Array<number | undefined>): Promise<void> {
   const keepNames = new Set([String(WEB_BUILD), ...keep.filter((x): x is number => typeof x === 'number').map(String)]);
@@ -449,6 +454,7 @@ export async function applyUpdate(man: OtaManifest, beforeSwitch: () => Promise<
     if (!text.includes('<div id="root">')) throw new Error('el archivo no es una versión del juego');
 
     set({ phase: 'installing' });
+    await cleanup;
     const fs = await import('@capacitor/filesystem');
     const rel = `ota/${man.build}`;
     try {
