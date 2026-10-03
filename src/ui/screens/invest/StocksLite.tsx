@@ -9,6 +9,7 @@ import { SECTOR_NAMES } from '../../../content/stocks';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { Stock } from '../../../engine/invest/types';
+import { Icon } from '../../icons';
 
 export function riskLabel(st: Stock): { label: string; tone: 'gain' | 'warn' | 'loss' } {
   const r = st.beta * 0.5 + st.vol * 3 + (st.status !== 'activa' ? 5 : 0);
@@ -114,14 +115,14 @@ export function StocksLite({ selected }: { selected: string | null }) {
         <div className="kv">
           <dt>Índice <InfoButton term="indice_bursatil" /></dt><dd>{s.stocks.index.level.toFixed(1)}</dd>
           <dt>Mercado</dt><dd>{isTradingDay(s.day) ? 'Abierto (día hábil)' : 'Cerrado (fin de semana)'}</dd>
-          <dt>Comisión <InfoButton term="comision_corretaje" /></dt><dd>0,2 % (mín. $1)</dd>
+          <dt>Comisión <InfoButton term="comision_corretaje" /></dt><dd>0.2 % (mín. $1)</dd>
         </div>
       </div>
       {st && <StockDetail key={st.id} st={st} />}
       <input className="input" placeholder="Buscar por nombre o código" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar acción" />
       <div className="chips">
         {['todos', 'mias', ...Object.keys(SECTOR_NAMES)].map((k) => (
-          <button key={k} onClick={() => setSector(k)} style={sector === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{k === 'todos' ? 'Todas' : k === 'mias' ? `⭐ Las mías (${Object.keys(s.stocks.holdings).length})` : SECTOR_NAMES[k as keyof typeof SECTOR_NAMES]}</button>
+          <button key={k} onClick={() => setSector(k)} style={sector === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{k === 'todos' ? 'Todas' : k === 'mias' ? `Las mías (${Object.keys(s.stocks.holdings).length})` : SECTOR_NAMES[k as keyof typeof SECTOR_NAMES]}</button>
         ))}
       </div>
       <div className="card" style={{ paddingBlock: 4 }}>
@@ -129,7 +130,7 @@ export function StocksLite({ selected }: { selected: string | null }) {
           {list.map((x) => (
             <button key={x.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { navStore.setSub('invest', `lite:${x.id}`); window.scrollTo({ top: 0 }); }}>
               <div className="grow">
-                <div className="title small">{mine(x.id) && '⭐ '}{x.id} <span className="faint">· {x.name}</span></div>
+                <div className="title small">{mine(x.id) && <><Icon name="star" size={13} label="Tenés esta acción" />{' '}</>}{x.id} <span className="faint">· {x.name}</span></div>
                 <div className="meta">{SECTOR_NAMES[x.sector]}{s.stocks.holdings[x.id] ? ` · tenés ${s.stocks.holdings[x.id].qty}` : ''}{x.status !== 'activa' ? ' · en quiebra' : ''}</div>
               </div>
               <Sparkline values={x.history.slice(-40).map((c) => c.c)} />

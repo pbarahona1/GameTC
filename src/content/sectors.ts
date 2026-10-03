@@ -180,7 +180,7 @@ export const SECTORS: SectorDef[] = [
       { id: 'almuerzo', name: 'Almuerzo del día', unit: 'plato', refPrice: 9.5, recipe: [{ item: 'insumos', qty: 0.5 }, { item: 'pan', qty: 1 }], laborUnits: 1.5, marketDaily: 300, elasticity: 1.7 },
     ],
     roles: [
-      { id: 'cocinero', name: 'Cocinero / barista', dept: 'operaciones', baseWage: 1100, capacity: { kind: 'production', perDay: 60 }, description: 'Prepara los pedidos: 60 unidades de trabajo por día (un café = 0,3; un almuerzo = 1,5).' },
+      { id: 'cocinero', name: 'Cocinero / barista', dept: 'operaciones', baseWage: 1100, capacity: { kind: 'production', perDay: 60 }, description: 'Prepara los pedidos: 60 unidades de trabajo por día (un café = 0.3; un almuerzo = 1.5).' },
       { id: 'mesero', name: 'Mesero / cajero', dept: 'atencion', baseWage: 950, capacity: { kind: 'service', perDay: 120 }, description: 'Atiende hasta 120 clientes por día.' },
     ],
     equipment: [
@@ -283,7 +283,7 @@ export const SECTORS: SectorDef[] = [
     ],
     roles: [
       { id: 'carpintero', name: 'Carpintero', dept: 'operaciones', baseWage: 1400, capacity: { kind: 'production', perDay: 5 }, description: 'Fabrica 5 unidades de trabajo por día (silla = 1, estante = 2, mesa = 3).' },
-      { id: 'ayudante', name: 'Ayudante de taller', dept: 'operaciones', baseWage: 900, capacity: { kind: 'production', perDay: 2.5 }, description: '2,5 unidades de trabajo por día.' },
+      { id: 'ayudante', name: 'Ayudante de taller', dept: 'operaciones', baseWage: 900, capacity: { kind: 'production', perDay: 2.5 }, description: '2.5 unidades de trabajo por día.' },
     ],
     equipment: [
       { id: 'sierra', name: 'Sierra de mesa', cost: 5000, lifeMonths: 84, capacityBonus: 0.2, qualityBonus: 3, maintenance: 50, description: '+20 % de capacidad.' },

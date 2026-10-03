@@ -6,12 +6,14 @@ import {
   buyProperty, inspectListing, allMortgageQuotes, sellProperty, setRent, setManagement, renovate, developLand, setUse, prepayMortgage,
   propertyReport, marketRent, closingCosts, ownerLabel, ownerCash, monthlyEconomics, zoneState, marketVacancy, SALE_COMMISSION, quickSalePrice, buyerWeeklyChance, tenantWeeklyChance, rentNoFasterBelow, knownRepairCost,
 } from '../../../engine/realestate/realestate';
-import { ZONES, ZONE_BY_ID, PROPERTY_TYPE_NAMES, PROPERTY_TYPE_ICONS, BUILD_COST } from '../../../content/realestate';
+import { ZONES, ZONE_BY_ID, PROPERTY_TYPE_NAMES, BUILD_COST } from '../../../content/realestate';
 import { jurisdictionById } from '../../../content/jurisdictions';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { GameState } from '../../../engine/state';
 import type { Property, PropertyOwner, PropertyType, PropertyListing } from '../../../engine/realestate/types';
+import { Icon } from '../../icons';
+import { PROPERTY_ICON } from '../../contentIcons';
 
 type Sub = 'mine' | 'market' | 'zones';
 
@@ -59,7 +61,7 @@ function PropertyDetail({ p }: { p: Property }) {
     <div className="card" style={{ borderColor: 'var(--accent)' }}>
       <div className="card-head">
         <div style={{ flex: 1 }}>
-          <h2>{PROPERTY_TYPE_ICONS[p.type]} {p.name}</h2>
+          <h2><Icon name={PROPERTY_ICON[p.type]} size={18} /> {p.name}</h2>
           <div className="tiny muted">{PROPERTY_TYPE_NAMES[p.type]} · {p.m2} m² · {ZONE_BY_ID[p.zoneId]?.name} ({j.name}) · categoría {p.grade}/5</div>
           <div className="tiny muted">Dueño: {ownerLabel(s, p.owner)}</div>
         </div>
@@ -232,7 +234,7 @@ function Mine({ selected }: { selected: number | null }) {
         <Stat label="Flujo mensual estimado" term="flujo_caja" value={<Money c={totals.flow} colored sign />} />
         <Stat label="Alquileres cobrados (año)" term="alquiler" value={<Money c={s.tax.ytd.rentalIncome ?? 0} />} sub="Personales, para impuestos" />
       </div>
-      {props.length === 0 && <Empty icon="🏠">Todavía no tenés inmuebles. Mirá el mercado: podés comprar a tu nombre o a nombre de una empresa, con o sin hipoteca.</Empty>}
+      {props.length === 0 && <Empty icon="realestate">Todavía no tenés inmuebles. Mirá el mercado: podés comprar a tu nombre o a nombre de una empresa, con o sin hipoteca.</Empty>}
       {props.length > 0 && (
         <div className="card" style={{ paddingBlock: 4 }}>
           <div className="rows">
@@ -242,7 +244,7 @@ function Mine({ selected }: { selected: number | null }) {
               return (
                 <button key={p.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { navStore.setSub('invest', `realestate:prop:${p.id}`); window.scrollTo({ top: 0 }); }}>
                   <div className="grow">
-                    <div className="title small">{PROPERTY_TYPE_ICONS[p.type]} {p.name}</div>
+                    <div className="title small"><Icon name={PROPERTY_ICON[p.type]} size={15} /> {p.name}</div>
                     <div className="meta">{ownerLabel(s, p.owner)} · <Pill tone={st.tone}>{st.label}</Pill></div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -292,7 +294,7 @@ function ListingDetail({ l }: { l: PropertyListing }) {
     <div className="card" style={{ borderColor: 'var(--accent)' }}>
       <div className="card-head">
         <div style={{ flex: 1 }}>
-          <h2>{PROPERTY_TYPE_ICONS[p.type]} {p.name}</h2>
+          <h2><Icon name={PROPERTY_ICON[p.type]} size={18} /> {p.name}</h2>
           <div className="tiny muted">{PROPERTY_TYPE_NAMES[p.type]} · {p.m2} m² · {ZONE_BY_ID[p.zoneId]?.name} ({j.name}) · categoría {p.grade}/5 · conservación {Math.round(p.condition)}/100</div>
         </div>
         <button className="btn sm ghost" onClick={() => navStore.setSub('invest', 'realestate:market')}>Cerrar</button>
@@ -386,7 +388,7 @@ function Market({ selected }: { selected: number | null }) {
       <div className="chips">
         {[{ id: 'todas', name: 'Todas las zonas' }, ...ZONES].map((z) => <button key={z.id} onClick={() => setZone(z.id)} style={zone === z.id ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{z.name}</button>)}
       </div>
-      {list.length === 0 && <Empty icon="🔎">No hay publicaciones con esos filtros. El mercado se renueva cada mes.</Empty>}
+      {list.length === 0 && <Empty icon="search">No hay publicaciones con esos filtros. El mercado se renueva cada mes.</Empty>}
       <div className="card" style={{ paddingBlock: 4 }}>
         <div className="rows">
           {list.map((l) => {
@@ -395,7 +397,7 @@ function Market({ selected }: { selected: number | null }) {
             return (
               <button key={l.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => { navStore.setSub('invest', `realestate:list:${l.id}`); window.scrollTo({ top: 0 }); }}>
                 <div className="grow">
-                  <div className="title small">{PROPERTY_TYPE_ICONS[p.type]} {p.name}</div>
+                  <div className="title small"><Icon name={PROPERTY_ICON[p.type]} size={15} /> {p.name}</div>
                   <div className="meta">{ZONE_BY_ID[p.zoneId]?.name} · {p.m2} m² · {p.lease ? 'con inquilino' : 'libre'}{rent ? ` · renta bruta ${fmtPct((rent * 12) / l.askPrice, 1)}` : ''}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>

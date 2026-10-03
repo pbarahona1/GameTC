@@ -12,6 +12,7 @@ import { spendable } from '../../../engine/finance/payments';
 import { formatDate } from '../../../engine/time/calendar';
 import type { ProHire } from '../../../engine/pros/types';
 import type { MandateProfile } from '../../../engine/invest/types';
+import { Icon } from '../../icons';
 
 const PROFILES: Array<{ id: MandateProfile; label: string }> = [
   { id: 'conservador', label: 'Conservador' },
@@ -34,7 +35,7 @@ function MandateCard({ h }: { h: ProHire }) {
     <div className="card" style={{ borderColor: 'var(--accent)' }}>
       <div className="card-head">
         <div style={{ flex: 1 }}>
-          <h2>🧑‍💼 {h.pro.name}</h2>
+          <h2><Icon name="gestor" size={18} /> {h.pro.name}</h2>
           <div className="tiny muted">{h.pro.specialty} · {h.pro.experience} años de experiencia · {h.trainings ?? 0} capacitación(es) · desde {formatDate(h.since)}</div>
           <div className="tiny muted">{feeLabel(h.pro)}</div>
         </div>
@@ -130,7 +131,7 @@ export function GestorScreen() {
       {hires.map((h) => <MandateCard key={h.id} h={h} />)}
       <div className="card">
         <CardHead title={hires.length ? 'Otros gestores disponibles' : 'Gestores disponibles'} right={<span className="tiny muted">Nuevos el {formatDate(nextRefresh(s))}</span>} />
-        {market.length === 0 && <Empty icon="🧑‍💼">No hay gestores disponibles ahora. El mercado de profesionales se renueva cada 60 días.</Empty>}
+        {market.length === 0 && <Empty icon="gestor">No hay gestores disponibles ahora. El mercado de profesionales se renueva cada 60 días.</Empty>}
         {market.map((p) => (
           <div className="card flat" key={p.id} style={{ padding: 12, gap: 6 }}>
             <div className="card-head">

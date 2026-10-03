@@ -8,6 +8,7 @@ import { DIFFICULTIES, DIFFICULTY_BY_ID } from '../engine/economy/difficulty';
 import type { PauseCategory } from './store';
 import { runScenario, ScenarioInput, ScenarioResult } from '../engine/advisor/scenarios';
 import { STAGES, ACHIEVEMENTS } from '../engine/progression/progression';
+import { sectionsFromStage } from '../engine/progression/unlocks';
 import { TUTORIAL, CHAPTERS, nextMission, isMissionDone, missionProgress } from '../engine/progression/tutorial';
 import { SKILL_BY_ID } from '../content/skills';
 import { LIFESTYLES } from '../content/lifestyle';
@@ -15,10 +16,11 @@ import { BANKS } from '../content/banks';
 import { fmtMoney } from '../engine/format';
 import { usd } from '../engine/money';
 import { formatDate } from '../engine/time/calendar';
-import { Sheet, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton, Switch } from './components/common';
+import { Sheet, SheetLayer, Pill, Seg, Bar, LineChart, Legend, AmountInput, ConfirmButton, Empty, InfoButton, Switch } from './components/common';
 import { Icon, IconName } from './icons';
 import { Avatar, avatarOf } from './components/Avatar';
 import { SlotList, SavedAgo, agoText, useNow } from './components/Slots';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
 import { otaStore, applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
@@ -27,6 +29,7 @@ export function useOta() {
   return useSyncExternalStore(otaStore.subscribe, otaStore.get);
 }
 import { LogRow } from './screens/Home';
+import { CHAPTER_ICON } from './contentIcons';
 
 /** Bloque de una ficha del glosario (no se muestra si el campo está vacío). */
 function TermBlock({ t, v }: { t: string; v?: string }) {
@@ -79,7 +82,7 @@ function GlossaryView() {
           </div>
         </div>
       ))}
-      {list.length === 0 && <Empty icon="🔎">Sin resultados para “{q}”.</Empty>}
+      {list.length === 0 && <Empty icon="search">Sin resultados para “{q}”.</Empty>}
     </Sheet>
   );
 }
@@ -219,12 +222,12 @@ function AdvisorView() {
   const all = useDerived(insightsOf);
   const list = all.filter((i) => ui.settings.alertCategories.includes(i.category));
   return (
-    <Sheet title="🧭 Asesor IA">
+    <Sheet title="Asesor">
       <Seg items={[{ id: 'alerts', label: `Alertas (${list.length})` }, { id: 'scen', label: '¿Qué pasaría si…?' }, { id: 'prefs', label: 'Categorías' }]} value={tab} onChange={setTab} />
       {tab === 'alerts' && (
         <>
           <p className="tiny muted">Análisis con los datos reales de tu partida al {formatDate(s.day)}. Los <Pill tone="neutral">hechos</Pill> salen del libro mayor; las <Pill tone="info">estimaciones</Pill> son proyecciones con supuestos explícitos. El asesor nunca toca tu dinero.</p>
-          {list.length === 0 && <Empty icon="✅">No detecto problemas ni oportunidades claras en las categorías activas. Seguí así.</Empty>}
+          {list.length === 0 && <Empty icon="check">No detecto problemas ni oportunidades claras en las categorías activas. Seguí así.</Empty>}
           {list.map((i) => <InsightCard key={i.id} i={i} open={open === i.id} onToggle={() => setOpen(open === i.id ? null : i.id)} />)}
         </>
       )}
@@ -366,7 +369,7 @@ function SettingsView() {
           <div className="btn-row">
             <button className="btn sm" onClick={() => { store.run((x) => { x.tutorial.dismissed = false; }, { toast: false }); navStore.open({ kind: 'tutorial' }); }}><Icon name="missions" size={15} /> Ver misiones</button>
           </div>
-          <button className="btn sm" disabled={!store.canCreateSlot()} onClick={() => { navStore.closeAll(); void store.requestNewGame(); }}><Icon name="plus" size={15} /> Nueva partida</button>
+          <ConfirmButton label="Nueva partida" className="btn sm" disabled={!store.canCreateSlot()} confirmLabel="Empezar otra partida" detail={<>Vas a la pantalla de partida nueva. «{s.player.name}» se guarda antes y queda en «Tus partidas» para volver cuando quieras.</>} onConfirm={() => { navStore.closeAll(); void store.requestNewGame(); }} />
           <p className="tiny muted">{store.canCreateSlot() ? 'La partida actual queda guardada: podés volver a ella desde «Tus partidas».' : 'Ya tenés el máximo de partidas: borrá una en «Guardado y copias» para empezar otra.'}</p>
         </SettingsSection>
       )}
@@ -393,7 +396,7 @@ function SettingsView() {
         <Switch checked={st.successToasts} onChange={() => store.updateSettings({ successToasts: !st.successToasts })} label="Confirmaciones de acciones exitosas" sub="Los errores siempre se muestran." />
         <span className="small">Progreso sin conexión (1 día cada 10 minutos reales, tope):</span>
         <Seg items={[{ id: 0, label: 'Nada' }, { id: 7, label: '7 días' }, { id: 30, label: '30 días' }, { id: 90, label: '90 días' }]} value={st.offlineMaxDays} onChange={(v) => store.updateSettings({ offlineMaxDays: v })} />
-        <p className="tiny muted">Las alertas del Asesor IA se eligen en el Asesor → Preferencias.</p>
+        <p className="tiny muted">Las alertas del Asesor se eligen en el Asesor → Categorías.</p>
       </SettingsSection>
       <SettingsSection id="save" icon="disk" title="Guardado y copias" summary={<>{ui.slots.length} {ui.slots.length === 1 ? 'partida' : 'partidas'} · <SavedAgo className="" /></>} open={open === 'save'} onToggle={toggle}>
         <p className="small muted">
@@ -472,7 +475,7 @@ function ProgressView() {
               <h2>{d.stage.name}</h2>
               {reached ? <Pill tone="gain">Alcanzada</Pill> : d.stage.n === s.progression.stage + 1 ? <Pill tone="accent">Siguiente</Pill> : null}
             </div>
-            <p className="small muted">{d.stage.description} Desbloquea: {d.stage.unlocks}</p>
+            <p className="small muted">{d.stage.description}{sectionsFromStage(d.stage.n).length > 0 && <> Desde esta etapa se recomienda: {sectionsFromStage(d.stage.n).map((g) => g.name).join(', ')}.</>}</p>
             {d.criteria.length > 0 && (
               <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
                 {d.criteria.map((c) => <li key={c.label} className={c.met ? 'gain' : ''}>{c.met ? '✓' : '○'} {c.label}{c.future && <span className="faint"> ({c.future})</span>}</li>)}
@@ -487,7 +490,7 @@ function ProgressView() {
           const day = s.progression.achievements[x.id];
           return (
             <div key={x.id} className="stat" style={{ opacity: day === undefined ? 0.55 : 1 }}>
-              <div className="label"><span aria-hidden>{x.icon}</span> {x.name}</div>
+              <div className="label"><Icon name={day === undefined ? 'lock' : 'medal'} size={14} /> {x.name}</div>
               <div className="tiny muted">{x.description}</div>
               {day !== undefined && <div className="tiny gain">{formatDate(day)}</div>}
             </div>
@@ -507,7 +510,7 @@ function LogView() {
     <Sheet title="Actividad">
       <Seg items={[{ id: 'all', label: 'Todo' }, { id: 'money', label: 'Dinero' }, { id: 'alerts', label: 'Alertas' }]} value={kind} onChange={setKind} />
       <div className="rows">{list.map((l) => <LogRow key={l.id} l={l} />)}</div>
-      {list.length === 0 && <Empty icon="🗒️">Sin actividad.</Empty>}
+      {list.length === 0 && <Empty icon="log">Sin actividad.</Empty>}
     </Sheet>
   );
 }
@@ -530,7 +533,7 @@ function TutorialView() {
         const early = s.progression.stage < ch.stage;
         return (
           <div key={ch.n} className="stack" style={{ gap: 6 }}>
-            <div className="section-title"><h2>{ch.icon} {ch.name}</h2><span className="tiny muted">{chDone}/{list.length}{early ? ` · recomendado desde la etapa ${ch.stage}` : ''}</span></div>
+            <div className="section-title"><h2><Icon name={CHAPTER_ICON[ch.n - 1] ?? 'missions'} size={18} /> {ch.name}</h2><span className="tiny muted">{chDone}/{list.length}{early ? ` · recomendado desde la etapa ${ch.stage}` : ''}</span></div>
             <div className="card" style={{ paddingBlock: 4 }}>
               <div className="rows">
                 {list.map((t) => {
@@ -599,8 +602,18 @@ function render(spec: SheetSpec) {
   }
 }
 
+/**
+ * Pila de hojas: todas quedan montadas (al volver, la de abajo conserva su estado:
+ * sección abierta, lo escrito…) y solo la de arriba se ve y recibe el foco.
+ */
 export function SheetHost() {
   const nav = useNav();
-  const top = nav.sheets[nav.sheets.length - 1];
-  return top ? render(top) : null;
+  const last = nav.sheets.length - 1;
+  return (
+    <>
+      {nav.sheets.map((spec, i) => (
+        <SheetLayer key={`${i}:${spec.kind}`} top={i === last}><ErrorBoundary scope="section">{render(spec)}</ErrorBoundary></SheetLayer>
+      ))}
+    </>
+  );
 }

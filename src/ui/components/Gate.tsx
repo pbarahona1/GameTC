@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { useGame, useUI, store } from '../store';
 import { navStore } from '../nav';
-import { gateActive, openGate, stageName } from '../../engine/progression/unlocks';
+import { gateActive, openGate } from '../../engine/progression/unlocks';
+import { stageName } from '../../engine/progression/progression';
 import { Act } from './common';
 import { Icon } from '../icons';
 

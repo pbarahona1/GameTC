@@ -8,6 +8,7 @@ import { fmtMoney, fmtPct } from '../../../engine/format';
 import { hashNormal } from '../../../engine/rng';
 import { Pill, Act, ScreenIntro, Empty, CardHead } from '../../components/common';
 import type { PoachOffer } from '../../../engine/world/types';
+import { monogram } from '../../contentIcons';
 
 const STYLE: Record<string, { label: string; tone: 'loss' | 'info' | 'warn' }> = {
   agresivo: { label: 'Agresivo', tone: 'loss' },
@@ -26,7 +27,7 @@ export function PoachCard({ p }: { p: PoachOffer }) {
     <div className="alert warning">
       <span className="stripe" />
       <div className="stack" style={{ gap: 6, flex: 1 }}>
-        <strong className="small">{r?.icon} {r?.name} quiere llevarse a {e.name} ({co.name})</strong>
+        <strong className="small">{r?.name} quiere llevarse a {e.name} ({co.name})</strong>
         <span className="small muted">Habilidad {Math.round(e.skill)} · sueldo actual {fmtMoney(e.wage)} → le ofrecen {fmtMoney(p.wage)} (+{fmtPct(p.wage / e.wage - 1, 0)}). Vence el {formatDate(p.expires)}: si no respondés y la oferta es mucho mejor, se va.</span>
         <div className="btn-row">
           <Act label={`Igualar (${fmtMoney(p.wage)})`} help="accion_igualar_oferta" className="btn sm primary" onClick={() => store.run((x) => answerPoach(x, p.id, true))} />
@@ -72,7 +73,7 @@ export function RivalsScreen() {
         return (
           <div className="card" key={r.id}>
             <div className="card-head">
-              <span className="store-logo" aria-hidden>{r.icon}</span>
+              <span className="store-logo monogram" aria-hidden>{monogram(r.name)}</span>
               <div style={{ flex: 1 }}>
                 <h2>{r.name}</h2>
                 <div className="tiny muted">{r.sectors.map((x) => SECTOR_BY_ID[x].name).join(' · ')}</div>
@@ -91,7 +92,7 @@ export function RivalsScreen() {
           </div>
         );
       })}
-      {s.world.rivals.length === 0 && <Empty icon="🏁">Sin rivales.</Empty>}
+      {s.world.rivals.length === 0 && <Empty icon="rivals">Sin rivales.</Empty>}
     </>
   );
 }

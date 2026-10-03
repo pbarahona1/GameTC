@@ -11,6 +11,7 @@ import { spendable } from '../../../engine/finance/payments';
 import { Pill, Seg, Tabs, InfoButton, Act, ScreenIntro, Empty } from '../../components/common';
 import { Avatar, avatarOf } from '../../components/Avatar';
 import { Icon, IconName } from '../../icons';
+import { STORE_CATEGORY_ICON } from '../../contentIcons';
 
 const CAT_ICON: Record<ShopCategory, IconName> = { ropa: 'wardrobe', vehiculos: 'car', tecnologia: 'tech', hogar: 'homegoods', lujo: 'luxury' };
 const TREAT: Record<string, { tone: 'gain' | 'info' | 'warn'; label: string }> = {
@@ -109,7 +110,7 @@ function StoreView({ st }: { st: StoreDef }) {
       <button className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => navStore.setSub('more', 'shops')}>← Tiendas</button>
       <div className="card store-hero">
         <div className="card-head">
-          <span className="store-logo" aria-hidden>{st.icon}</span>
+          <span className="store-logo" aria-hidden><Icon name={STORE_CATEGORY_ICON[st.category]} size={22} /></span>
           <div style={{ flex: 1 }}>
             <h2>{st.name}</h2>
             <div className="tiny muted">{CATEGORY_INFO[st.category].name} · categoría {TIER_NAMES[st.tier].toLowerCase()} · {st.tagline}</div>
@@ -154,7 +155,7 @@ export function ShopsScreen() {
         const t = treatment(s, x.tier);
         return (
           <button key={x.id} className="card store-card" onClick={() => navStore.setSub('more', `shops:${x.id}`)}>
-            <span className="store-logo" aria-hidden>{x.icon}</span>
+            <span className="store-logo" aria-hidden><Icon name={STORE_CATEGORY_ICON[x.category]} size={22} /></span>
             <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
               <strong>{x.name}</strong>
               <div className="tiny muted">{TIER_NAMES[x.tier]} · {x.tagline}</div>
@@ -164,7 +165,7 @@ export function ShopsScreen() {
           </button>
         );
       })}
-      {STORES.filter((x) => x.category === cat).length === 0 && <Empty icon="🏬">No hay tiendas en esta categoría.</Empty>}
+      {STORES.filter((x) => x.category === cat).length === 0 && <Empty icon="store">No hay tiendas en esta categoría.</Empty>}
     </>
   );
 }

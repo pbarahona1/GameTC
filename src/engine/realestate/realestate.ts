@@ -506,7 +506,7 @@ export function quoteMortgage(state: GameState, bankId: string, owner: PropertyO
       const ebitdaMonthly = m.net30 + m.payrollMonthly * 0; // aproximación conservadora: beneficio neto mensual
       const cover = (Math.max(0, ebitdaMonthly) + expectedRent * 0.7) / Math.max(1, payment);
       if (co.status !== 'active') reasons.push('La empresa está insolvente.');
-      if (cover < 1.2 && coEquity(co) < price) reasons.push(`La empresa no demuestra flujo suficiente (cobertura ${cover.toFixed(2)}×, mínimo 1,2×) ni patrimonio que respalde el préstamo.`);
+      if (cover < 1.2 && coEquity(co) < price) reasons.push(`La empresa no demuestra flujo suficiente (cobertura ${cover.toFixed(2)}×, mínimo 1.2×) ni patrimonio que respalde el préstamo.`);
     }
   }
   if (amount > maxAmount) reasons.push(`Financian como máximo el ${Math.round(maxLtv * 100)} % del precio (${fmtMoney(maxAmount)}).`);

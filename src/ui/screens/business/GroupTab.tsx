@@ -3,7 +3,7 @@ import { useGame, useUI, useDerived, store } from '../../store';
 import { groupOf, groupRisksOf } from '../../derived';
 import { navStore } from '../../nav';
 import type { Company } from '../../../engine/business/types';
-import { SECTOR_BY_ID, LEGAL_FORM_BY_ID } from '../../../content/sectors';
+import { LEGAL_FORM_BY_ID } from '../../../content/sectors';
 import { JURISDICTION_BY_ID } from '../../../content/jurisdictions';
 import { isOpen } from '../../../engine/business/common';
 import { coMetrics } from '../../../engine/business/reports';
@@ -14,11 +14,12 @@ import {
 import { transferToGroup, spinOff } from '../../../engine/business/ownership';
 import { companyTaxRates } from '../../../engine/business/ownership';
 import { propertyReport } from '../../../engine/realestate/realestate';
-import { PROPERTY_TYPE_ICONS } from '../../../content/realestate';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import { Money, InfoButton, CardHead, Act, ConfirmButton, Seg, AmountInput, NumInput, Pill, Stat, Empty } from '../../components/common';
 import { runCo } from './CompanyView';
+import { SECTOR_ICON, PROPERTY_ICON } from '../../contentIcons';
+import { Icon } from '../../icons';
 
 function Consolidated({ root }: { root: Company }) {
   const c = useDerived(groupOf, root.id);
@@ -71,7 +72,7 @@ function Consolidated({ root }: { root: Company }) {
           <dt>Préstamos intragrupo vigentes</dt><dd>{fmtMoney(r.consolidated.intercompany)}</dd>
           <dt>Garantías personales</dt><dd>{fmtMoney(r.consolidated.guaranteed)}</dd>
         </div>
-        {r.consolidated.warnings.length === 0 ? <p className="small gain">Sin alertas consolidadas.</p> : r.consolidated.warnings.map((w) => <p key={w} className="small loss">⚠︎ {w}</p>)}
+        {r.consolidated.warnings.length === 0 ? <p className="small gain">Sin alertas consolidadas.</p> : r.consolidated.warnings.map((w) => <p key={w} className="small loss"><Icon name="alert" size={14} /> {w}</p>)}
       </div>
     </>
   );
@@ -161,13 +162,13 @@ export function GroupTab({ co }: { co: Company }) {
         <>
           <div className="card">
             <CardHead title="Subsidiarias" term="holding" />
-            {kids.length === 0 && <Empty icon="🏢">Esta holding todavía no tiene subsidiarias. Transferile empresas tuyas, fundá una nueva a su nombre o comprá una en el mercado.</Empty>}
+            {kids.length === 0 && <Empty icon="network">Esta holding todavía no tiene subsidiarias. Transferile empresas tuyas, fundá una nueva a su nombre o comprá una en el mercado.</Empty>}
             <div className="rows">
               {kids.map((k) => {
                 const m = coMetrics(s, k);
                 return (
                   <button key={k.id} className="row clickable" style={{ border: 0, borderBottom: '1px solid var(--line)', background: 'none', textAlign: 'left', width: '100%' }} onClick={() => navStore.setSub('business', `co:${k.id}:summary`)}>
-                    <span aria-hidden>{SECTOR_BY_ID[k.sector].icon}</span>
+                    <Icon name={SECTOR_ICON[k.sector]} size={16} />
                     <div className="grow"><div className="title small">{k.name}</div><div className="meta">{fmtPct(k.ownership, 0)} · valor contable {fmtMoney(k.carrying, { decimals: false })} · caja {fmtMoney(m.cash, { decimals: false })}</div></div>
                     <Money c={m.net30} colored sign className="small" />
                   </button>
@@ -228,7 +229,7 @@ export function GroupTab({ co }: { co: Company }) {
           const r = propertyReport(s, p);
           return (
             <button key={p.id} className="row clickable" style={{ border: 0, background: 'none', textAlign: 'left', width: '100%' }} onClick={() => navStore.go('invest', `realestate:prop:${p.id}`)}>
-              <span aria-hidden>{PROPERTY_TYPE_ICONS[p.type]}</span>
+              <Icon name={PROPERTY_ICON[p.type]} size={16} />
               <div className="grow"><div className="title small">{p.name} {p.usedBy === co.id && <Pill tone="accent">Local propio</Pill>}</div><div className="meta">Libros {fmtMoney(p.carrying, { decimals: false })} · tasación {fmtMoney(p.appraisal, { decimals: false })}</div></div>
               <Money c={r.monthlyCashFlow} colored sign className="small" />
             </button>

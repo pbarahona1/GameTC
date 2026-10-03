@@ -8,6 +8,7 @@ import {
 } from '../../engine/advisor/businessForecast';
 import { deepClone } from '../../engine/clone';
 import { fmtMoney, fmtPct } from '../../engine/format';
+import { Icon } from '../icons';
 
 /**
  * Panel de "Proyección de negocios": simula varios futuros (sin congelar la
@@ -57,7 +58,7 @@ export function ForecastPanel({ target, onResult, title = 'Proyección a 12 mese
   return (
     <div className="card flat forecast">
       <div className="card-head">
-        <strong style={{ flex: 1 }}>🔮 {title}</strong>
+        <strong style={{ flex: 1 }}><Icon name="sparkles" size={15} /> {title}</strong>
         <InfoButton term="proyeccion_negocios" />
       </div>
       {!result && !running && (

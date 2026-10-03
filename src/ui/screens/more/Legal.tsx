@@ -3,7 +3,7 @@ import { useGame, useUI, store } from '../../store';
 import { navStore } from '../../nav';
 import { CardHead, InfoButton, Pill, Act, ConfirmButton, Seg, Empty, Stat, Bar, AmountInput, Money } from '../../components/common';
 import {
-  KIND_INFO, VENTURES, bribe, setUnderreport, setCompanyIrregular, skimCash, startVenture, depositUndeclared, launderThroughCompany, voluntaryDisclosure,
+  VENTURES, bribe, setUnderreport, setCompanyIrregular, skimCash, startVenture, depositUndeclared, launderThroughCompany, voluntaryDisclosure,
   payFine, finePlan, resolveInspection, assignLawyer, reviewCase, estimatedConviction, prepareDefense, negotiatePlea, acceptPlea, goToTrial, appeal,
   bribeInvestigator, openCases, legalRiskSummary, heatLabel, jurisdictionName,
 } from '../../../engine/legal/legal';
@@ -13,6 +13,8 @@ import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { LegalCase } from '../../../engine/legal/types';
 import { IllegalToggle } from '../../components/IllegalToggle';
+import { Icon } from '../../icons';
+import { ILLEGAL_ICON } from '../../contentIcons';
 
 const STAGE: Record<LegalCase['stage'], string> = { investigacion: 'Investigación', imputacion: 'Imputación', juicio: 'Juicio', sentencia: 'Sentencia', cerrado: 'Cerrado' };
 
@@ -162,7 +164,7 @@ export function LegalScreen() {
       {L.prison && (
         <div className="alert critical">
           <span className="stripe" />
-          <div className="grow small" style={{ flex: 1 }}><strong>🔒 Estás en prisión hasta el {formatDate(L.prison.until)}.</strong> No podés trabajar ni operar; tus empresas siguen funcionando con sus gerentes y tus deudas siguen corriendo. Puede haber libertad anticipada por buena conducta.</div>
+          <div className="grow small" style={{ flex: 1 }}><strong><Icon name="lock" size={14} /> Estás en prisión hasta el {formatDate(L.prison.until)}.</strong> No podés trabajar ni operar; tus empresas siguen funcionando con sus gerentes y tus deudas siguen corriendo. Puede haber libertad anticipada por buena conducta.</div>
         </div>
       )}
       <div className="grid2">
@@ -172,7 +174,7 @@ export function LegalScreen() {
         <Stat label="Procesos abiertos" term="investigacion" value={String(risk.openCases)} sub={risk.hiddenActs ? `${risk.hiddenActs} acto(s) no descubierto(s)` : 'Sin exposición oculta'} />
       </div>
       {cases.map((c) => <CaseCard key={c.id} c={c} />)}
-      {cases.length === 0 && !L.prison && <Empty icon="⚖️">No tenés procesos judiciales abiertos.</Empty>}
+      {cases.length === 0 && !L.prison && <Empty icon="legal">No tenés procesos judiciales abiertos.</Empty>}
 
       {fines.length > 0 && (
         <div className="card">
@@ -214,7 +216,7 @@ export function LegalScreen() {
           <div className="rows">
             {acts.map((a) => (
               <div className="row" key={a.id}>
-                <span aria-hidden>{KIND_INFO[a.kind].icon}</span>
+                <Icon name={ILLEGAL_ICON[a.kind]} size={18} />
                 <div className="grow">
                   <div className="small">{a.label}</div>
                   <div className="tiny faint">{formatDate(a.day)} · {jurisdictionName(a.jurisdiction)} · pruebas {Math.round(a.evidence)}/100 · {a.witnesses} testigo(s) · prescribe {formatDate(a.statuteDay)}</div>
@@ -234,7 +236,7 @@ export function LegalScreen() {
       )}
 
       {s.options.illegalEnabled && !L.prison && <GreyZone />}
-      {!s.options.illegalEnabled && <p className="tiny muted">Las actividades ilegales ficticias están desactivadas (Ajustes → Juego).</p>}
+      {!s.options.illegalEnabled && <p className="tiny muted">Las actividades ilegales ficticias están desactivadas (Ajustes → Partida).</p>}
 
       {closed.length > 0 && (
         <div className="card">

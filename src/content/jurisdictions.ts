@@ -92,7 +92,7 @@ export const VALDORIA: Jurisdiction = {
   foreignCompanyAdmin: 0,
   notes: [
     'Impuesto sobre la renta progresivo por tramos: cada tasa se aplica solo a la porción del ingreso dentro de su tramo.',
-    'Los primeros $9.600 anuales están exentos (tramo al 0 %).',
+    'Los primeros $9,600 anuales están exentos (tramo al 0 %).',
     'Los intereses (ahorro, depósitos, bonos) tributan como renta ordinaria en la declaración anual.',
     'Los aportes del empleado al fondo de jubilación son deducibles hasta el 15 % del salario bruto.',
     'Crédito educativo: 15 % de lo gastado en educación, máximo $600 al año, no reembolsable.',
@@ -138,12 +138,12 @@ export const ISLA_CORAL: Jurisdiction = {
   minNetWorth: 150000,
   foreignCompanyAdmin: 400,
   notes: [
-    'Renta personal: 0 % hasta $30.000 y 5 % sobre el excedente. Sin deducciones ni créditos.',
+    'Renta personal: 0 % hasta $30,000 y 5 % sobre el excedente. Sin deducciones ni créditos.',
     'Sin impuesto a las ganancias de capital ni a los dividendos.',
     'Impuesto de sociedades 10 %. Una empresa registrada aquí siendo residente en otro país paga $400 mensuales de administración (agente residente).',
-    'Impuesto inmobiliario bajo (0,4 %), pero la transferencia de inmuebles cuesta 7 %.',
+    'Impuesto inmobiliario bajo (0.4 %), pero la transferencia de inmuebles cuesta 7 %.',
     'Hipotecas sin recurso: si el remate no cubre la deuda, el banco asume la pérdida.',
-    'Costo de vida 40 % más alto. Residencia por inversión: patrimonio neto mínimo de $150.000 y $15.000 de trámites.',
+    'Costo de vida 40 % más alto. Residencia por inversión: patrimonio neto mínimo de $150,000 y $15,000 de trámites.',
     'Controles fiscales laxos (auditorías poco frecuentes), aunque los ilícitos igual pueden detectarse.',
   ],
 };
@@ -184,12 +184,12 @@ export const NORVALIA: Jurisdiction = {
   minNetWorth: 0,
   foreignCompanyAdmin: 150,
   notes: [
-    'Renta progresiva hasta 45 %. Primeros $12.000 exentos.',
-    'Jubilación: aportes deducibles hasta el 20 % del salario. Crédito educativo del 30 % (máximo $1.500).',
+    'Renta progresiva hasta 45 %. Primeros $12,000 exentos.',
+    'Jubilación: aportes deducibles hasta el 20 % del salario. Crédito educativo del 30 % (máximo $1,500).',
     'Ganancias de capital: 30 % si vendés antes de un año, 15 % después. Pérdidas arrastrables 10 años.',
     'Dividendos: retención del 20 %.',
     'Alquileres: depreciación en 33 años e intereses hipotecarios deducibles; las pérdidas compensan otros ingresos.',
-    'Impuesto de sociedades 28 %. Inmobiliario 1,3 %. Transferencia 2 %.',
+    'Impuesto de sociedades 28 %. Inmobiliario 1.3 %. Transferencia 2 %.',
     'Controles estrictos: más auditorías y mayor probabilidad de detectar irregularidades.',
   ],
 };
@@ -230,12 +230,12 @@ export const MERIDIA: Jurisdiction = {
   minNetWorth: 0,
   foreignCompanyAdmin: 120,
   notes: [
-    'Renta progresiva de 12 % a 37 %. Primeros $11.000 exentos.',
+    'Renta progresiva de 12 % a 37 %. Primeros $11,000 exentos.',
     'Ganancias de capital: 22 % a corto plazo y solo 10 % si mantenés la inversión más de un año. Pérdidas arrastrables sin límite.',
     'Dividendos: 15 %. Impuesto de sociedades 21 % (el más bajo entre los países con controles normales).',
-    'Alquileres: depreciación rápida (27,5 años) e intereses deducibles, pero las pérdidas de alquiler NO compensan otros ingresos.',
-    'Impuesto inmobiliario alto: 1,8 % anual. Transferencia solo 1 %.',
-    'Crédito educativo 20 % (máximo $1.000).',
+    'Alquileres: depreciación rápida (27.5 años) e intereses deducibles, pero las pérdidas de alquiler NO compensan otros ingresos.',
+    'Impuesto inmobiliario alto: 1.8 % anual. Transferencia solo 1 %.',
+    'Crédito educativo 20 % (máximo $1,000).',
   ],
 };
 

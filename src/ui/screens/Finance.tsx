@@ -360,11 +360,6 @@ function Invest() {
         </div>
         <p className="tiny muted">Deducible hasta 15 %. No es liquidez: no se puede usar para gastos. Aportar al menos lo que iguala tu empleador es dinero adicional.</p>
       </div>
-      <div className="card lock">
-        <Pill tone="neutral">Fase 3</Pill>
-        <strong>Bolsa de valores, Mogul Exchange y bienes raíces</strong>
-        <p className="small muted">Llegan en la próxima gran actualización, conectados al mismo libro mayor.</p>
-      </div>
     </>
   );
 }

@@ -6,11 +6,14 @@ import {
   Store, Watch, Bike, Smartphone, Tag, Handshake, Magnet, Bell, SquareParking, KeyRound, GraduationCap, PiggyBank, Banknote, Coins, Gauge, Lightbulb,
   ListChecks, Rocket, Plus, Minus, Zap, Wallet, Eye, HardDrive, Maximize2, Undo2, Flame, Pause, Play, Gift,
   TriangleAlert, History, FolderOpen, Copy, ArchiveRestore, SkipForward, ChevronDown, CalendarDays, ChevronsRight, Ellipsis,
+  Coffee, ShoppingCart, Network, Star, Brain, Megaphone, Calculator, Sun, CloudRain, CloudSun, TrendingUp, TrendingDown, Shield, Clover, MessageCircle,
+  Telescope, Lock, Package, Truck, Mail, CircleDollarSign, Medal, Siren, Puzzle, Music, Trees,
 } from 'lucide-react';
 
 /**
  * Íconos de la interfaz (líneas, 1 color, se adaptan al tema claro/oscuro).
- * Los emojis quedan solo para contenido (registro, sectores, eventos).
+ * Un solo sistema: los contenidos (sectores, tiendas, fases, noticias, registro…)
+ * se dibujan con estos íconos a través de contentIcons.ts, no con emojis.
  */
 const MAP = {
   home: House, career: Briefcase, finance: Landmark, invest: ChartLine, business: Factory, more: LayoutGrid,
@@ -26,6 +29,10 @@ const MAP = {
   plus: Plus, minus: Minus, bolt: Zap, wallet: Wallet, eye: Eye, disk: HardDrive, expand: Maximize2, undo: Undo2, fire: Flame, pause: Pause, play: Play, gift: Gift,
   alert: TriangleAlert, history: History, folder: FolderOpen, copy: Copy, restore: ArchiveRestore, skip: SkipForward,
   chevronDown: ChevronDown, calendar: CalendarDays, fastForward: ChevronsRight, dots: Ellipsis,
+  coffee: Coffee, cart: ShoppingCart, network: Network, star: Star, brain: Brain, megaphone: Megaphone, calculator: Calculator,
+  sun: Sun, rain: CloudRain, cloudSun: CloudSun, trendUp: TrendingUp, trendDown: TrendingDown, shield: Shield, clover: Clover,
+  chat: MessageCircle, telescope: Telescope, lock: Lock, package: Package, truck: Truck, mail: Mail, dollar: CircleDollarSign,
+  medal: Medal, siren: Siren, puzzle: Puzzle, music: Music, trees: Trees,
 } as const;
 
 export type IconName = keyof typeof MAP;

@@ -22,19 +22,16 @@ void (async () => {
   if (store.getSnapshot().settings.autoUpdate !== false) setTimeout(() => void autoCheck(), 4000);
 })();
 
-// Botón "atrás" de Android: cierra la hoja abierta, vuelve a Inicio o guarda y minimiza.
+// Botón "atrás" de Android: hoja de arriba → hoja anterior → lugar anterior → Inicio → guarda y minimiza.
 void import('@capacitor/core').then(async ({ Capacitor }) => {
   if (!Capacitor.isNativePlatform()) return;
   const { App: CapApp } = await import('@capacitor/app');
   const { navStore } = await import('./ui/nav');
   CapApp.addListener('backButton', () => {
-    const nav = navStore.get();
     const ui = store.getSnapshot();
     if (ui.simError) store.dismissSimError();
     else if (ui.absence) store.dismissAbsence();
-    else if (nav.sheets.length) navStore.close();
-    else if (nav.tab !== 'home') navStore.go('home');
-    else void store.save().then(() => CapApp.minimizeApp());
+    else if (!navStore.back()) void store.save().then(() => CapApp.minimizeApp());
   });
   CapApp.addListener('pause', () => void store.save());
 });

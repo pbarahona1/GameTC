@@ -1,6 +1,6 @@
 import { useNav, navStore } from '../nav';
 import { useUI } from '../store';
-import { Tabs, ScreenIntro } from '../components/common';
+import { GroupedTabs, ScreenIntro } from '../components/common';
 import { Portfolio } from './invest/Portfolio';
 import { StocksLite } from './invest/StocksLite';
 import { TradingPro } from './invest/TradingPro';
@@ -27,16 +27,13 @@ export function Invest() {
   return (
     <>
       <ScreenIntro icon="invest" title="Invertir" text="Hacé crecer tu dinero: acciones, fondos, bonos, inmuebles o un gestor que invierta por vos. Ninguna ganancia está garantizada." term="diversificacion" />
-      <Tabs<Sub>
-        items={[
-          { id: 'portfolio', label: 'Mis inversiones', icon: 'wallet' },
-          { id: 'lite', label: 'Bolsa', icon: 'invest' },
-          { id: 'pro', label: 'Trading Pro', icon: 'stocks' },
-          { id: 'funds', label: 'Fondos', icon: 'funds' },
-          { id: 'gestor', label: 'Gestor', icon: 'gestor' },
-          { id: 'bonds', label: 'Bonos', icon: 'bonds' },
-          { id: 'realestate', label: 'Inmuebles', icon: 'realestate' },
-          { id: 'mogul', label: 'Mogul', icon: 'luxury' },
+      <GroupedTabs<Sub>
+        label="Inversiones"
+        groups={[
+          { id: 'mine', label: 'Mis inversiones', icon: 'wallet', items: [{ id: 'portfolio', label: 'Mis inversiones' }] },
+          { id: 'market', label: 'Bolsa', icon: 'stocks', items: [{ id: 'lite', label: 'Bolsa simple' }, { id: 'pro', label: 'Trading Pro' }] },
+          { id: 'income', label: 'Fondos y bonos', icon: 'funds', items: [{ id: 'funds', label: 'Fondos' }, { id: 'bonds', label: 'Bonos' }, { id: 'gestor', label: 'Gestor' }] },
+          { id: 'property', label: 'Inmuebles', icon: 'realestate', items: [{ id: 'realestate', label: 'Inmuebles' }, { id: 'mogul', label: 'Mogul Exchange' }] },
         ]}
         value={sub}
         onChange={(v) => {

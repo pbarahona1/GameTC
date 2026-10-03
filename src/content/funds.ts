@@ -22,15 +22,15 @@ export interface FundDef {
 export const FUND_DEFS: FundDef[] = [
   { id: 'F-IDX', name: 'Fondo Índice Valoria', kind: 'indice', fee: 0.002, entryFee: 0, risk: 4, distributes: false,
     description: 'Replica el índice de la bolsa: compra todas las acciones en proporción a su tamaño.',
-    howItWorks: 'Su valor sigue al índice día a día y reinvierte los dividendos. Comisión anual muy baja (0,2 %).',
+    howItWorks: 'Su valor sigue al índice día a día y reinvierte los dividendos. Comisión anual muy baja (0.2 %).',
     risks: 'Cae junto con toda la bolsa en recesiones o pánicos. Diversificado, pero no protegido.' },
   { id: 'F-TEC', name: 'Fondo Tecnología', kind: 'sector', fee: 0.008, entryFee: 0, risk: 5, distributes: false, holdings: ['NBLA', 'CIRQ', 'ONDA', 'TELV'],
     description: 'Concentra acciones tecnológicas y de telecomunicaciones.',
-    howItWorks: 'Promedio de sus acciones (pesos iguales). Comisión anual 0,8 %.',
+    howItWorks: 'Promedio de sus acciones (pesos iguales). Comisión anual 0.8 %.',
     risks: 'Muy volátil y sensible a las tasas de interés: puede caer mucho más que el índice.' },
   { id: 'F-DIV', name: 'Fondo Dividendos', kind: 'dividendos', fee: 0.005, entryFee: 0, risk: 3, distributes: true, holdings: ['TELV', 'PLZA', 'PTRS', 'MRKT', 'BVAL'],
     description: 'Empresas maduras que reparten dividendos altos.',
-    howItWorks: 'Cobra los dividendos de sus acciones y los reparte cada trimestre. Comisión 0,5 %.',
+    howItWorks: 'Cobra los dividendos de sus acciones y los reparte cada trimestre. Comisión 0.5 %.',
     risks: 'Crece poco; sus empresas pueden recortar dividendos en crisis.' },
   { id: 'F-BON', name: 'Fondo de Bonos Soberanos', kind: 'bonos', fee: 0.003, entryFee: 0, risk: 2, distributes: true,
     description: 'Cartera de bonos de gobiernos con buena calificación.',
@@ -42,7 +42,7 @@ export const FUND_DEFS: FundDef[] = [
     risks: 'Casi sin riesgo, pero su rendimiento puede quedar por debajo de la inflación.' },
   { id: 'F-REIT', name: 'Fondo Inmobiliario (REIT)', kind: 'inmobiliario', fee: 0.007, entryFee: 0.01, risk: 3, distributes: true,
     description: 'Invierte en edificios alquilados de varias zonas.',
-    howItWorks: 'Reparte los alquileres cada trimestre y su valor sigue los precios inmobiliarios. Comisión de entrada 1 % y anual 0,7 %.',
+    howItWorks: 'Reparte los alquileres cada trimestre y su valor sigue los precios inmobiliarios. Comisión de entrada 1 % y anual 0.7 %.',
     risks: 'Cae con los precios de los inmuebles y cuando sube la vacancia.' },
 ];
 

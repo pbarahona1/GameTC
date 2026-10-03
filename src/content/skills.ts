@@ -51,7 +51,7 @@ export const SKILLS: SkillDef[] = [
   {
     id: 'stocks', name: 'Bolsa de valores', icon: '📈', trainable: true,
     description: 'Interpretar información bursátil: precios, valoraciones, dividendos.',
-    effects: ['Requisito de certificaciones de análisis financiero.', 'Mejor ejecución de órdenes: reduce hasta 40 % el costo de diferencial e impacto de mercado (−0,4 % por nivel).'],
+    effects: ['Requisito de certificaciones de análisis financiero.', 'Mejor ejecución de órdenes: reduce hasta 40 % el costo de diferencial e impacto de mercado (−0.4 % por nivel).'],
     methods: ['Libros y cursos de inversión', 'Comprar, vender y dar órdenes en la bolsa'],
   },
   {
@@ -85,19 +85,19 @@ export const SKILLS: SkillDef[] = [
   {
     id: 'marketing', name: 'Marketing', icon: '📣', trainable: true,
     description: 'Diseñar campañas y comprender la demanda.',
-    effects: ['Requisito de empleos de marketing.', 'Tus campañas ganan +0,4 % de conocimiento de marca por nivel (hasta +40 %).'],
+    effects: ['Requisito de empleos de marketing.', 'Tus campañas ganan +0.4 % de conocimiento de marca por nivel (hasta +40 %).'],
     methods: ['Cursos de marketing', 'Trabajar en marketing'],
   },
   {
     id: 'realEstate', name: 'Bienes raíces', icon: '🏠', trainable: true,
     description: 'Analizar propiedades, alquileres, precios y rentabilidad inmobiliaria.',
-    effects: ['Aumenta la probabilidad de que acepten tus contraofertas por inmuebles (+0,2 % por nivel).'],
+    effects: ['Aumenta la probabilidad de que acepten tus contraofertas por inmuebles (+0.2 % por nivel).'],
     methods: ['Curso de bienes raíces', 'Inspeccionar, comprar, renovar y vender inmuebles'],
   },
   {
     id: 'law', name: 'Derecho', icon: '⚖️', trainable: true,
     description: 'Comprender contratos, obligaciones legales y riesgos jurídicos.',
-    effects: ['Requisito de puestos directivos de tecnología.', 'Suma a tu defensa en un juicio (+0,1 punto por nivel).'],
+    effects: ['Requisito de puestos directivos de tecnología.', 'Suma a tu defensa en un juicio (+0.1 punto por nivel).'],
     methods: ['Curso de derecho empresarial'],
   },
   {
@@ -121,7 +121,7 @@ export const SKILLS: SkillDef[] = [
   {
     id: 'discipline', name: 'Disciplina', icon: '⏱️', trainable: true,
     description: 'Constancia en estudio y práctica.',
-    effects: ['Cada nivel suma +0,3 % de XP en estudios (hasta +30 %).', 'Reduce el estrés que genera estudiar.'],
+    effects: ['Cada nivel suma +0.3 % de XP en estudios (hasta +30 %).', 'Reduce el estrés que genera estudiar.'],
     methods: ['Terminar cursos', 'Libro de hábitos'],
   },
   {

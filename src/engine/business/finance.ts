@@ -73,7 +73,7 @@ export function quoteCoLoan(state: GameState, co: Company, bank: BizBank, amount
   if (term > bank.maxTerm) reasons.push(`Plazo máximo: ${bank.maxTerm} meses.`);
   if (amount < px(state, 1000)) reasons.push('Monto mínimo: $1,000.');
   if (amount > maxAmount) reasons.push(`Monto máximo según ${bank.requiresGuarantee ? 'garantías' : 'ganancias (3 × EBITDA anual)'}: ${fmtMoney(maxAmount)}.`);
-  if (!bank.requiresGuarantee && (dscr === null || dscr < 1.25)) reasons.push('La empresa no genera suficiente EBITDA para cubrir 1,25 veces las cuotas.');
+  if (!bank.requiresGuarantee && (dscr === null || dscr < 1.25)) reasons.push('La empresa no genera suficiente EBITDA para cubrir 1.25 veces las cuotas.');
   if (bank.requiresGuarantee && state.credit.score < 640) reasons.push(`Tu puntaje personal (${state.credit.score}) está por debajo de 640, requerido para garantizar.`);
   const sched = amortizationSchedule(amount, apr, term);
   return {

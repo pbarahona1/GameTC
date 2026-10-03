@@ -7,7 +7,7 @@ import { CandleChart, IndicatorPanel, Overlay } from '../../components/charts';
 import { stockById, analystView, quoteMarket, placeStockOrder, placeBracket, cancelOrder, orderSummary, isTradingDay, fairValue } from '../../../engine/invest/stocks';
 import { sma, ema, rsi, macd, bollinger, correlation, annualVol, maxDrawdown } from '../../../engine/invest/indicators';
 import { SECTOR_NAMES } from '../../../content/stocks';
-import { fmtMoney, fmtPct } from '../../../engine/format';
+import { fmtMoney, fmtPct, fmtNumber } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { OrderType, OrderSide } from '../../../engine/invest/types';
 import { portfolioRisk } from './Portfolio';
@@ -175,7 +175,7 @@ export function TradingPro({ selected }: { selected: string | null }) {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
           <span className="num" style={{ fontSize: 22, fontWeight: 700 }}>{fmtMoney(st.price)}</span>
-          <span className="tiny muted">Ap {fmtMoney(st.open)} · Máx {fmtMoney(st.high)} · Mín {fmtMoney(st.low)} · Vol {st.volume.toLocaleString('es')}</span>
+          <span className="tiny muted">Ap {fmtMoney(st.open)} · Máx {fmtMoney(st.high)} · Mín {fmtMoney(st.low)} · Vol {fmtNumber(st.volume)}</span>
         </div>
         <Seg items={[{ id: 60, label: '3 m' }, { id: 120, label: '6 m' }, { id: 260, label: '1 a' }, { id: 0, label: 'Todo' }]} value={[60, 120, 260].includes(range) && endOff === 0 ? range : range >= total && endOff === 0 ? 0 : -1} onChange={(v) => setWin(clampWin(v === 0 ? total : v, 0))} />
         <CandleChart candles={data.candles} overlays={data.overlays} markers={markers} onZoom={zoom} onPan={pan} />

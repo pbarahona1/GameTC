@@ -252,7 +252,7 @@ export function bondQuote(state: GameState, b: BondIssue, qty: number, side: 'co
 export function buyBond(state: GameState, id: string, qty: number): ActionResult {
   const b = state.bonds.issues.find((x) => x.id === id);
   if (!b || b.status !== 'vigente') return FAIL('Ese bono no está disponible.');
-  if (!Number.isInteger(qty) || qty <= 0) return FAIL('Indicá una cantidad entera de bonos (nominal $1.000 cada uno).');
+  if (!Number.isInteger(qty) || qty <= 0) return FAIL('Indicá una cantidad entera de bonos (nominal $1,000 cada uno).');
   if (state.legal?.prison) return FAIL('Desde prisión no podés operar.');
   const q = bondQuote(state, b, qty, 'compra');
   if (!canPayFromChecking(state, q.total)) return FAIL(`Necesitás ${fmtMoney(q.total)}.`);

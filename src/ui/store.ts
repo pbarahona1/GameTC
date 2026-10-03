@@ -17,6 +17,9 @@ import { APP_VERSION } from '../version';
 import { syncSystemBars } from './systemBars';
 
 export type Speed = 0 | 1 | 2 | 4 | 8;
+export type PlaySpeed = Exclude<Speed, 0>;
+/** Orden del botón de velocidad: 1× → 2× → 4× → 8× → 1×. */
+export const NEXT_SPEED: Record<PlaySpeed, PlaySpeed> = { 1: 2, 2: 4, 4: 8, 8: 1 };
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
 export type PauseCategory = LogCategory;
@@ -43,6 +46,8 @@ export interface Settings {
   showAllSections: boolean;
   /** Buscar actualizaciones al abrir la app (1.2). */
   autoUpdate: boolean;
+  /** Velocidad con la que se reanuda el tiempo (la última elegida). */
+  playSpeed: PlaySpeed;
 }
 
 const SETTINGS_KEY = 'urt.settings';
@@ -51,7 +56,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: 'system', learningMode: true, autoPause: true, offlineMaxDays: 30,
   alertCategories: ['liquidez', 'deuda', 'credito', 'ahorro', 'impuestos', 'carrera', 'bienestar', 'empresa', 'inversiones', 'inmuebles', 'legal', 'economia'],
   msPerDay: 2000, pauseOn: ['peligro', 'ofertas', 'logros', 'legal'], successToasts: true,
-  fontScale: 1, highContrast: false, reduceMotion: false, colorblind: false, density: 'comoda', showAllSections: false, autoUpdate: true,
+  fontScale: 1, highContrast: false, reduceMotion: false, colorblind: false, density: 'comoda', showAllSections: false, autoUpdate: true, playSpeed: 1,
 };
 
 /** Milisegundos reales por día de juego a velocidad 1× (valor por defecto). */
@@ -479,7 +484,20 @@ export class GameStore {
   }
 
   // ---------- Tiempo ----------
+  /** Play/Pausa: reanuda con la última velocidad elegida. */
+  togglePlay() {
+    this.setSpeed(this.ui.speed === 0 ? this.ui.settings.playSpeed : 0);
+  }
+
+  /** Botón de velocidad: 1× → 2× → 4× → 8× → 1×. Si el tiempo corre, se aplica ya. */
+  cycleSpeed() {
+    const next = NEXT_SPEED[this.ui.settings.playSpeed] ?? 1;
+    if (this.ui.speed !== 0) this.setSpeed(next);
+    else this.updateSettings({ playSpeed: next });
+  }
+
   setSpeed(speed: Speed) {
+    if (speed !== 0 && speed !== this.ui.settings.playSpeed) this.updateSettings({ playSpeed: speed });
     const pausing = speed === 0 && this.ui.speed !== 0;
     this.ui.speed = speed;
     this.accumulator = 0;

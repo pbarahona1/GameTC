@@ -298,7 +298,7 @@ export function mogulQuote(state: GameState, a: MogulAsset, units: number, side:
 export function buyMogul(state: GameState, id: string, units: number): ActionResult {
   const a = mogulAsset(state, id);
   if (!a || a.status !== 'activo') return FAIL('Activo no disponible.');
-  if (!(units >= 0.01)) return FAIL('La cantidad mínima es 0,01 participaciones.');
+  if (!(units >= 0.01)) return FAIL('La cantidad mínima es 0.01 participaciones.');
   if (state.legal?.prison) return FAIL('Desde prisión no podés operar.');
   const owned = state.mogul.holdings[id]?.qty ?? 0;
   if (owned + units > a.units * 0.49) return FAIL('Mogul Exchange limita a cada inversor al 49 % de un activo.');

@@ -1,5 +1,5 @@
 import { Icon, isIconName, IconName } from '../icons';
-import { ReactNode, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { ReactNode, createContext, useContext, useEffect, useId, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Cents } from '../../engine/money';
 import { fmtMoney, fmtCompact, fmtAmountInput, fmtNumber, parseMoney, parseQuantity } from '../../engine/format';
 import { GLOSSARY_BY_ID } from '../../content/glossary';
@@ -12,14 +12,48 @@ export function Money({ c, compact, sign, colored, className = '' }: { c: Cents;
   return <span className={`num ${cls} ${className}`}>{arrow}{compact ? fmtCompact(c) : fmtMoney(c, { sign })}</span>;
 }
 
+/**
+ * PUNTOS DE "CONCEPTO NUEVO": como mucho unos pocos por pantalla, para que no le
+ * roben la atención a las acciones reales (el dorado es también el color de la
+ * acción principal). Cada pantalla y cada hoja tiene su propio cupo; los primeros
+ * conceptos sin ver (en orden de aparición) llevan el punto y el resto, la ayuda neutra.
+ */
+const MAX_DOTS = 3;
+const DotApi = createContext<{ add(id: string): void; remove(id: string): void } | null>(null);
+const DotOrder = createContext<string[]>([]);
+
+export function DotBudget({ children }: { children: ReactNode }) {
+  const [order, setOrder] = useState<string[]>([]);
+  const api = useMemo(() => ({
+    add: (id: string) => setOrder((o) => (o.includes(id) ? o : [...o, id])),
+    remove: (id: string) => setOrder((o) => o.filter((x) => x !== id)),
+  }), []);
+  return <DotApi.Provider value={api}><DotOrder.Provider value={order}>{children}</DotOrder.Provider></DotApi.Provider>;
+}
+
+function useNewDot(want: boolean): boolean {
+  const api = useContext(DotApi);
+  const order = useContext(DotOrder);
+  const id = useId();
+  useEffect(() => {
+    if (!api || !want) return;
+    api.add(id);
+    return () => api.remove(id);
+  }, [api, want, id]);
+  if (!api) return want;
+  const i = order.indexOf(id);
+  return want && i >= 0 && i < MAX_DOTS;
+}
+
 export function InfoButton({ term, label }: { term: string; label?: string }) {
   const ui = useUI();
-  const seen = ui.state?.meta.seenTerms.includes(term);
+  const seen = !!ui.state?.meta.seenTerms.includes(term);
+  const dot = useNewDot(!seen && !!GLOSSARY_BY_ID[term]);
   if (!GLOSSARY_BY_ID[term]) return null;
   return (
     <button
       type="button"
-      className={`info-btn ${seen ? '' : 'new'}`}
+      className={`info-btn ${dot ? 'new' : ''}`}
       aria-label={`Qué significa ${label ?? GLOSSARY_BY_ID[term].term}`}
       onClick={(e) => {
         e.stopPropagation();
@@ -66,14 +100,87 @@ export function Pill({ tone, children }: { tone: 'gain' | 'loss' | 'warn' | 'inf
   return <span className={`pill ${tone}`}>{children}</span>;
 }
 
-export function Tabs<T extends string>({ items, value, onChange }: { items: Array<{ id: T; label: string; icon?: IconName; badge?: number }>; value: T; onChange: (v: T) => void }) {
+/**
+ * Indicador de "hay más pestañas": marca el contenedor cuando se puede desplazar
+ * hacia un lado (el CSS dibuja un degradado y una flecha) y lleva la pestaña
+ * activa a la vista.
+ */
+function useOverflowHint(dep: unknown) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const left = el.scrollLeft > 4;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      setEdges((e) => (e.left === left && e.right === right ? e : { left, right }));
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', update);
+      ro?.disconnect();
+    };
+  }, []);
+  useEffect(() => {
+    const el = ref.current;
+    const on = el?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!el || !on || typeof on.scrollIntoView !== 'function') return;
+    const r = on.getBoundingClientRect();
+    const c = el.getBoundingClientRect();
+    if (r.left < c.left || r.right > c.right) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [dep]);
+  return { ref, edges };
+}
+
+export function Tabs<T extends string>({ items, value, onChange, label }: { items: Array<{ id: T; label: string; icon?: IconName; badge?: number }>; value: T; onChange: (v: T) => void; label?: string }) {
+  const { ref, edges } = useOverflowHint(value);
   return (
-    <div className="tabs" role="tablist">
-      {items.map((it) => (
-        <button key={it.id} role="tab" aria-selected={value === it.id} className={value === it.id ? 'on' : ''} onClick={() => onChange(it.id)}>
-          {it.icon && <Icon name={it.icon} size={15} />}{it.label}{it.badge ? <span className="count-badge sm">{it.badge}</span> : null}
-        </button>
-      ))}
+    <div className={`tabs-wrap ${edges.left ? 'more-left' : ''} ${edges.right ? 'more-right' : ''}`}>
+      <div className="tabs" role="tablist" aria-label={label} ref={ref}>
+        {items.map((it) => (
+          <button key={it.id} role="tab" aria-selected={value === it.id} className={value === it.id ? 'on' : ''} onClick={() => onChange(it.id)}>
+            {it.icon && <Icon name={it.icon} size={15} />}{it.label}{it.badge ? <span className="count-badge sm">{it.badge}</span> : null}
+          </button>
+        ))}
+      </div>
+      {edges.right && <span className="tabs-more" aria-hidden><Icon name="chevron" size={16} /></span>}
+    </div>
+  );
+}
+
+export interface TabGroup<T extends string> {
+  id: string;
+  label: string;
+  icon?: IconName;
+  items: Array<{ id: T; label: string; badge?: number }>;
+}
+
+/**
+ * Pestañas en dos niveles: grupos arriba y, si el grupo tiene varias secciones,
+ * una fila de subsecciones. Las rutas no cambian (cada subsección conserva su id).
+ */
+export function GroupedTabs<T extends string>({ groups, value, onChange, label }: { groups: Array<TabGroup<T>>; value: T; onChange: (v: T) => void; label?: string }) {
+  const current = groups.find((g) => g.items.some((i) => i.id === value)) ?? groups[0];
+  const badge = (g: TabGroup<T>) => g.items.reduce((n, i) => n + (i.badge ?? 0), 0) || undefined;
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <Tabs items={groups.map((g) => ({ id: g.id, label: g.label, icon: g.icon, badge: badge(g) }))} value={current.id} label={label} onChange={(id) => {
+        const g = groups.find((x) => x.id === id);
+        if (g && g.id !== current.id) onChange(g.items[0].id);
+      }} />
+      {current.items.length > 1 && (
+        <div className="subtabs" role="tablist" aria-label={current.label}>
+          {current.items.map((it) => (
+            <button key={it.id} type="button" role="tab" aria-selected={value === it.id} className={value === it.id ? 'on' : ''} onClick={() => onChange(it.id)}>
+              {it.label}{it.badge ? <span className="count-badge sm">{it.badge}</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -90,22 +197,60 @@ export function Seg<T extends string | number>({ items, value, onChange }: { ite
   );
 }
 
-export function Sheet({ title, children, onClose }: { title: ReactNode; children: ReactNode; onClose?: () => void }) {
-  const close = onClose ?? (() => navStore.close());
-  useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && close();
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
-  });
+/** Esqueleto mientras se carga una pestaña (en lugar de un «Cargando…» suelto). */
+export function ScreenSkeleton() {
   return (
-    <div className="sheet-backdrop" onClick={close}>
-      <div className="sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grip" />
+    <div className="skeleton-screen" role="status" aria-label="Cargando la sección">
+      <div className="sk sk-title" />
+      <div className="sk sk-card" />
+      <div className="sk sk-row" />
+      <div className="sk sk-row" />
+    </div>
+  );
+}
+
+/** ¿Esta hoja es la de arriba de la pila? (las de abajo quedan montadas pero ocultas). */
+const SheetTop = createContext(true);
+
+export function SheetLayer({ top, children }: { top: boolean; children: ReactNode }) {
+  return <SheetTop.Provider value={top}>{children}</SheetTop.Provider>;
+}
+
+export function Sheet({ title, children, onClose }: { title: ReactNode; children: ReactNode; onClose?: () => void }) {
+  const top = useContext(SheetTop);
+  const titleId = useId();
+  const box = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  // Solo la hoja de arriba responde a Escape y se lleva el foco; al cerrarse, el foco
+  // vuelve a donde estaba (el botón que la abrió o la hoja de abajo).
+  useEffect(() => {
+    if (!top) return;
+    const prev = document.activeElement as HTMLElement | null;
+    box.current?.focus();
+    const k = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      (closeRef.current ?? (() => navStore.close()))();
+    };
+    window.addEventListener('keydown', k);
+    return () => {
+      window.removeEventListener('keydown', k);
+      if (prev && document.contains(prev)) prev.focus();
+    };
+  }, [top]);
+  const close = () => (onClose ?? (() => navStore.close()))();
+  return (
+    <div className="sheet-backdrop" hidden={!top} onClick={close}>
+      <div ref={box} className="sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grip" aria-hidden />
         <div className="sheet-head">
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button className="icon-btn" onClick={close} aria-label="Cerrar"><Icon name="close" /></button>
         </div>
-        <div className="sheet-body">{children}</div>
+        <div className="sheet-body"><DotBudget>{children}</DotBudget></div>
       </div>
     </div>
   );
@@ -180,10 +325,10 @@ export function AmountInput({ id, value, onChange, max, placeholder, label }: { 
   );
 }
 
-export function Empty({ icon, children }: { icon: string; children: ReactNode }) {
+export function Empty({ icon, children }: { icon: IconName; children: ReactNode }) {
   return (
     <div className="empty">
-      <div className="ic" aria-hidden>{icon}</div>
+      <div className="ic" aria-hidden><Icon name={icon} size={26} /></div>
       <div>{children}</div>
     </div>
   );
@@ -229,6 +374,15 @@ function chartScale(all: number[]): { min: number; max: number; ticks: number[] 
  * Gráfico de líneas SVG propio (liviano, sin dependencias). Al tocar o pasar
  * el dedo muestra una línea guía con el valor de cada serie en ese punto.
  */
+/** Resumen del gráfico para lectores de pantalla: inicio, fin, mínimo y máximo de cada serie. */
+function chartSummary(series: Series[], format: (v: number) => string, pointLabels?: string[]): string {
+  const span = pointLabels && pointLabels.length > 1 ? ` (${pointLabels[0]} a ${pointLabels[pointLabels.length - 1]})` : '';
+  return series
+    .filter((s) => s.values.length)
+    .map((s) => `${s.name}${span}: empieza en ${format(s.values[0])} y termina en ${format(s.values[s.values.length - 1])}; mínimo ${format(Math.min(...s.values))}, máximo ${format(Math.max(...s.values))}`)
+    .join('. ');
+}
+
 export function LineChart({ series, labels, pointLabels, height = 150, format = (v: number) => fmtCompact(v) }: { series: Series[]; labels?: string[]; pointLabels?: string[]; height?: number; format?: (v: number) => string }) {
   const W = 340;
   const H = height;
@@ -237,7 +391,7 @@ export function LineChart({ series, labels, pointLabels, height = 150, format = 
   const [hover, setHover] = useState<number | null>(null);
   const { min, max, ticks } = chartScale(all);
   const n = Math.max(...series.map((s) => s.values.length));
-  if (n < 2) return <Empty icon="📈">El gráfico aparece después del primer cierre de mes.</Empty>;
+  if (n < 2) return <Empty icon="reports">El gráfico aparece después del primer cierre de mes.</Empty>;
   const x = (i: number) => padL + (i / (n - 1)) * (W - padL - padR);
   const y = (v: number) => padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
   const pick = (e: RPointerEvent<SVGSVGElement>) => {
@@ -249,7 +403,7 @@ export function LineChart({ series, labels, pointLabels, height = 150, format = 
   const tipX = hover !== null ? Math.min(W - tipW - 2, Math.max(padL, x(hover) - tipW / 2)) : 0;
   const rows = hover !== null ? series.filter((s) => s.values[hover] !== undefined) : [];
   return (
-    <svg className="chart touch" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={series.map((s) => s.name).join(', ')}
+    <svg className="chart touch" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={chartSummary(series, format, pointLabels)}
       onPointerMove={pick} onPointerDown={pick} onPointerLeave={() => setHover(null)}>
       {ticks.map((t, i) => (
         <g key={i}>

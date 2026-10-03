@@ -1,5 +1,4 @@
 import type { GameState } from '../state';
-import { STAGES } from './progression';
 
 /**
  * Secciones recomendadas por etapa (1.2). NO bloquean: la primera vez que entrás a
@@ -22,7 +21,7 @@ export const GATES: SectionGate[] = [
     before: ['Un fondo de emergencia (etapa 3)', 'Comparar el alquiler anual con el precio (rendimiento)'] },
   { id: 'trading', name: 'Trading Pro', stage: 4, why: 'Las órdenes avanzadas y los gráficos técnicos sirven cuando ya entendés la bolsa. Empezar por un fondo índice es más simple y casi siempre mejor.',
     before: ['Haber invertido en un fondo o en acciones (etapa 4)', 'Leer el análisis de una acción en Bolsa'] },
-  { id: 'mogul', name: 'Mogul Exchange', stage: 5, why: 'Son participaciones en activos poco líquidos y de riesgo alto: conviene tener antes una base sólida.', before: ['Patrimonio de $50.000 y 3 meses de reserva (etapa 5)'] },
+  { id: 'mogul', name: 'Mogul Exchange', stage: 5, why: 'Son participaciones en activos poco líquidos y de riesgo alto: conviene tener antes una base sólida.', before: ['Patrimonio de $50,000 y 3 meses de reserva (etapa 5)'] },
   { id: 'gestor', name: 'Gestor de inversiones', stage: 4, why: 'Un gestor cobra comisiones todos los años: tiene sentido cuando tenés un capital que valga la pena delegar.', before: ['Primeras inversiones (etapa 4)'] },
   { id: 'holding', name: 'Holding y grupos', stage: 6, why: 'Una holding cuesta dinero todos los meses y solo aporta cuando tenés varias empresas (SRL o corporaciones) para agrupar.', before: ['Al menos una empresa rentable', 'Ingresos pasivos (etapa 6)'] },
 ];
@@ -43,6 +42,7 @@ export function openGate(state: GameState, id: string): void {
   if (!state.meta.gatesOpened.includes(id)) state.meta.gatesOpened.push(id);
 }
 
-export function stageName(n: number): string {
-  return STAGES[n - 1]?.name ?? '';
+/** Secciones cuya recomendación empieza exactamente en esta etapa. */
+export function sectionsFromStage(n: number): SectionGate[] {
+  return GATES.filter((g) => g.stage === n);
 }

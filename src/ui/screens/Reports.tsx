@@ -153,7 +153,7 @@ function CF({ period }: { period: Period }) {
 function NW() {
   const s = useGame();
   const h = s.history;
-  if (h.length < 2) return <div className="card"><Empty icon="📈">La evolución se registra en cada cierre de mes. Avanzá el tiempo para ver tu historial.</Empty></div>;
+  if (h.length < 2) return <div className="card"><Empty icon="reports">La evolución se registra en cada cierre de mes. Avanzá el tiempo para ver tu historial.</Empty></div>;
   const series = [
     { name: 'Patrimonio neto', values: h.map((x) => x.netWorth), color: 'var(--accent)' },
     { name: 'Liquidez', values: h.map((x) => x.liquid), color: 'var(--info)' },

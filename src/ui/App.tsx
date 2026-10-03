@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { store, useUI, useDerived, Speed } from './store';
+import { lazy, Suspense, useEffect, useRef } from 'react';
+import { store, useUI, useDerived, NEXT_SPEED } from './store';
 import { insightsOf } from './derived';
 import { navStore, useNav, Tab } from './nav';
 import { formatDateShort } from '../engine/time/calendar';
@@ -7,7 +7,6 @@ import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
 import { SheetHost, useOta } from './sheets';
 import { Icon, IconName } from './icons';
-import { Avatar, avatarOf } from './components/Avatar';
 import { unreadNews } from '../engine/world/news';
 const More = lazy(() => import('./screens/More').then((m) => ({ default: m.More })));
 const Invest = lazy(() => import('./screens/Invest').then((m) => ({ default: m.Invest })));
@@ -15,11 +14,13 @@ const Reports = lazy(() => import('./screens/Reports').then((m) => ({ default: m
 const Business = lazy(() => import('./screens/Business').then((m) => ({ default: m.Business })));
 const Finance = lazy(() => import('./screens/Finance').then((m) => ({ default: m.Finance })));
 const Career = lazy(() => import('./screens/Career').then((m) => ({ default: m.Career })));
-import { Money, Sheet, InfoButton } from './components/common';
+import { Money, Sheet, DotBudget, ScreenSkeleton } from './components/common';
+import { MenuButton, type MenuItem } from './components/Menu';
 import { fmtMoney } from '../engine/format';
 import { spendable } from '../engine/finance/payments';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BootErrorScreen, SimErrorSheet } from './screens/Recovery';
+import { logIcon } from './contentIcons';
 
 const TABS: Array<{ id: Tab; label: string; icon: IconName }> = [
   { id: 'home', label: 'Inicio', icon: 'home' },
@@ -30,48 +31,47 @@ const TABS: Array<{ id: Tab; label: string; icon: IconName }> = [
   { id: 'more', label: 'Más', icon: 'more' },
 ];
 
-const SPEEDS: Array<{ s: Speed; label: string; aria: string }> = [
-  { s: 0, label: 'pause', aria: 'Pausa' },
-  { s: 1, label: '1×', aria: 'Velocidad normal' },
-  { s: 2, label: '2×', aria: 'Velocidad doble' },
-  { s: 4, label: '4×', aria: 'Velocidad 4x' },
-  { s: 8, label: '8×', aria: 'Velocidad 8x' },
-];
-
+/**
+ * Barra superior en una fila: fecha (y lo disponible) · Play/Pausa · Velocidad · Más.
+ * Los saltos de tiempo, las noticias, el asesor y los ajustes van en el menú «Más».
+ */
 function TopBar() {
   const ui = useUI();
   const s = ui.state!;
   const alerts = useDerived(insightsOf).filter((i) => (i.severity === 'critical' || i.severity === 'warning') && ui.settings.alertCategories.includes(i.category)).length;
   const unread = unreadNews(s);
+  const running = ui.speed !== 0;
+  const speed = ui.settings.playSpeed;
+  const next = NEXT_SPEED[speed];
+  const items: MenuItem[] = [
+    { label: 'Avanzar 1 día', icon: 'skip', onSelect: () => store.step(1) },
+    { label: 'Avanzar 1 semana', icon: 'fastForward', onSelect: () => store.step(7) },
+    { label: 'Avanzar 1 mes', icon: 'calendar', onSelect: () => store.step(30) },
+    { label: 'Noticias', icon: 'news', divider: true, badge: unread ? (unread > 9 ? '9+' : String(unread)) : undefined, tone: unread ? 'info' : undefined, onSelect: () => navStore.go('more', 'news') },
+    { label: 'Asesor', icon: 'advisor', badge: alerts ? String(alerts) : undefined, tone: alerts ? 'danger' : undefined, onSelect: () => navStore.open({ kind: 'advisor' }) },
+    { label: 'Ajustes y guardado', icon: 'settings', onSelect: () => navStore.open({ kind: 'settings' }) },
+    { label: 'Cómo funciona el tiempo', icon: 'info', divider: true, onSelect: () => navStore.open({ kind: 'term', id: 'accion_velocidad' }) },
+  ];
   return (
     <header className="topbar">
       <div className="topbar-row">
-        <button className="avatar-btn" aria-label="Tu personaje" onClick={() => navStore.go('more', 'wardrobe')}>
-          <Avatar data={avatarOf(s)} size={40} bust />
-        </button>
         <div className="date-block">
           <div className="d">{formatDateShort(s.day)}</div>
           <div className="tiny muted">
             Disponible <Money c={spendable(s)} />
           </div>
         </div>
-        <button className="icon-btn" aria-label={`Noticias${unread ? ` (${unread} nuevas)` : ''}`} onClick={() => navStore.go('more', 'news')}>
-          <Icon name="news" />{unread > 0 && <span className="badge info">{unread > 9 ? '9+' : unread}</span>}
+        <button className={`time-btn ${running ? 'on' : ''}`} aria-label={running ? 'Pausar el tiempo' : `Reanudar el tiempo a ${speed}×`} aria-pressed={running} onClick={() => store.togglePlay()}>
+          <Icon name={running ? 'pause' : 'play'} size={18} />
         </button>
-        <button className="icon-btn" aria-label="Asesor IA" onClick={() => navStore.open({ kind: 'advisor' })}>
-          <Icon name="advisor" />{alerts > 0 && <span className="badge">{alerts}</span>}
+        <button className="time-btn speed-btn" aria-label={`Velocidad ${speed}×. Tocar para ${next}×`} onClick={() => store.cycleSpeed()}>
+          {speed}×
         </button>
-        <button className="icon-btn" aria-label="Ajustes y guardado" onClick={() => navStore.open({ kind: 'settings' })}><Icon name="settings" /></button>
-      </div>
-      <div className="speed" role="group" aria-label="Control del tiempo">
-        {SPEEDS.map((x) => (
-          <button key={x.s} aria-label={x.aria} className={ui.speed === x.s ? 'on' : ''} onClick={() => store.setSpeed(x.s)}>{x.label === 'pause' ? <Icon name="pause" size={15} /> : x.label}</button>
-        ))}
-        <span className="sep" />
-        <button aria-label="Avanzar un día" onClick={() => store.step(1)}>+1d</button>
-        <button aria-label="Avanzar una semana" onClick={() => store.step(7)}>+7d</button>
-        <button aria-label="Avanzar un mes" onClick={() => store.step(30)}>+30d</button>
-        <InfoButton term="accion_velocidad" />
+        <MenuButton
+          label={`Más opciones${alerts ? ` (${alerts} alertas)` : ''}${unread ? ` (${unread} noticias nuevas)` : ''}`}
+          trigger={<><Icon name="dots" />{alerts > 0 ? <span className="badge">{alerts}</span> : unread > 0 ? <span className="badge info dot" /> : null}</>}
+          items={items}
+        />
       </div>
     </header>
   );
@@ -143,7 +143,7 @@ function AbsenceReport() {
         {important.length === 0 && <p className="muted small">Sin novedades importantes.</p>}
         {important.map((l) => (
           <div className="row" key={l.id}>
-            <span aria-hidden>{l.icon}</span>
+            <span className="log-ic" aria-hidden><Icon name={logIcon(l)} size={16} /></span>
             <div className="grow small">{l.text}</div>
             {l.amount !== undefined && <span className="amt small">{fmtMoney(l.amount)}</span>}
           </div>
@@ -162,6 +162,14 @@ export function App() {
   useEffect(() => {
     if (hasNews && ui.ready && !navStore.get().sheets.some((x) => x.kind === 'whatsnew')) navStore.open({ kind: 'whatsnew' });
   }, [hasNews, ui.ready]);
+  // Otra partida abierta: se empieza en Inicio y sin el historial de la anterior.
+  const openSlot = ui.state ? ui.activeSlot : null;
+  const lastSlot = useRef(openSlot);
+  useEffect(() => {
+    if (lastSlot.current === openSlot) return;
+    lastSlot.current = openSlot;
+    if (openSlot) navStore.reset();
+  }, [openSlot]);
   if (!ui.ready) {
     return (
       <div className="onboard" aria-busy="true">
@@ -172,7 +180,7 @@ export function App() {
     );
   }
   if (!ui.state && ui.bootError) return <><BootErrorScreen /><Toasts /></>;
-  if (!ui.state) return <><Onboarding /><SheetHost /><Toasts /></>;
+  if (!ui.state) return <><DotBudget><Onboarding /></DotBudget><SheetHost /><Toasts /></>;
   return (
     <div className="app">
       <TopBar />
@@ -188,7 +196,8 @@ export function App() {
       )}
       <main className="screen">
         <ErrorBoundary key={nav.tab} scope="section">
-        <Suspense fallback={<p className="small muted">Cargando…</p>}>
+        <DotBudget>
+        <Suspense fallback={<ScreenSkeleton />}>
         {nav.tab === 'home' && <Home />}
         {nav.tab === 'career' && <Career />}
         {nav.tab === 'finance' && <Finance />}
@@ -202,12 +211,11 @@ export function App() {
           </>
         )}
         </Suspense>
+        </DotBudget>
         </ErrorBoundary>
       </main>
       <BottomNav />
-      <ErrorBoundary key={nav.sheets.length} scope="section">
-        <SheetHost />
-      </ErrorBoundary>
+      <SheetHost />
       <AbsenceReport />
       <SimErrorSheet />
       <Toasts />

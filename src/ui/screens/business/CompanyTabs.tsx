@@ -10,7 +10,7 @@ import { injectCapital, distribute, maxDistribution, requestSaleOffer, acceptSal
 import { rivalsAttraction } from '../../../engine/business/market';
 import { expectedShare, refPrice, companyAttraction, effectivePrice } from '../../../engine/business/operations';
 import { distributableProfit, isOpen } from '../../../engine/business/common';
-import { fmtMoney, fmtPct } from '../../../engine/format';
+import { fmtMoney, fmtPct, fmtNumber } from '../../../engine/format';
 import { spendable } from '../../../engine/finance/payments';
 import { formatDate, startOfMonth, startOfYear, addMonths } from '../../../engine/time/calendar';
 import { Cents, usd } from '../../../engine/money';
@@ -54,7 +54,7 @@ export function MarketingTab({ co }: { co: Company }) {
                 <dt>Presupuesto · público</dt><dd>{fmtMoney(c.dailyBudget)}/día · {AUDIENCES.find((a) => a.id === c.audience)?.name}</dd>
                 <dt>Período</dt><dd>{formatDate(c.startDay)} – {formatDate(c.endDay)}</dd>
                 <dt>Gastado</dt><dd>{fmtMoney(c.spent)}</dd>
-                <dt>Alcance estimado</dt><dd>{c.reach.toLocaleString('es')} personas</dd>
+                <dt>Alcance estimado</dt><dd>{fmtNumber(c.reach)} personas</dd>
                 <dt>Conocimiento ganado</dt><dd>+{c.awarenessGained.toFixed(1)} puntos</dd>
                 <dt>Retorno (estimación aprox.)</dt><dd className={est - c.spent >= 0 ? 'gain' : 'loss'}>{fmtMoney(est - c.spent)}</dd>
               </div>

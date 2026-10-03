@@ -7,6 +7,8 @@ import { isOpen } from '../../../engine/business/common';
 import { fmtMoney, fmtPct } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import type { ProKind, Professional } from '../../../engine/pros/types';
+import { Icon } from '../../icons';
+import { PRO_ICON } from '../../contentIcons';
 
 const KINDS: ProKind[] = ['contador', 'asesor', 'gestor', 'abogado', 'auditor', 'gerente'];
 const TERM: Record<ProKind, string> = { contador: 'contador', asesor: 'asesor_financiero', abogado: 'abogado', auditor: 'auditor', gerente: 'gerente_profesional', gestor: 'gestor_inversiones' };
@@ -66,11 +68,11 @@ export function ProsScreen() {
       </div>
       <div className="card">
         <CardHead title="Tu equipo" />
-        {hires.length === 0 && <Empty icon="🤝">No contrataste a nadie todavía.</Empty>}
+        {hires.length === 0 && <Empty icon="deal">No contrataste a nadie todavía.</Empty>}
         <div className="rows">
           {hires.map(({ hire, monthly, where }) => (
             <div className="row" key={hire.id}>
-              <span aria-hidden>{PRO_INFO[hire.pro.kind].icon}</span>
+              <Icon name={PRO_ICON[hire.pro.kind]} size={18} />
               <div className="grow">
                 <div className="title small">{hire.pro.name} · {PRO_INFO[hire.pro.kind].name}</div>
                 <div className="meta">{where} · desde {formatDate(hire.since)} · {hire.pro.kind === 'gestor' ? feeLabel(hire.pro) : monthly ? `${fmtMoney(monthly)}/mes` : 'por encargo'}</div>
@@ -101,8 +103,8 @@ export function ProsScreen() {
       )}
       <div className="card">
         <CardHead title="Mercado de profesionales" term={TERM[kind]} right={<span className="tiny muted">Se renueva el {formatDate(nextRefresh(s))}</span>} />
-        <div className="chips">{KINDS.map((k) => <button key={k} onClick={() => setKind(k)} style={kind === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{PRO_INFO[k].icon} {PRO_INFO[k].name.split(' ')[0]}</button>)}</div>
-        <p className="small">{PRO_INFO[kind].icon} {PRO_INFO[kind].what} <InfoButton term={TERM[kind]} /></p>
+        <div className="chips">{KINDS.map((k) => <button key={k} onClick={() => setKind(k)} style={kind === k ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{PRO_INFO[k].name.split(' ')[0]}</button>)}</div>
+        <p className="small">{PRO_INFO[kind].what} <InfoButton term={TERM[kind]} /></p>
         {market.length === 0 && <p className="small muted">No quedan candidatos de este tipo hasta la próxima renovación.</p>}
         {market.map((p) => <ProRow key={p.id} p={p} />)}
       </div>

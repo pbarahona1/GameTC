@@ -1,13 +1,14 @@
 import { usd } from '../money';
+import { fmtMoney } from '../format';
 import type { GameState } from '../state';
 import { addLog } from '../log';
 import { computeMetrics, Metrics } from '../reports/metrics';
 import { rewardMissions } from './tutorial';
+import { sectionsFromStage } from './unlocks';
 
 /**
  * Etapas de magnate. Ninguna exige una ruta concreta: cada criterio puede
- * cumplirse con empleo, inversiones o (en fases futuras) empresas y
- * propiedades. La etapa alcanzada nunca retrocede; los criterios actuales
+ * cumplirse con empleo, inversiones, empresas o propiedades. La etapa alcanzada nunca retrocede; los criterios actuales
  * se muestran para que el jugador vea si mantiene su posición.
  */
 export interface Criterion {
@@ -21,46 +22,45 @@ export interface StageDef {
   n: number;
   name: string;
   description: string;
-  unlocks: string;
   criteria: (s: GameState, m: Metrics) => Criterion[];
 }
 
-const nw = (m: Metrics, v: number): Criterion => ({ label: `Patrimonio neto ≥ $${v.toLocaleString('en-US')}`, met: m.netWorth >= usd(v) });
+const nw = (m: Metrics, v: number): Criterion => ({ label: `Patrimonio neto ≥ ${fmtMoney(usd(v), { decimals: false })}`, met: m.netWorth >= usd(v) });
 
 export const STAGES: StageDef[] = [
-  { n: 1, name: 'Supervivencia financiera', description: 'Recursos limitados. El objetivo es no quedarte sin efectivo.', unlocks: 'Banca básica, empleo y formación.', criteria: () => [] },
+  { n: 1, name: 'Supervivencia financiera', description: 'Recursos limitados. El objetivo es no quedarte sin efectivo.', criteria: () => [] },
   {
-    n: 2, name: 'Ingreso estable', description: 'Tus ingresos recurrentes cubren tus gastos esenciales.', unlocks: 'Préstamos de bancos tradicionales (con requisitos).',
+    n: 2, name: 'Ingreso estable', description: 'Tus ingresos recurrentes cubren tus gastos esenciales.',
     criteria: (_s, m) => [{ label: 'Ingreso neto recurrente ≥ gastos esenciales', met: m.expectedNetPay + m.passiveMonthly >= m.essentialMonthly && m.essentialMonthly > 0 }],
   },
   {
-    n: 3, name: 'Primeros ahorros', description: 'Un colchón para imprevistos y cero atrasos.', unlocks: 'Depósitos a plazo más largos rinden más.',
+    n: 3, name: 'Primeros ahorros', description: 'Un colchón para imprevistos y cero atrasos.',
     criteria: (s, m) => [
       { label: 'Fondo de emergencia ≥ 1 mes de gastos esenciales', met: m.emergencyMonths >= 1 },
       { label: 'Sin pagos vencidos', met: s.ledger.balances.arrears === 0 },
     ],
   },
   {
-    n: 4, name: 'Primeras inversiones', description: 'Tu dinero empieza a trabajar para vos.', unlocks: 'Fase 3: bolsa de valores y Mogul Exchange.',
+    n: 4, name: 'Primeras inversiones', description: 'Tu dinero empieza a trabajar para vos.',
     criteria: (s, m) => [
       { label: 'Tener inversiones activas (depósitos, fondos, acciones, inmuebles o empresas)', met: m.investments > 0 || m.realEstate > 0 || s.ledger.balances.business_equity > 0 || s.progression.achievements['first_deposit_matured'] !== undefined },
       nw(m, 10_000),
     ],
   },
   {
-    n: 5, name: 'Patrimonio sólido', description: 'Base financiera sana para emprender o invertir en grande.', unlocks: 'Mejores condiciones de crédito empresarial.',
+    n: 5, name: 'Patrimonio sólido', description: 'Base financiera sana para emprender o invertir en grande.',
     criteria: (s, m) => [nw(m, 50_000), { label: 'Fondo de emergencia ≥ 3 meses', met: m.emergencyMonths >= 3 }, { label: 'Puntaje crediticio ≥ 670', met: s.credit.score >= 670 }],
   },
   {
-    n: 6, name: 'Empresario emergente', description: 'Ingresos más allá del salario.', unlocks: 'Fase 3: bienes raíces e hipotecas.',
+    n: 6, name: 'Empresario emergente', description: 'Ingresos más allá del salario.',
     criteria: (_s, m) => [nw(m, 150_000), { label: 'Ingresos pasivos (intereses, alquileres, dividendos o ganancias de tus empresas) ≥ 20 % de tus gastos', met: m.passiveMonthly >= m.recurringMonthly * 0.2 }, { label: 'Deuda / activos < 50 %', met: m.debtToAssets < 0.5 }],
   },
-  { n: 7, name: 'Magnate regional', description: 'Un patrimonio que ya mueve tu región.', unlocks: 'Grupos empresariales.', criteria: (s, m) => [nw(m, 1_000_000), { label: 'Al menos una empresa propia con ganancias en los últimos 3 meses', met: s.companies.some((c) => c.status === 'active' && c.history.length >= 3 && c.history.slice(-3).reduce((a, h) => a + h.netIncome, 0) > 0) }] },
-  { n: 8, name: 'Empresario nacional', description: 'Tu nombre se conoce en todo el país.', unlocks: 'Emisión de bonos.', criteria: (s, m) => [nw(m, 10_000_000), { label: 'Reputación ≥ 60', met: s.player.attributes.reputation >= 60 }] },
-  { n: 9, name: 'Grupo empresarial', description: 'Varias empresas bajo tu control.', unlocks: 'Sociedades matrices y filiales (Fase 4).', criteria: (s, m) => [nw(m, 50_000_000), { label: '3 empresas activas o más', met: s.companies.filter((c) => c.status === 'active').length >= 3 }] },
-  { n: 10, name: 'Corporación internacional', description: 'Operaciones en varias jurisdicciones.', unlocks: 'Planificación fiscal internacional.', criteria: (s, m) => [nw(m, 250_000_000), { label: 'Empresas o inmuebles en 2 jurisdicciones', met: jurisdictionsPresent(s) >= 2 }] },
-  { n: 11, name: 'Conglomerado global', description: 'Diversificado en múltiples sectores.', unlocks: 'Adquisiciones hostiles.', criteria: (s, m) => [nw(m, 1_000_000_000), { label: 'Empresas en 5 sectores distintos', met: new Set(s.companies.filter((c) => c.status === 'active').map((c) => c.sector)).size >= 5 }] },
-  { n: 12, name: 'Imperio económico', description: 'La cima.', unlocks: '—', criteria: (_s, m) => [nw(m, 10_000_000_000)] },
+  { n: 7, name: 'Magnate regional', description: 'Un patrimonio que ya mueve tu región.', criteria: (s, m) => [nw(m, 1_000_000), { label: 'Al menos una empresa propia con ganancias en los últimos 3 meses', met: s.companies.some((c) => c.status === 'active' && c.history.length >= 3 && c.history.slice(-3).reduce((a, h) => a + h.netIncome, 0) > 0) }] },
+  { n: 8, name: 'Empresario nacional', description: 'Tu nombre se conoce en todo el país.', criteria: (s, m) => [nw(m, 10_000_000), { label: 'Reputación ≥ 60', met: s.player.attributes.reputation >= 60 }] },
+  { n: 9, name: 'Grupo empresarial', description: 'Varias empresas bajo tu control.', criteria: (s, m) => [nw(m, 50_000_000), { label: '3 empresas activas o más', met: s.companies.filter((c) => c.status === 'active').length >= 3 }] },
+  { n: 10, name: 'Corporación internacional', description: 'Operaciones en varias jurisdicciones.', criteria: (s, m) => [nw(m, 250_000_000), { label: 'Empresas o inmuebles en 2 jurisdicciones', met: jurisdictionsPresent(s) >= 2 }] },
+  { n: 11, name: 'Conglomerado global', description: 'Diversificado en múltiples sectores.', criteria: (s, m) => [nw(m, 1_000_000_000), { label: 'Empresas en 5 sectores distintos', met: new Set(s.companies.filter((c) => c.status === 'active').map((c) => c.sector)).size >= 5 }] },
+  { n: 12, name: 'Imperio económico', description: 'La cima.', criteria: (_s, m) => [nw(m, 10_000_000_000)] },
 ];
 
 /** Jurisdicciones donde tenés empresas activas o inmuebles (propios o de tus empresas). */
@@ -115,6 +115,10 @@ export function evaluateStage(state: GameState, m = computeMetrics(state)): { cu
   return { current, details };
 }
 
+export function stageName(n: number): string {
+  return STAGES[n - 1]?.name ?? '';
+}
+
 /** Actualiza etapa y logros. Llamado tras cada acción y al cierre de cada mes. */
 export function updateProgression(state: GameState): void {
   if (state.meta.projection) return;
@@ -123,7 +127,8 @@ export function updateProgression(state: GameState): void {
   if (current > state.progression.stage) {
     state.progression.stage = current;
     const st = STAGES[current - 1];
-    addLog(state, 'success', '🏆', `Nueva etapa: ${st.name}. Desbloquea: ${st.unlocks}`, undefined, 'logros');
+    const recommended = sectionsFromStage(current).map((g) => g.name);
+    addLog(state, 'success', '🏆', `Nueva etapa: ${st.name}.${recommended.length ? ` Desde ahora se recomienda: ${recommended.join(', ')}.` : ''}`, undefined, 'logros');
   }
   rewardMissions(state);
   for (const a of ACHIEVEMENTS) {

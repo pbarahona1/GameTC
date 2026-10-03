@@ -19,8 +19,8 @@ function ImportCard() {
   const [text, setText] = useState('');
   return (
     <div className="card import-card">
-      <div className="card-head"><span className="ss-icon" aria-hidden><Icon name="upload" size={18} /></span><h2>¿Ya tenías una partida?</h2></div>
-      <p className="small muted">Elegí el archivo .json que exportaste desde Ajustes → Guardado (por ejemplo, desde Descargas o Drive). Se verifica la contabilidad antes de cargarla y se actualiza a esta versión.</p>
+      <div className="card-head"><span className="ss-icon" aria-hidden><Icon name="upload" size={18} /></span><h2>Importar una partida</h2></div>
+      <p className="small muted">Elegí el archivo .json que exportaste desde Ajustes → Guardado y copias (por ejemplo, desde Descargas o Drive). Se verifica la contabilidad antes de cargarla y se actualiza a esta versión.</p>
       <label className="btn dark block file-btn">
         <Icon name="upload" size={16} /> Elegir archivo de partida
         <input type="file" accept=".json,application/json,text/plain" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; await store.importText(await f.text()); e.target.value = ''; }} />
@@ -56,7 +56,10 @@ export function Onboarding() {
   const [look, setLook] = useState<Look>({ skin: 1, hair: 'corto', hairColor: 1 });
   const [seed, setSeed] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-  const [illegal, setIllegal] = useState(true);
+  // Las actividades ilegales ficticias son opcionales: arrancan desactivadas y se
+  // pueden activar acá (opciones avanzadas), en Ajustes → Partida o en Más → Legal.
+  const [illegal, setIllegal] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   return (
     <div className="onboard">
@@ -68,28 +71,26 @@ export function Onboarding() {
 
       <SavedGames />
 
-      <ImportCard />
-
-      <div className="section-title"><h2>O empezá una partida nueva</h2></div>
+      <div className="section-title"><h2>1 · Tu personaje</h2></div>
       <div className="card onboard-char">
         <div className="oc-avatar"><Avatar data={{ look, items: [], outfit: {} }} size={92} /></div>
         <div className="stack" style={{ flex: 1, minWidth: 0 }}>
           <div className="field">
-            <label htmlFor="pname">Nombre del personaje</label>
-            <input id="pname" className="input" value={name} maxLength={24} placeholder="Ej.: Adriana Paz" onChange={(e) => setName(e.target.value)} />
+            <label htmlFor="pname">Nombre</label>
+            <input id="pname" className="input" value={name} maxLength={24} placeholder="Ej.: Adriana Paz" autoComplete="off" onChange={(e) => setName(e.target.value)} />
           </div>
-          <span className="tiny muted">Tono de piel</span>
-          <div className="swatches">{SKIN_TONES.map((c, i) => <button key={c} type="button" className={`swatch ${look.skin === i ? 'on' : ''}`} style={{ background: c }} aria-label={`Tono ${i + 1}`} onClick={() => setLook({ ...look, skin: i })} />)}</div>
-          <span className="tiny muted">Peinado y color</span>
-          <div className="chips">{HAIR_STYLES.map((h) => <button key={h} type="button" className={look.hair === h ? 'on' : ''} onClick={() => setLook({ ...look, hair: h })}>{HAIR_STYLE_NAMES[h]}</button>)}</div>
-          <div className="swatches">{HAIR_COLORS.map((c, i) => <button key={c} type="button" className={`swatch ${look.hairColor === i ? 'on' : ''}`} style={{ background: c }} aria-label={`Color de pelo ${i + 1}`} onClick={() => setLook({ ...look, hairColor: i })} />)}</div>
+          <span className="tiny muted" id="skin-label">Tono de piel</span>
+          <div className="swatches" role="group" aria-labelledby="skin-label">{SKIN_TONES.map((c, i) => <button key={c} type="button" className={`swatch ${look.skin === i ? 'on' : ''}`} style={{ background: c }} aria-label={`Tono ${i + 1}`} aria-pressed={look.skin === i} onClick={() => setLook({ ...look, skin: i })} />)}</div>
+          <span className="tiny muted" id="hair-label">Peinado y color</span>
+          <div className="chips" role="group" aria-labelledby="hair-label">{HAIR_STYLES.map((h) => <button key={h} type="button" className={look.hair === h ? 'on' : ''} aria-pressed={look.hair === h} onClick={() => setLook({ ...look, hair: h })}>{HAIR_STYLE_NAMES[h]}</button>)}</div>
+          <div className="swatches" role="group" aria-label="Color de pelo">{HAIR_COLORS.map((c, i) => <button key={c} type="button" className={`swatch ${look.hairColor === i ? 'on' : ''}`} style={{ background: c }} aria-label={`Color de pelo ${i + 1}`} aria-pressed={look.hairColor === i} onClick={() => setLook({ ...look, hairColor: i })} />)}</div>
         </div>
       </div>
 
-      <div className="section-title"><h2>Tu punto de partida</h2></div>
-      <div className="stack">
+      <div className="section-title"><h2>2 · Tu origen</h2></div>
+      <div className="stack" role="radiogroup" aria-label="Origen">
         {BACKGROUNDS.map((b) => (
-          <button key={b.id} type="button" className={`choice ${bg === b.id ? 'on' : ''}`} onClick={() => setBg(b.id)} aria-pressed={bg === b.id}>
+          <button key={b.id} type="button" role="radio" className={`choice ${bg === b.id ? 'on' : ''}`} onClick={() => setBg(b.id)} aria-checked={bg === b.id}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
               <strong>{b.name}</strong>
               <span className="num">{fmtMoney(usd(b.startingCash + b.startingChecking), { decimals: false })}</span>
@@ -101,40 +102,47 @@ export function Onboarding() {
         ))}
       </div>
 
-      <div className="section-title"><h2>Objetivo sugerido (opcional)</h2></div>
-      <p className="small muted">No bloquea nada: podés combinar todas las rutas cuando quieras. Solo orienta las sugerencias.</p>
-      <div className="chips">
-        {PLAY_STYLES.map((p) => (
-          <button key={p.id} type="button" onClick={() => setStyle(p.id)} style={style === p.id ? { background: 'var(--text)', color: 'var(--bg)' } : undefined}>{p.name}</button>
-        ))}
-      </div>
-      <p className="small">{PLAY_STYLES.find((p) => p.id === style)!.hint}</p>
+      <details className="card advanced">
+        <summary><strong>Opciones avanzadas</strong> <span className="tiny muted">dificultad, objetivo, actividades ilegales, semilla</span></summary>
+        <div className="stack" style={{ marginTop: 12 }}>
+          <span className="eyebrow">Dificultad económica</span>
+          <div className="stack" role="radiogroup" aria-label="Dificultad económica">
+            {DIFFICULTIES.map((d) => (
+              <button key={d.id} type="button" role="radio" className={`choice ${difficulty === d.id ? 'on' : ''}`} onClick={() => setDifficulty(d.id)} aria-checked={difficulty === d.id}>
+                <strong>{d.name}</strong>
+                <span className="small muted">{d.description}</span>
+              </button>
+            ))}
+          </div>
 
-      <div className="section-title"><h2>Dificultad económica</h2></div>
-      <div className="stack">
-        {DIFFICULTIES.map((d) => (
-          <button key={d.id} type="button" className={`choice ${difficulty === d.id ? 'on' : ''}`} onClick={() => setDifficulty(d.id)} aria-pressed={difficulty === d.id}>
-            <strong>{d.name}</strong>
-            <span className="small muted">{d.description}</span>
-          </button>
-        ))}
-      </div>
-      <div className="card">
-        <Switch checked={illegal} onChange={() => setIllegal(!illegal)} label={<strong>Actividades ilegales ficticias: {illegal ? 'activadas' : 'desactivadas'}</strong>} sub="Sobornos, evasión y negocios clandestinos, con riesgos probabilísticos (investigaciones, multas, prisión). Se cambian cuando quieras en Ajustes → Partida o en Más → Legal." />
-      </div>
+          <span className="eyebrow">Objetivo sugerido</span>
+          <p className="small muted">No bloquea nada: podés combinar todas las rutas cuando quieras. Solo orienta las sugerencias.</p>
+          <div className="chips" role="radiogroup" aria-label="Objetivo sugerido">
+            {PLAY_STYLES.map((p) => (
+              <button key={p.id} type="button" role="radio" aria-checked={style === p.id} className={style === p.id ? 'on' : ''} onClick={() => setStyle(p.id)}>{p.name}</button>
+            ))}
+          </div>
+          <p className="small">{PLAY_STYLES.find((p) => p.id === style)!.hint}</p>
 
-      <details>
-        <summary className="small muted">Opciones avanzadas</summary>
-        <div className="field" style={{ marginTop: 8 }}>
-          <label htmlFor="seed">Semilla del mundo (misma semilla = mismos acontecimientos)</label>
-          <input id="seed" className="input" value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="Aleatoria" />
+          <Switch checked={illegal} onChange={() => setIllegal(!illegal)} label={<strong>Actividades ilegales ficticias: {illegal ? 'activadas' : 'desactivadas'}</strong>} sub="Opcionales. Si las activás aparecen sobornos, evasión y negocios clandestinos con riesgos probabilísticos (investigaciones, multas, prisión). Se pueden cambiar en cualquier momento en Ajustes → Partida o en Más → Legal." />
+
+          <div className="field">
+            <label htmlFor="seed">Semilla del mundo</label>
+            <input id="seed" className="input" value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="Aleatoria" autoComplete="off" />
+            <span className="tiny muted">Misma semilla y mismas decisiones = mismos acontecimientos.</span>
+          </div>
         </div>
       </details>
 
-      <button className="btn primary block" style={{ minHeight: 52, fontSize: 16 }} onClick={() => void store.startNewGame({ name: name || 'Jugador', background: bg, style, color, seed: seed || undefined, difficulty, illegalEnabled: illegal, look })}>
+      <button className="btn primary block" style={{ minHeight: 52, fontSize: 16 }} onClick={() => void store.startNewGame({ name: name.trim() || 'Jugador', background: bg, style, color, seed: seed.trim() || undefined, difficulty, illegalEnabled: illegal, look })}>
         Comenzar partida
       </button>
 
+      {importing ? <ImportCard /> : (
+        <button type="button" className="btn ghost block" onClick={() => setImporting(true)}>
+          <Icon name="upload" size={16} /> ¿Ya tenés una partida? Importar
+        </button>
+      )}
     </div>
   );
 }
