@@ -18,7 +18,7 @@ Esta guía explica cómo llega una versión nueva al teléfono **sin perder la p
 En **cualquier rama y en pull requests** (permisos de solo lectura):
 
 1. Valida el *Gradle wrapper* y que la versión tenga su entrada en `src/content/changelog.json`.
-2. `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npx cap sync android`.
+2. `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, prueba e2e (`npm run e2e`, Playwright) y `npx cap sync android`.
 3. `./gradlew assembleDebug` → APK de actualización (llave fija).
 4. Si están los secretos de publicación: `bundleRelease` y `assembleRelease` firmados; la llave se escribe en un archivo temporal que se borra al terminar.
 5. Huellas `SHA256SUMS` y artefacto `android-<versión>`.

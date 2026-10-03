@@ -1,4 +1,29 @@
-# Estado del proyecto — versión 1.2
+# Estado del proyecto — versión 1.3
+
+## Versión 1.3: robustez (rama `v1.3-robustez`)
+
+Ocho fases sobre la 1.2, en orden de prioridad (integridad del juego → datos → seguridad → Android → UX → rendimiento → funciones):
+
+1. **Red de seguridad del simulador:** cada día es atómico (copia previa, invariantes al cierre de mes, vuelta atrás si falla); errores visibles y recuperables (reintentar, exportar, volver); arranque con tiempos máximos; límites de error por pantalla y por hoja.
+2. **Dinero:** un único intérprete de montos (1,500 / 1500 / 1,500.50; rechaza ambigüedades) con «Valor interpretado»; formularios que no arrastran datos entre entidades; validaciones de préstamos, ofertas y precios.
+3. **Persistencia:** hasta 3 partidas, copias por tiempo real (10 min / 1 h / 1 día), restaurar e importar que se pueden deshacer, guardado automático sin escrituras superpuestas, «Guardado hace X».
+4. **Motor:** holding con subsidiaria sin valor, equipos amortizados, gerente con calidad/costo y resumen semanal, inspección y abogado (una sola consecuencia), vivienda propia, empleo desde prisión, misiones correctas y persistentes, rumores falsos indistinguibles y azar del análisis separado del mundo, liquidez única, pausa automática por categoría.
+5. **Rendimiento y ESLint:** derivados calculados una vez por cambio de partida, ESLint con react-hooks sin excepciones injustificadas, código muerto eliminado.
+6. **Android 16 y CI/CD:** Capacitor 8 (minSdk 24, target 36, AGP 8.13, Gradle 8.14), borde a borde, actualizaciones firmadas ECDSA P-256 verificadas con WebCrypto, OTA con tiempos máximos y reintentos, CI de solo lectura que publica solo desde `main` sin reemplazar Releases.
+7. **UX/UI:** barra superior Fecha | Play/Pausa | 1×–8× | Más; Inicio del día 1; primera partida en 4 pasos con opciones avanzadas (ilegales desactivadas por defecto); botón atrás con historial; un solo sistema de íconos; pestañas agrupadas; formato numérico único; contraste AA y zoom.
+8. **Pulido:** e2e con Playwright, prueba de caos 50 × 20, recordatorio de exportar, copia automática de Android solo de partidas, mercado de inmuebles ordenable por rendimiento.
+
+### Verificación 1.3 (resultados reales)
+
+- `npm test`: 289 pruebas en 32 archivos, todas correctas (antes de la 1.3: 180 en 21). `npm run typecheck` y `npm run lint` sin errores ni advertencias. `npm run build` correcto (archivo principal 664.6 kB, gzip 216.7 kB).
+- `npm run e2e` (Playwright, Chromium móvil): abrir → crear partida → conseguir empleo → avanzar → cerrar el primer mes → guardar → recargar → continuar. Correcto en este entorno y en GitHub Actions.
+- `npm run chaos` (50 semillas × 20 años con decisiones aleatorias en todos los sistemas): correcto después de corregir tres asientos de importe cero que encontró (dos de ellos detenían la simulación diaria).
+- GitHub Actions compiló la APK de actualización y el AAB/APK de publicación firmados (Android 16 / API 36).
+- **No verificado:** la APK no se instaló ni se ejecutó en un teléfono o emulador. El borde a borde, el botón atrás nativo, la copia de seguridad automática de Android y el cambio de versión del WebView por una actualización por internet están probados con simulaciones y compilación, no en un dispositivo.
+
+---
+
+# Versión 1.2
 
 ## Novedades de la versión 1.2
 
