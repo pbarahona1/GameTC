@@ -12,7 +12,7 @@ import { sectionsFromStage } from '../engine/progression/unlocks';
 import { TUTORIAL, CHAPTERS, nextMission, isMissionDone, missionProgress } from '../engine/progression/tutorial';
 import { SKILL_BY_ID } from '../content/skills';
 import { LIFESTYLES } from '../content/lifestyle';
-import { BANKS } from '../content/banks';
+import { BANKS, BANK_BY_ID } from '../content/banks';
 import { fmtMoney } from '../engine/format';
 import { usd } from '../engine/money';
 import { formatDate } from '../engine/time/calendar';
@@ -23,6 +23,10 @@ import { SlotList, SavedAgo, agoText, useNow, LastExport } from './components/Sl
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { IllegalToggle } from './components/IllegalToggle';
 import { APP_VERSION } from '../version';
+import { LEGAL, PRIVACY, TERMS, LICENSES } from '../content/legal';
+import { AD_REWARDS, STUDY_SKIP_DAYS, DEBT_ADS_NEEDED, adRewardsLeft, cashRewardAmount, debtCutAmount, grantAdReward, reducibleLoans, skippableCourses, type AdRewardKind } from '../engine/rewards';
+import { COURSE_BY_ID } from '../content/courses';
+import { showRewardedAd, todayKey, ADS_LIVE } from './ads';
 import { applyUpdate, checkForUpdate, OTA_REPO, dismissUpdateNotes } from '../persistence/ota';
 import { useOta } from './useOta';
 import { LogRow } from './screens/Home';
@@ -435,7 +439,8 @@ function SettingsView() {
         <UpdatesPanel />
         <Switch checked={st.autoUpdate} onChange={() => store.updateSettings({ autoUpdate: !st.autoUpdate })} label="Buscar actualizaciones al abrir la app" sub="Solo consulta si hay una versión nueva; nunca instala sin que lo confirmes." term="actualizaciones" />
       </SettingsSection>
-      <p className="tiny faint" style={{ textAlign: 'center' }}>Ultimate Realistic Tycoon · versión {APP_VERSION} · simulación ficticia sin anuncios ni compras.</p>
+      <button className="btn sm ghost" onClick={() => navStore.open({ kind: 'legal' })}><Icon name="shield" size={15} /> Privacidad, términos y licencias</button>
+      <p className="tiny faint" style={{ textAlign: 'center' }}>Ultimate Realistic Tycoon · versión {APP_VERSION} · simulación ficticia.</p>
     </Sheet>
   );
 }
@@ -586,6 +591,95 @@ function WhatsNewSheet() {
   );
 }
 
+/** Recompensas opcionales por ver un anuncio (solo Android). */
+function RewardsView() {
+  const s = useGame();
+  const [busy, setBusy] = useState<AdRewardKind | null>(null);
+  const [courseId, setCourseId] = useState<string>('');
+  const today = todayKey();
+  const courses = skippableCourses(s);
+  const loans = reducibleLoans(s);
+  const progress = s.meta.ads?.debtProgress;
+  const [loanPick, setLoanPick] = useState<number | null>(null);
+  const loanId = loanPick ?? progress?.loanId ?? loans[0]?.id;
+  const loan = loans.find((l) => l.id === loanId);
+  const watch = async (kind: AdRewardKind) => {
+    setBusy(kind);
+    const outcome = await showRewardedAd();
+    setBusy(null);
+    if (outcome === 'rewarded') store.run((x) => grantAdReward(x, kind, todayKey(), { courseId: courseId || courses[0]?.courseId, loanId }));
+    else if (outcome === 'closed') store.toast('Cerraste el anuncio antes de terminar: no hay recompensa.', 'info');
+    else store.toast('No hay un anuncio disponible ahora. Probá en un rato (hace falta internet).', 'error');
+  };
+  const rows: Array<{ kind: AdRewardKind; detail: string; disabled?: string }> = [
+    { kind: 'cash', detail: `Recibís ${fmtMoney(cashRewardAmount(s))} (una semana de tu sueldo, o $100 sin empleo). Tributa como otros ingresos.` },
+    { kind: 'news', detail: 'Tu próximo análisis de una noticia tiene la mitad del error. Nunca da certeza.', disabled: s.meta.ads?.newsBoost ? 'Ya tenés uno pendiente' : undefined },
+    { kind: 'study', detail: `Adelanta hasta ${STUDY_SKIP_DAYS / 30} meses un curso en curso. Las matrículas de esos meses se pagan igual.`, disabled: courses.length ? undefined : 'No tenés cursos en curso' },
+    {
+      kind: 'debt',
+      detail: loan
+        ? `Con ${DEBT_ADS_NEEDED} anuncios el saldo baja ${fmtMoney(debtCutAmount(s, loan.balance))} (la mitad, con tope). La cuota no cambia: terminás antes. Una vez por préstamo. Llevás ${progress?.loanId === loan.id ? progress.watched : 0} de ${DEBT_ADS_NEEDED}.`
+        : 'Reduce a la mitad el saldo de un préstamo personal (con tope), una vez por préstamo.',
+      disabled: loan ? undefined : 'No tenés préstamos para reducir',
+    },
+  ];
+  return (
+    <Sheet title="Recompensas">
+      <p className="small muted">Opcional: mirá un anuncio corto y elegí una ayuda. El juego nunca te obliga a ver anuncios ni los muestra solo.</p>
+      {rows.map((r) => {
+        const left = adRewardsLeft(s, r.kind, today);
+        return (
+          <div className="card" key={r.kind}>
+            <div className="card-head"><h2 style={{ flex: 1 }}>{AD_REWARDS[r.kind].title}</h2><span className="tiny muted">{left} de {AD_REWARDS[r.kind].perDay} hoy</span></div>
+            <p className="small muted">{r.detail}</p>
+            {r.kind === 'study' && courses.length > 1 && (
+              <select className="input" aria-label="Curso a adelantar" value={courseId || courses[0].courseId} onChange={(e) => setCourseId(e.target.value)}>
+                {courses.map((a) => <option key={a.courseId} value={a.courseId}>{COURSE_BY_ID[a.courseId].name}</option>)}
+              </select>
+            )}
+            {r.kind === 'debt' && loans.length > 1 && (
+              <select className="input" aria-label="Préstamo a reducir" value={loanId} onChange={(e) => setLoanPick(Number(e.target.value))}>
+                {loans.map((l) => <option key={l.id} value={l.id}>{BANK_BY_ID[l.bankId]?.name ?? 'Préstamo'} · saldo {fmtMoney(l.balance)}</option>)}
+              </select>
+            )}
+            <button className="btn primary" disabled={!!busy || left === 0 || !!r.disabled} onClick={() => void watch(r.kind)}>
+              <Icon name="play" size={15} /> {busy === r.kind ? 'Cargando anuncio…' : r.disabled ?? (left === 0 ? 'Volvé mañana' : 'Ver anuncio')}
+            </button>
+          </div>
+        );
+      })}
+      {!ADS_LIVE && <p className="tiny faint">Versión de prueba: se muestran anuncios de prueba de Google.</p>}
+    </Sheet>
+  );
+}
+
+/** Privacidad, términos y licencias (el mismo texto que las páginas públicas). */
+function LegalView({ initial }: { initial: 'privacy' | 'terms' | 'licenses' }) {
+  const [tab, setTab] = useState(initial);
+  const sections = tab === 'privacy' ? PRIVACY : TERMS;
+  return (
+    <Sheet title="Privacidad y términos">
+      <Seg items={[{ id: 'privacy', label: 'Privacidad' }, { id: 'terms', label: 'Términos' }, { id: 'licenses', label: 'Licencias' }]} value={tab} onChange={setTab} />
+      <p className="tiny muted">Actualizado el {LEGAL.updated}.</p>
+      {tab !== 'licenses' && sections.map((sec) => (
+        <section key={sec.title} className="stack" style={{ gap: 4 }}>
+          <h3 className="small" style={{ margin: 0 }}>{sec.title}</h3>
+          {sec.paragraphs.map((p) => <p key={p} className="small" style={{ margin: 0 }}>{p}</p>)}
+        </section>
+      ))}
+      {tab === 'licenses' && (
+        <div className="rows">
+          {LICENSES.map((l) => (
+            <div className="row" key={l.name}>
+              <div className="grow"><div className="title small">{l.name}</div><div className="meta">{l.license} · {l.url}</div></div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 function render(spec: SheetSpec) {
   switch (spec.kind) {
     case 'term': return <TermView key={spec.id} id={spec.id} />;
@@ -597,6 +691,8 @@ function render(spec: SheetSpec) {
     case 'tutorial': return <TutorialView />;
     case 'update': return <UpdateSheet />;
     case 'whatsnew': return <WhatsNewSheet />;
+    case 'legal': return <LegalView initial={spec.tab ?? 'privacy'} />;
+    case 'rewards': return <RewardsView />;
   }
 }
 

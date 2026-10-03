@@ -127,16 +127,30 @@ export function parseQuantity(text: string, decimals = 0): { ok: true; value: nu
 }
 
 /** Formato compacto para cifras grandes: $12.4K, $3.20M, $1.05B. */
-export function fmtCompact(c: Cents): string {
+export function fmtCompact(c: Cents, opts: { sign?: boolean } = {}): string {
   const v = c / 100;
   const a = Math.abs(v);
-  const s = v < 0 ? '−' : '';
+  const s = v < 0 ? '−' : opts.sign && v > 0 ? '+' : '';
+  if (a >= 1e15) return `${s}$${grouper(0).format(Math.round(a / 1e12))}T`;
+  if (a >= 1e12) return `${s}$${(a / 1e12).toFixed(2)}T`;
   if (a >= 1e9) return `${s}$${(a / 1e9).toFixed(2)}B`;
   if (a >= 1e6) return `${s}$${(a / 1e6).toFixed(2)}M`;
   if (a >= 1e4) return `${s}$${(a / 1e3).toFixed(1)}K`;
-  return fmtMoney(c, { decimals: a < 1000 });
+  return fmtMoney(c, { decimals: a < 1000, sign: opts.sign });
+}
+
+/**
+ * Monto completo si entra en `max` caracteres; si no, abreviado ($9.50B, $1.20T).
+ * Para filas, celdas y barras donde un número enorme no puede empujar al resto.
+ */
+export function fmtMoneyFit(c: Cents, opts: { decimals?: boolean; sign?: boolean; max?: number } = {}): string {
+  const full = fmtMoney(c, opts);
+  return full.length <= (opts.max ?? 12) ? full : fmtCompact(c, { sign: opts.sign });
 }
 
 export function fmtPct(rate: number, digits = 1): string {
-  return `${(rate * 100).toFixed(digits).replace(/\.0+$/, '')} %`;
+  const v = rate * 100;
+  // Porcentajes enormes (una inversión que se multiplicó 100 veces) con separador de miles y sin decimales.
+  if (Math.abs(v) >= 1000) return `${grouper(0).format(Math.round(v))} %`;
+  return `${v.toFixed(digits).replace(/\.0+$/, '')} %`;
 }

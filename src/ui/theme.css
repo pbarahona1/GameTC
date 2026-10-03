@@ -641,3 +641,12 @@ details.advanced[open] > summary::after { transform: rotate(-135deg); }
 .chips button::before { content: ''; position: absolute; inset: -4px 0; }
 .swatch { width: 36px; height: 36px; }
 .export-reminder { border-color: color-mix(in srgb, var(--info) 45%, var(--line)); }
+
+/* Cifras principales: la letra se achica según el largo del número (monoespaciada,
+   ~0.6 em por carácter) para que montos enormes nunca se salgan de la tarjeta. */
+.hero .big.big-fit { font-size: min(clamp(30px, 9vw, 40px), calc((100vw - 72px) / (var(--chars) * 0.62))); white-space: nowrap; }
+@media (min-width: 600px) { .hero .big.big-fit { font-size: min(40px, calc(520px / (var(--chars) * 0.62))); } }
+.row .grow { min-width: 88px; }
+/* Red de seguridad: ningún número empuja la pantalla hacia los costados. */
+.num, .amt, .kv dd { overflow-wrap: anywhere; }
+.row .amt { white-space: normal; }

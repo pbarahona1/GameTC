@@ -6,6 +6,7 @@ import { formatDateShort } from '../engine/time/calendar';
 import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
 import { useOta } from './useOta';
+import { useAdsSupported } from './ads';
 import { Icon, IconName } from './icons';
 import { unreadNews } from '../engine/world/news';
 const More = lazy(() => import('./screens/More').then((m) => ({ default: m.More })));
@@ -45,12 +46,14 @@ function TopBar() {
   const running = ui.speed !== 0;
   const speed = ui.settings.playSpeed;
   const next = NEXT_SPEED[speed];
+  const adsOk = useAdsSupported();
   const items: MenuItem[] = [
     { label: 'Avanzar 1 día', icon: 'skip', onSelect: () => store.step(1) },
     { label: 'Avanzar 1 semana', icon: 'fastForward', onSelect: () => store.step(7) },
     { label: 'Avanzar 1 mes', icon: 'calendar', onSelect: () => store.step(30) },
     { label: 'Noticias', icon: 'news', divider: true, badge: unread ? (unread > 9 ? '9+' : String(unread)) : undefined, tone: unread ? 'info' : undefined, onSelect: () => navStore.go('more', 'news') },
     { label: 'Asesor', icon: 'advisor', badge: alerts ? String(alerts) : undefined, tone: alerts ? 'danger' : undefined, onSelect: () => navStore.open({ kind: 'advisor' }) },
+    ...(adsOk ? [{ label: 'Recompensas', icon: 'gift' as IconName, onSelect: () => navStore.open({ kind: 'rewards' }) }] : []),
     { label: 'Ajustes y guardado', icon: 'settings', onSelect: () => navStore.open({ kind: 'settings' }) },
     { label: 'Cómo funciona el tiempo', icon: 'info', divider: true, onSelect: () => navStore.open({ kind: 'term', id: 'accion_velocidad' }) },
   ];
@@ -60,7 +63,7 @@ function TopBar() {
         <div className="date-block">
           <div className="d">{formatDateShort(s.day)}</div>
           <div className="tiny muted">
-            Disponible <Money c={spendable(s)} />
+            Disponible <Money c={spendable(s)} fit />
           </div>
         </div>
         <button className={`time-btn ${running ? 'on' : ''}`} aria-label={running ? 'Pausar el tiempo' : `Reanudar el tiempo a ${speed}×`} aria-pressed={running} onClick={() => store.togglePlay()}>

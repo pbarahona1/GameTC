@@ -47,7 +47,7 @@ npm run build:single   # un único index.html autocontenido en dist-single/ (vis
 ### Opción A — sin instalar nada (GitHub Actions, recomendada)
 
 1. Cada push (cualquier rama) corre tipos, lint, pruebas, e2e y compila la APK; solo un push a `main` publica la Release (workflow **Android y publicación**).
-2. Descargala desde **Releases** (`https://github.com/pbarahona1/gametc/releases/latest`, directo desde el teléfono) o desde los artefactos de la ejecución.
+2. Descargala desde **Releases** (`https://github.com/pbarahona12/gametc/releases/latest`, directo desde el teléfono) o desde los artefactos de la ejecución.
 3. Se instala **encima** de la versión anterior (misma firma): la partida se conserva. Solo al pasar de la 1.1 a la 1.2 hay que exportar la partida, reinstalar e importarla (la 1.1 tenía una firma al azar).
 4. Si configurás los secretos de firma de publicación, el mismo flujo genera el **AAB firmado para Play Store** (ver `docs/PUBLICAR.md`).
 

@@ -329,6 +329,8 @@ export interface MetaState {
   seenTerms: string[];
   /** Secciones recomendadas para más adelante que el jugador decidió abrir igual (1.2). */
   gatesOpened?: string[];
+  /** Recompensas por anuncios usadas hoy (día real) y análisis preciso pendiente (1.3). */
+  ads?: import('./rewards').AdRewardsState;
 }
 
 export interface GameState {

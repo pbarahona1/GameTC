@@ -10,9 +10,9 @@ import { imageScore, imageLabel } from '../../engine/lifestyle/effects';
 import { unreadNews, TOPIC_NAMES } from '../../engine/world/news';
 import { cardTier } from '../../engine/finance/cardRewards';
 import { PoachCard } from './more/Rivals';
-import { Money, InfoButton, Learn, LineChart, Bar } from '../components/common';
+import { Money, BigAmount, InfoButton, Learn, LineChart, Bar } from '../components/common';
 import { JOB_BY_ID } from '../../content/jobs';
-import { fmtMoney } from '../../engine/format';
+import { fmtMoney, fmtMoneyFit } from '../../engine/format';
 import type { LogItem } from '../../engine/state';
 import { phaseInfo } from '../../engine/economy/economy';
 import { fmtPct } from '../../engine/format';
@@ -61,9 +61,9 @@ export function Home() {
   const openCos = s.companies.filter((c) => c.status === 'active' || c.status === 'insolvent');
   const invValue = m.securities + (s.ledger.balances.term_deposits ?? 0);
   const areas: Array<{ icon: IconName; title: string; value: ReactNode; sub: string; go: () => void; badge?: number }> = [
-    { icon: 'career', title: 'Trabajo', value: job ? <Money c={m.monthlyGross} /> : 'Sin empleo', sub: job ? `${job.title} · nivel ${prof.level}` : 'Buscá empleo en Carrera', go: () => navStore.go('career') },
-    { icon: 'invest', title: 'Inversiones', value: <Money c={invValue} />, sub: invValue > 0 ? 'Tocá para ver y operar todo' : 'Empezá con un fondo índice', go: () => navStore.go('invest', 'portfolio') },
-    { icon: 'realestate', title: 'Inmuebles', value: <Money c={m.realEstate - m.mortgages} />, sub: m.realEstate ? `Alquileres ${fmtMoney(m.rentIncome, { decimals: false })}/mes` : 'Cocheras y estudios desde poco', go: () => navStore.go('invest', 'realestate') },
+    { icon: 'career', title: 'Trabajo', value: job ? <Money c={m.monthlyGross} fit /> : 'Sin empleo', sub: job ? `${job.title} · nivel ${prof.level}` : 'Buscá empleo en Carrera', go: () => navStore.go('career') },
+    { icon: 'invest', title: 'Inversiones', value: <Money c={invValue} fit />, sub: invValue > 0 ? 'Tocá para ver y operar todo' : 'Empezá con un fondo índice', go: () => navStore.go('invest', 'portfolio') },
+    { icon: 'realestate', title: 'Inmuebles', value: <Money c={m.realEstate - m.mortgages} fit />, sub: m.realEstate ? `Alquileres ${fmtMoney(m.rentIncome, { decimals: false })}/mes` : 'Cocheras y estudios desde poco', go: () => navStore.go('invest', 'realestate') },
     { icon: 'business', title: 'Negocios', value: openCos.length ? `${openCos.length} empresa${openCos.length > 1 ? 's' : ''}` : 'Ninguno', sub: openCos.length ? `Tu parte ${fmtMoney(s.ledger.balances.business_equity, { decimals: false })}` : 'Proyectá y fundá tu primera', go: () => navStore.go('business') },
     { icon: 'card', title: `Crédito · ${cardTier(s).name}`, value: String(s.credit.score), sub: m.debt ? `Deudas ${fmtMoney(m.debt, { decimals: false })}` : 'Sin deudas', go: () => navStore.go('finance', 'card') },
     { icon: 'wardrobe', title: 'Tu imagen', value: `${img} · ${imageLabel(img)}`, sub: 'Vestidor, bienes y tiendas', go: () => navStore.go('more', 'wardrobe') },
@@ -114,29 +114,29 @@ export function Home() {
           <span className="eyebrow">Patrimonio neto</span>
           <InfoButton term="patrimonio_neto" />
           <span style={{ flex: 1 }} />
-          {prev && <span className="small"><Money c={change} colored sign /> <span className="faint">este mes</span></span>}
+          {prev && <span className="small"><Money c={change} colored sign fit /> <span className="faint">este mes</span></span>}
         </div>
-        <div className="big">{fmtMoney(m.netWorth)}</div>
+        <BigAmount c={m.netWorth} />
         <Learn term="patrimonio_neto" />
         {nwSeries.length >= 2 && <LineChart series={[{ name: 'Patrimonio neto', values: nwSeries, color: 'var(--accent)' }]} pointLabels={nwLabels} height={100} />}
-        <div className="tiny faint">Lo que tenés {fmtMoney(m.totalAssets, { decimals: false })} − lo que debés {fmtMoney(m.totalLiabilities, { decimals: false })}</div>
+        <div className="tiny faint">Lo que tenés {fmtMoneyFit(m.totalAssets, { decimals: false })} − lo que debés {fmtMoneyFit(m.totalLiabilities, { decimals: false })}</div>
       </section>
 
       <div className="month-strip" role="group" aria-label="Tu mes">
         <button className="ms-cell" onClick={() => navStore.go('finance', 'accounts')}>
           <span className="tiny muted">Liquidez</span>
-          <strong className="num">{fmtMoney(m.liquid, { decimals: false })}</strong>
+          <strong className="num">{fmtMoneyFit(m.liquid, { decimals: false, max: 9 })}</strong>
           <span className="tiny faint">{m.runwayMonths !== null ? `alcanza ~${m.runwayMonths.toFixed(1)} meses` : 'te sobra cada mes'}</span>
         </button>
         <button className="ms-cell" onClick={() => navStore.go('reports', 'cf')}>
           <span className="tiny muted">Entró este mes</span>
-          <strong className="num gain">{fmtMoney(month.cf.cashIn, { decimals: false })}</strong>
-          <span className="tiny faint">salió {fmtMoney(month.cf.cashOut, { decimals: false })}</span>
+          <strong className="num gain">{fmtMoneyFit(month.cf.cashIn, { decimals: false, max: 9 })}</strong>
+          <span className="tiny faint">salió {fmtMoneyFit(month.cf.cashOut, { decimals: false, max: 9 })}</span>
         </button>
         <button className="ms-cell" onClick={() => navStore.go('reports', 'cf')}>
           <span className="tiny muted">Balance del mes</span>
-          <strong className={`num ${month.cf.cashIn - month.cf.cashOut >= 0 ? 'gain' : 'loss'}`}>{fmtMoney(month.cf.cashIn - month.cf.cashOut, { decimals: false, sign: true })}</strong>
-          <span className="tiny faint">gastos fijos {fmtMoney(m.recurringMonthly, { decimals: false })}/mes</span>
+          <strong className={`num ${month.cf.cashIn - month.cf.cashOut >= 0 ? 'gain' : 'loss'}`}>{fmtMoneyFit(month.cf.cashIn - month.cf.cashOut, { decimals: false, sign: true, max: 9 })}</strong>
+          <span className="tiny faint">gastos fijos {fmtMoneyFit(m.recurringMonthly, { decimals: false, max: 9 })}/mes</span>
         </button>
       </div>
 

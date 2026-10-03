@@ -21,7 +21,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['scripts/**/*.mjs', 'vite.config.ts', 'capacitor.config.ts', 'eslint.config.js', 'playwright.config.ts', 'e2e/**/*.ts'],
+    files: ['scripts/**/*.mjs', 'vite.config.ts', 'capacitor.config.ts', 'eslint.config.js', 'playwright.config.ts', 'e2e/**/*.ts', 'scripts/**/*.ts'],
     languageOptions: { globals: { ...globals.node } },
   },
 );

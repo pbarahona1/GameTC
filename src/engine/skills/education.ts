@@ -46,7 +46,7 @@ export function timesCompleted(state: GameState, courseId: string): number {
   return state.education.completed.filter((c) => c.courseId === courseId).length;
 }
 
-function recordEducationSpend(state: GameState, amount: Cents): void {
+export function recordEducationSpend(state: GameState, amount: Cents): void {
   state.tax.ytd.educationSpent += amount;
 }
 

@@ -5,6 +5,7 @@ import { chance, nextRandom, randNormal, randRange, RngHolder, seedFromString } 
 import { practice } from '../skills/skills';
 import { ActionResult, FAIL, OK } from '../result';
 import { fmtPct } from '../format';
+import { takeNewsBoost } from '../rewards';
 
 /**
  * NOTICIAS Y RUMORES.
@@ -150,7 +151,9 @@ export function analyzeNews(state: GameState, id: number): ActionResult {
   // Generador propio de ESTE análisis (semilla + noticia + nivel): analizar no consume el
   // azar del mundo, así que mirar una noticia no cambia lo que va a pasar después.
   const g = analysisRng(state, n, skill);
-  const est = Math.min(0.97, Math.max(0.03, n.reliability + randNormal(g) * estimateError(skill)));
+  // Recompensa por anuncio: un análisis con la mitad del error.
+  const precise = takeNewsBoost(state);
+  const est = Math.min(0.97, Math.max(0.03, n.reliability + randNormal(g) * estimateError(skill) * (precise ? 0.5 : 1)));
   let clue: 'respalda' | 'contradice' | null = null;
   if (nextRandom(g) < 0.25 + skill / 250) {
     const right = nextRandom(g) < Math.min(0.93, 0.6 + skill / 300);
@@ -159,6 +162,6 @@ export function analyzeNews(state: GameState, id: number): ActionResult {
   n.analysis = { day: state.day, estimate: Math.round(est * 100) / 100, clue, skill };
   const xp = practice(state, `news:${n.topic}`, TOPIC_SKILL[n.topic], 60);
   const clueText = clue === 'respalda' ? ' Encontraste datos que la respaldan.' : clue === 'contradice' ? ' Encontraste datos que la contradicen.' : '';
-  return OK(`Estimás que es cierta con ~${fmtPct(n.analysis.estimate, 0)} de probabilidad.${clueText}${xp ? ` (+${xp} XP)` : ''}`);
+  return OK(`Estimás que es cierta con ~${fmtPct(n.analysis.estimate, 0)} de probabilidad${precise ? ' (análisis preciso)' : ''}.${clueText}${xp ? ` (+${xp} XP)` : ''}`);
 }
 

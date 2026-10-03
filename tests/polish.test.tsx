@@ -115,3 +115,57 @@ describe('Fase 8 · hallazgos de la prueba de caos (50 semillas × 20 años)', (
     expect(f.balance).toBe(3);
   });
 });
+
+describe('Fase 8 · montos enormes no se salen de la pantalla', () => {
+  it('fmtMoneyFit deja el monto completo si entra y lo abrevia si no', async () => {
+    const { fmtMoneyFit, fmtCompact, fmtPct } = await import('../src/engine/format');
+    expect(fmtMoneyFit(usd(81_507), { decimals: false })).toBe('$81,507');
+    expect(fmtMoneyFit(usd(9_502_007_410), { decimals: false })).toBe('$9.50B');
+    expect(fmtMoneyFit(usd(9_431_211_140.52), { sign: true })).toBe('+$9.43B');
+    expect(fmtMoneyFit(-usd(2_500_000_000_000))).toBe('−$2.50T');
+    expect(fmtCompact(usd(4_000_000_000_000_000))).toBe('$4,000T');
+    expect(fmtPct(133.216, 1)).toBe('13,322 %');
+    expect(fmtPct(0.199, 1)).toBe('19.9 %');
+  });
+
+  it('la cifra principal achica la letra según el largo del número', async () => {
+    const { render } = await import('@testing-library/react');
+    const { BigAmount } = await import('../src/ui/components/common');
+    const { container } = render(<BigAmount c={usd(9_514_003_894.55)} />);
+    const el = container.querySelector('.big-fit') as HTMLElement;
+    expect(el.textContent).toBe('$9,514,003,894.55');
+    expect(el.style.getPropertyValue('--chars')).toBe('17');
+  });
+});
+
+describe('Privacidad y términos: lo que dicen coincide con lo que hace la app', () => {
+  it('la app solo declara el permiso de internet; el único SDK de terceros es AdMob (declarado en la política), sin analíticas ni compras', async () => {
+    const manifest = readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
+    const perms = [...manifest.matchAll(/uses-permission android:name="([^"]+)"/g)].map((m) => m[1]);
+    expect(perms).toEqual(['android.permission.INTERNET']);
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { dependencies: Record<string, string> };
+    expect(Object.keys(pkg.dependencies).filter((d) => /admob|ads|analytics|firebase|billing|purchase|sentry|amplitude|mixpanel/i.test(d))).toEqual(['@capacitor-community/admob']);
+    const { PRIVACY } = await import('../src/content/legal');
+    expect(PRIVACY.map((s) => s.title)).toContain('Anuncios (Google AdMob)');
+  });
+
+  it('la única conexión de red es la búsqueda de actualizaciones en GitHub', async () => {
+    const { execSync } = await import('node:child_process');
+    const hits = execSync("grep -rln 'fetch(\\|XMLHttpRequest\\|navigator.sendBeacon\\|new WebSocket' src || true", { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+    expect(hits).toEqual(['src/persistence/ota.ts']);
+    const { OTA_BASE } = await import('../src/persistence/ota');
+    expect(OTA_BASE.startsWith('https://raw.githubusercontent.com/')).toBe(true);
+  });
+
+  it('las páginas públicas incluyen todas las secciones, escapadas, y la hoja de la app las muestra', async () => {
+    const { renderLegalPage } = await import('../scripts/legalPages');
+    const { PRIVACY, TERMS, LICENSES } = await import('../src/content/legal');
+    const priv = renderLegalPage('privacy');
+    const terms = renderLegalPage('terms');
+    for (const s of PRIVACY) expect(priv).toContain(s.title);
+    for (const s of TERMS) expect(terms).toContain(s.title);
+    for (const l of LICENSES) expect(terms).toContain(l.license);
+    expect(priv).toMatch(/<title>Política de privacidad/);
+    expect(priv).not.toMatch(/<script/);
+  });
+});

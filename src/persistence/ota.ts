@@ -24,7 +24,7 @@ import { verifySignedManifest } from './otaSignature';
  * (archivos de la app), así que no se pierde.
  */
 
-export const OTA_REPO = 'pbarahona1/gametc';
+export const OTA_REPO = 'pbarahona12/gametc';
 /**
  * Canal firmado: rama que publica el CI (solo desde main) con el manifiesto firmado y
  * los archivos de cada versión. La carpeta ota/ de main queda solo como puente para

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGame, useUI, useDerived, store } from '../../store';
 import { navStore } from '../../nav';
-import { Money, Stat, InfoButton, CardHead, Learn, Pill, NumInput, AmountInput, Act } from '../../components/common';
+import { Money, BigAmount, Stat, InfoButton, CardHead, Learn, Pill, NumInput, AmountInput, Act } from '../../components/common';
 import { Donut, CHART_COLORS, Sparkline } from '../../components/charts';
 import { positions, investmentsValue, InvestClass, PositionSummary } from '../../../engine/invest/portfolio';
 import { projectPortfolio } from '../../../engine/pros/pros';
@@ -11,7 +11,7 @@ import { buyFund, sellFund } from '../../../engine/invest/funds';
 import { buyMogul, sellMogul, mogulQuote } from '../../../engine/invest/mogul';
 import { depositMandate, withdrawMandate, mandateById, mandateValue } from '../../../engine/invest/managed';
 import { propertyReport } from '../../../engine/realestate/realestate';
-import { fmtMoney, fmtPct } from '../../../engine/format';
+import { fmtMoney, fmtMoneyFit, fmtPct, fmtNumber } from '../../../engine/format';
 import { formatDate } from '../../../engine/time/calendar';
 import { usd } from '../../../engine/money';
 import { FUND_BY_ID } from '../../../content/funds';
@@ -148,12 +148,12 @@ function HoldingRow({ p, open, onToggle }: { p: PositionSummary; open: boolean; 
         <span className="h-icon" aria-hidden><Icon name={INVEST_CLASS_ICON[p.cls]} size={18} /></span>
         <div className="grow">
           <div className="title small">{assetName(s, p.cls, p.id)}</div>
-          <div className="meta">{p.cls === 'stocks' || p.cls === 'bonds' ? `${p.qty} u.` : `${p.qty.toFixed(2)} ${p.cls === 'managed' ? 'unid.' : 'part.'}`} · pagaste {fmtMoney(p.cost, { decimals: false })}</div>
+          <div className="meta">{p.cls === 'stocks' || p.cls === 'bonds' ? `${fmtNumber(p.qty)} u.` : `${fmtNumber(p.qty, 2)} ${p.cls === 'managed' ? 'unid.' : 'part.'}`} · pagaste {fmtMoneyFit(p.cost, { decimals: false })}</div>
         </div>
         <Sparkline values={t} width={54} />
         <div style={{ textAlign: 'right', minWidth: 84 }}>
-          <div className="amt small">{fmtMoney(p.value, { decimals: false })}</div>
-          <div className="tiny"><Money c={p.unrealized} colored sign /> <span className="faint">{p.cost > 0 ? fmtPct(p.unrealizedPct, 1) : ''}</span></div>
+          <div className="amt small">{fmtMoneyFit(p.value, { decimals: false })}</div>
+          <div className="tiny"><Money c={p.unrealized} colored sign fit /> <span className="faint">{p.cost > 0 ? fmtPct(p.unrealizedPct, 1) : ''}</span></div>
         </div>
       </button>
       {open && <QuickTrade p={p} />}
@@ -186,11 +186,11 @@ export function Portfolio() {
           <span className="eyebrow">Todo lo que tenés invertido</span>
           <InfoButton term="mis_inversiones" />
         </div>
-        <div className="big">{fmtMoney(total)}</div>
+        <BigAmount c={total} />
         <div className="small">
-          Financieras {fmtMoney(data.value, { decimals: false })} · inmuebles (neto) {fmtMoney(Math.max(0, data.reEquity), { decimals: false })}
+          Financieras {fmtMoneyFit(data.value, { decimals: false })} · inmuebles (neto) {fmtMoneyFit(Math.max(0, data.reEquity), { decimals: false })}
         </div>
-        {data.cost > 0 && <div className="small">Ganancia sin vender <Money c={data.value - data.cost} colored sign /> <span className="faint">({fmtPct(data.value / data.cost - 1, 1)})</span></div>}
+        {data.cost > 0 && <div className="small">Ganancia sin vender <Money c={data.value - data.cost} colored sign fit /> <span className="faint">({fmtPct(data.value / data.cost - 1, 1)})</span></div>}
       </section>
 
       <div className="card" style={{ paddingBlock: 8 }}>

@@ -12,6 +12,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint . --max-warnings 0",
     "e2e": "playwright test",
+    "legal": "vite-node scripts/legal.ts",
     "chaos": "URT_CHAOS_SEEDS=50 URT_CHAOS_YEARS=20 vitest run tests/audit_world.test.ts",
     "cap:sync": "npm run build && npx cap sync android",
     "ota:sign": "node scripts/ota.mjs sign --out ota-dist",
@@ -20,6 +21,7 @@
     "icons": "python3 scripts/make_icons.py"
   },
   "dependencies": {
+    "@capacitor-community/admob": "8.1.0",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.2",
     "@capacitor/filesystem": "^8.1.3",
